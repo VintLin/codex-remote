@@ -1,0 +1,149 @@
+{
+  "sourceRoot": "https://developers.openai.com/codex/app",
+  "capturedAt": "2026-06-14T13:28:35+00:00",
+  "pageCount": 14,
+  "expectedPageCount": 14,
+  "pages": [
+    {
+      "slug": "01-overview",
+      "title": "App – Codex | OpenAI Developers",
+      "label": "Overview",
+      "url": "https://developers.openai.com/codex/app",
+      "markdown": "pages/01-overview.md",
+      "metadata": "metadata/01-overview.json",
+      "wordCount": 486,
+      "markdownLength": 4925
+    },
+    {
+      "slug": "02-features",
+      "title": "Features – Codex app",
+      "label": "Features",
+      "url": "https://developers.openai.com/codex/app/features",
+      "markdown": "pages/02-features.md",
+      "metadata": "metadata/02-features.json",
+      "wordCount": 1956,
+      "markdownLength": 13826
+    },
+    {
+      "slug": "03-settings",
+      "title": "Settings – Codex app",
+      "label": "Settings",
+      "url": "https://developers.openai.com/codex/app/settings",
+      "markdown": "pages/03-settings.md",
+      "metadata": "metadata/03-settings.json",
+      "wordCount": 824,
+      "markdownLength": 5999
+    },
+    {
+      "slug": "04-review",
+      "title": "Review – Codex app",
+      "label": "Review",
+      "url": "https://developers.openai.com/codex/app/review",
+      "markdown": "pages/04-review.md",
+      "metadata": "metadata/04-review.json",
+      "wordCount": 647,
+      "markdownLength": 4188
+    },
+    {
+      "slug": "05-automations",
+      "title": "Automations – Codex app",
+      "label": "Automations",
+      "url": "https://developers.openai.com/codex/app/automations",
+      "markdown": "pages/05-automations.md",
+      "metadata": "metadata/05-automations.json",
+      "wordCount": 1782,
+      "markdownLength": 11976
+    },
+    {
+      "slug": "06-worktrees",
+      "title": "Worktrees – Codex app",
+      "label": "Worktrees",
+      "url": "https://developers.openai.com/codex/app/worktrees",
+      "markdown": "pages/06-worktrees.md",
+      "metadata": "metadata/06-worktrees.json",
+      "wordCount": 1601,
+      "markdownLength": 10340
+    },
+    {
+      "slug": "07-local-environments",
+      "title": "Local environments – Codex app",
+      "label": "Local Environments",
+      "url": "https://developers.openai.com/codex/app/local-environments",
+      "markdown": "pages/07-local-environments.md",
+      "metadata": "metadata/07-local-environments.json",
+      "wordCount": 310,
+      "markdownLength": 2255
+    },
+    {
+      "slug": "08-in-app-browser",
+      "title": "In-app browser – Codex app",
+      "label": "In-app browser",
+      "url": "https://developers.openai.com/codex/app/browser",
+      "markdown": "pages/08-in-app-browser.md",
+      "metadata": "metadata/08-in-app-browser.json",
+      "wordCount": 869,
+      "markdownLength": 6000
+    },
+    {
+      "slug": "09-chrome-extension",
+      "title": "Codex Chrome extension – Codex app",
+      "label": "Chrome extension",
+      "url": "https://developers.openai.com/codex/app/chrome-extension",
+      "markdown": "pages/09-chrome-extension.md",
+      "metadata": "metadata/09-chrome-extension.json",
+      "wordCount": 962,
+      "markdownLength": 6438
+    },
+    {
+      "slug": "10-computer-use",
+      "title": "Computer Use – Codex app",
+      "label": "Computer Use",
+      "url": "https://developers.openai.com/codex/app/computer-use",
+      "markdown": "pages/10-computer-use.md",
+      "metadata": "metadata/10-computer-use.json",
+      "wordCount": 1396,
+      "markdownLength": 9141
+    },
+    {
+      "slug": "11-appshots",
+      "title": "Appshots – Codex | OpenAI Developers",
+      "label": "Appshots",
+      "url": "https://developers.openai.com/codex/appshots",
+      "markdown": "pages/11-appshots.md",
+      "metadata": "metadata/11-appshots.json",
+      "wordCount": 509,
+      "markdownLength": 3248
+    },
+    {
+      "slug": "12-commands",
+      "title": "Commands – Codex app",
+      "label": "Commands",
+      "url": "https://developers.openai.com/codex/app/commands",
+      "markdown": "pages/12-commands.md",
+      "metadata": "metadata/12-commands.json",
+      "wordCount": 1250,
+      "markdownLength": 9975
+    },
+    {
+      "slug": "13-windows",
+      "title": "Windows – Codex app",
+      "label": "Windows",
+      "url": "https://developers.openai.com/codex/app/windows",
+      "markdown": "pages/13-windows.md",
+      "metadata": "metadata/13-windows.json",
+      "wordCount": 1187,
+      "markdownLength": 8696
+    },
+    {
+      "slug": "14-troubleshooting",
+      "title": "Troubleshooting – Codex app",
+      "label": "Troubleshooting",
+      "url": "https://developers.openai.com/codex/app/troubleshooting",
+      "markdown": "pages/14-troubleshooting.md",
+      "metadata": "metadata/14-troubleshooting.json",
+      "wordCount": 813,
+      "markdownLength": 5653
+    }
+  ],
+  "failures": []
+}

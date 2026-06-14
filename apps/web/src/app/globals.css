@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "@codex-remote/ui/styles.css";
+
+@theme inline {
+  --font-sans: "InterVariable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "BerkeleyMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-cr-bg: var(--cr-bg);
+  --color-cr-surface: var(--cr-surface);
+  --color-cr-ink: var(--cr-ink);
+  --color-cr-muted: var(--cr-muted);
+  --color-cr-line: var(--cr-line);
+  --radius-cr-sm: var(--cr-radius-sm);
+  --radius-cr-md: var(--cr-radius-md);
+  --radius-cr-lg: var(--cr-radius-lg);
+}
+
+html,
+body {
+  height: 100%;
+}

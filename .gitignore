@@ -1,3 +1,11 @@
 .DS_Store
 project_referenecs/
 .codegraph/
+node_modules/
+.turbo/
+.next/
+apps/*/.next/
+*.tsbuildinfo
+dist/
+apps/*/dist/
+packages/*/dist/

@@ -1,0 +1,120 @@
+{
+  "url": "https://developers.openai.com/codex/app/worktrees",
+  "baseUrl": "https://developers.openai.com/codex/app/worktrees",
+  "capturedAt": "2026-06-14T13:29:21.156663+00:00",
+  "sessionId": "",
+  "tabId": "",
+  "title": "Worktrees – Codex app",
+  "author": "",
+  "description": "Leverage Git worktrees within the Codex app to let Codex work in parallel",
+  "favicon": "/favicon.png",
+  "image": "https://developers.openai.com/og/codex/app/worktrees.png",
+  "language": "en",
+  "published": "",
+  "site": "OpenAI Developers",
+  "wordCount": 1601,
+  "parseTime": 134,
+  "engine": "defuddle",
+  "engineVersion": "0.18.1",
+  "selectedText": "",
+  "selectedHtmlLength": 0,
+  "selectedMarkdownLength": 0,
+  "textContentLength": 9486,
+  "contentHtmlLength": 11315,
+  "fullHtmlLength": 268183,
+  "markdownLength": 10168,
+  "schemaOrgData": [],
+  "metaTags": [
+    {
+      "name": "viewport",
+      "property": null,
+      "content": "width=device-width,initial-scale=1"
+    },
+    {
+      "name": "generator",
+      "property": null,
+      "content": "Astro v6.0.4"
+    },
+    {
+      "name": "title",
+      "property": null,
+      "content": "Worktrees – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "description",
+      "property": null,
+      "content": "Leverage Git worktrees within the Codex app to let Codex work in parallel"
+    },
+    {
+      "name": null,
+      "property": "og:type",
+      "content": "website"
+    },
+    {
+      "name": null,
+      "property": "og:url",
+      "content": "https://developers.openai.com/codex/app/worktrees"
+    },
+    {
+      "name": null,
+      "property": "og:title",
+      "content": "Worktrees – Codex app | OpenAI Developers"
+    },
+    {
+      "name": null,
+      "property": "og:description",
+      "content": "Leverage Git worktrees within the Codex app to let Codex work in parallel"
+    },
+    {
+      "name": null,
+      "property": "og:image",
+      "content": "https://developers.openai.com/og/codex/app/worktrees.png"
+    },
+    {
+      "name": "twitter:card",
+      "property": null,
+      "content": "summary_large_image"
+    },
+    {
+      "name": "twitter:site",
+      "property": null,
+      "content": "@OpenAIDevs"
+    },
+    {
+      "name": "twitter:url",
+      "property": null,
+      "content": "https://developers.openai.com/codex/app/worktrees"
+    },
+    {
+      "name": "twitter:title",
+      "property": null,
+      "content": "Worktrees – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "twitter:description",
+      "property": null,
+      "content": "Leverage Git worktrees within the Codex app to let Codex work in parallel"
+    },
+    {
+      "name": "twitter:image",
+      "property": null,
+      "content": "https://developers.openai.com/og/codex/app/worktrees.png"
+    },
+    {
+      "name": "twitter:image:alt",
+      "property": null,
+      "content": "Worktrees – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "astro-view-transitions-enabled",
+      "property": null,
+      "content": "true"
+    },
+    {
+      "name": "astro-view-transitions-fallback",
+      "property": null,
+      "content": "swap"
+    }
+  ],
+  "extractedContent": {}
+}

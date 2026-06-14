@@ -1,0 +1,120 @@
+{
+  "url": "https://developers.openai.com/codex/app/troubleshooting",
+  "baseUrl": "https://developers.openai.com/codex/app/troubleshooting",
+  "capturedAt": "2026-06-14T13:30:32.453100+00:00",
+  "sessionId": "",
+  "tabId": "",
+  "title": "Troubleshooting – Codex app",
+  "author": "",
+  "description": "FAQ and fixes for common Codex app issues",
+  "favicon": "/favicon.png",
+  "image": "https://developers.openai.com/og/codex/app/troubleshooting.png",
+  "language": "en",
+  "published": "",
+  "site": "OpenAI Developers",
+  "wordCount": 813,
+  "parseTime": 128,
+  "engine": "defuddle",
+  "engineVersion": "0.18.1",
+  "selectedText": "",
+  "selectedHtmlLength": 0,
+  "selectedMarkdownLength": 0,
+  "textContentLength": 4864,
+  "contentHtmlLength": 6292,
+  "fullHtmlLength": 256174,
+  "markdownLength": 5469,
+  "schemaOrgData": [],
+  "metaTags": [
+    {
+      "name": "viewport",
+      "property": null,
+      "content": "width=device-width,initial-scale=1"
+    },
+    {
+      "name": "generator",
+      "property": null,
+      "content": "Astro v6.0.4"
+    },
+    {
+      "name": "title",
+      "property": null,
+      "content": "Troubleshooting – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "description",
+      "property": null,
+      "content": "FAQ and fixes for common Codex app issues"
+    },
+    {
+      "name": null,
+      "property": "og:type",
+      "content": "website"
+    },
+    {
+      "name": null,
+      "property": "og:url",
+      "content": "https://developers.openai.com/codex/app/troubleshooting"
+    },
+    {
+      "name": null,
+      "property": "og:title",
+      "content": "Troubleshooting – Codex app | OpenAI Developers"
+    },
+    {
+      "name": null,
+      "property": "og:description",
+      "content": "FAQ and fixes for common Codex app issues"
+    },
+    {
+      "name": null,
+      "property": "og:image",
+      "content": "https://developers.openai.com/og/codex/app/troubleshooting.png"
+    },
+    {
+      "name": "twitter:card",
+      "property": null,
+      "content": "summary_large_image"
+    },
+    {
+      "name": "twitter:site",
+      "property": null,
+      "content": "@OpenAIDevs"
+    },
+    {
+      "name": "twitter:url",
+      "property": null,
+      "content": "https://developers.openai.com/codex/app/troubleshooting"
+    },
+    {
+      "name": "twitter:title",
+      "property": null,
+      "content": "Troubleshooting – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "twitter:description",
+      "property": null,
+      "content": "FAQ and fixes for common Codex app issues"
+    },
+    {
+      "name": "twitter:image",
+      "property": null,
+      "content": "https://developers.openai.com/og/codex/app/troubleshooting.png"
+    },
+    {
+      "name": "twitter:image:alt",
+      "property": null,
+      "content": "Troubleshooting – Codex app | OpenAI Developers"
+    },
+    {
+      "name": "astro-view-transitions-enabled",
+      "property": null,
+      "content": "true"
+    },
+    {
+      "name": "astro-view-transitions-fallback",
+      "property": null,
+      "content": "swap"
+    }
+  ],
+  "extractedContent": {}
+}
