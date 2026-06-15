@@ -8,6 +8,9 @@ export interface AssistantTimeline {
 export interface AssistantTimelineTurn {
   id: string;
   status: string;
+  startedAt: number | null;
+  completedAt: number | null;
+  durationMs: number | null;
   nodes: AssistantTimelineNode[];
 }
 
@@ -32,17 +35,18 @@ export interface AssistantTextNode extends AssistantTimelineNodeBase {
 
 export interface AssistantToolGroupNode extends AssistantTimelineNodeBase {
   type: "toolGroup";
-  collapsed: true;
+  defaultCollapsed: true;
   summary: string;
-  children: AssistantToolCallNode[];
+  calls: AssistantToolCallNode[];
 }
 
 export interface AssistantToolCallNode extends AssistantTimelineNodeBase {
   type: "toolCall";
   kind: ToolCallKind;
   status: ToolCallStatus;
-  collapsed: true;
+  defaultCollapsed: true;
   label: string;
+  detailPlacement: DetailPlacement;
   detailTarget: DetailTarget;
 }
 
@@ -54,6 +58,8 @@ export interface AssistantContextCompactionNode extends AssistantTimelineNodeBas
 export type ToolCallKind = "fileChange" | "mcpToolCall" | "webSearch";
 
 export type ToolCallStatus = "completed" | "failed" | "running" | "unknown";
+
+export type DetailPlacement = "inline" | "workspace";
 
 export type LinkTargetType = "skill" | "file" | "image" | "url" | "anchor" | "unknown";
 
@@ -181,6 +187,9 @@ function createTimelineTurn(turn: RawCodexTurn, turnIndex: number): AssistantTim
   return {
     id: turnId,
     status: getNonEmptyString(turn.status) ?? "unknown",
+    startedAt: getNullableNumber(turn.startedAt),
+    completedAt: getNullableNumber(turn.completedAt),
+    durationMs: getNullableNumber(turn.durationMs),
     nodes,
   };
 }
@@ -203,9 +212,9 @@ function flushPendingTools(nodes: AssistantTimelineNode[], pendingTools: Assista
     id: `${turnId}-tool-group-${nodes.length}`,
     turnId,
     sourceItemIds: pendingTools.flatMap((tool) => tool.sourceItemIds),
-    collapsed: true,
+    defaultCollapsed: true,
     summary: summarizeToolGroup(pendingTools),
-    children: pendingTools,
+    calls: pendingTools,
   });
 }
 
@@ -215,6 +224,8 @@ function createToolCallNode(item: RawCodexItem, turnId: string, itemId: string):
     return null;
   }
 
+  const detailTarget = createDetailTarget(item, kind);
+
   return {
     type: "toolCall",
     id: itemId,
@@ -222,9 +233,10 @@ function createToolCallNode(item: RawCodexItem, turnId: string, itemId: string):
     sourceItemIds: [itemId],
     kind,
     status: normalizeToolStatus(item.status),
-    collapsed: true,
+    defaultCollapsed: true,
     label: getToolCallLabel(item, kind),
-    detailTarget: createDetailTarget(item, kind),
+    detailPlacement: getDetailPlacement(kind, detailTarget),
+    detailTarget,
   };
 }
 
@@ -338,6 +350,18 @@ function createFileChangeDetailTarget(changes: RawCodexFileChange[]): DetailTarg
     title,
     path,
   };
+}
+
+function getDetailPlacement(kind: ToolCallKind, detailTarget: DetailTarget): DetailPlacement {
+  if (kind === "fileChange") {
+    return "workspace";
+  }
+
+  if (detailTarget.type === "tool") {
+    return detailTarget.presentation;
+  }
+
+  return "workspace";
 }
 
 function normalizeToolStatus(status: string | undefined): ToolCallStatus {
@@ -523,6 +547,10 @@ function getNonEmptyString(value: string | undefined | null): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? value : null;
+}
+
+function getNullableNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -26,8 +26,8 @@ test("when tool-like items are consecutive, should group them and collapse child
 
   assert.equal(group?.type, "toolGroup");
   assert.equal(group.summary, "已编辑 1 个文件 已运行 1 条命令");
-  assert.equal(group.collapsed, true);
-  assert.deepEqual(group.children.map((child) => `${child.id}:${child.collapsed}`), ["file-a:true", "mcp-a:true"]);
+  assert.equal(group.defaultCollapsed, true);
+  assert.deepEqual(group.calls.map((child) => `${child.id}:${child.defaultCollapsed}`), ["file-a:true", "mcp-a:true"]);
   assert.deepEqual(group.sourceItemIds, ["file-a", "mcp-a"]);
 });
 
@@ -36,8 +36,9 @@ test("when a single tool-like item is isolated, should derive a collapsed toolCa
   const toolCall = timeline.turns[0]?.nodes[4];
 
   assert.equal(toolCall?.type, "toolCall");
-  assert.equal(toolCall.collapsed, true);
+  assert.equal(toolCall.defaultCollapsed, true);
   assert.equal(toolCall.label, "已运行 node --test sample.test.ts");
+  assert.equal(toolCall.detailPlacement, "inline");
   assert.deepEqual(toolCall.sourceItemIds, ["mcp-b"]);
 });
 
@@ -45,14 +46,24 @@ test("when file changes contain a diff, should generate a workspace diff DetailT
   const timeline = deriveAssistantTimeline(createSyntheticThread());
   const group = timeline.turns[0]?.nodes[2];
   assert.equal(group?.type, "toolGroup");
-  const fileChange = group.children[0];
+  const fileChange = group.calls[0];
 
   assert.equal(fileChange?.type, "toolCall");
   assert.equal(fileChange.kind, "fileChange");
+  assert.equal(fileChange.detailPlacement, "workspace");
   assert.equal(fileChange.detailTarget.type, "diff");
   assert.equal(fileChange.detailTarget.title, "sample.ts");
   assert.equal(fileChange.detailTarget.path, "/tmp/sample.ts");
   assert.equal(fileChange.detailTarget.diff, "@@ -1 +1 @@\n-old\n+new\n");
+});
+
+test("when raw turn includes timing, should pass timing fields into timeline turn", () => {
+  const timeline = deriveAssistantTimeline(createSyntheticThread());
+  const turn = timeline.turns[0];
+
+  assert.equal(turn?.startedAt, 1_700_000_000_000);
+  assert.equal(turn.completedAt, 1_700_000_001_250);
+  assert.equal(turn.durationMs, 1_250);
 });
 
 test("when classifying markdown links, should route skill/file/image/url/anchor/unknown targets", () => {
@@ -84,7 +95,7 @@ test("when deriving from real fixture, should preserve turnId and sourceItemIds 
     assert.ok(node.turnId.length > 0, `missing turnId for ${node.id}`);
     assert.ok(node.sourceItemIds.length > 0, `missing sourceItemIds for ${node.id}`);
     if (node.type === "toolGroup") {
-      for (const child of node.children) {
+      for (const child of node.calls) {
         assert.ok(child.turnId.length > 0, `missing child turnId for ${child.id}`);
         assert.ok(child.sourceItemIds.length > 0, `missing child sourceItemIds for ${child.id}`);
       }
@@ -98,7 +109,7 @@ function summarizeNode(node: AssistantTimelineNode): string {
   }
 
   if (node.type === "toolGroup") {
-    return `toolGroup:${node.children.map((child) => child.id).join(",")}`;
+    return `toolGroup:${node.calls.map((child) => child.id).join(",")}`;
   }
 
   return `toolCall:${node.id}`;
@@ -111,6 +122,9 @@ function createSyntheticThread(): RawCodexThread {
       {
         id: "turn-a",
         status: "complete",
+        startedAt: 1_700_000_000_000,
+        completedAt: 1_700_000_001_250,
+        durationMs: 1_250,
         items: [
           { type: "userMessage", id: "user-a", text: "Prompt" },
           { type: "agentMessage", id: "assistant-a", text: "Assistant A" },
