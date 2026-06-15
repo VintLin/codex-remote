@@ -30,6 +30,10 @@
   font-family:
     "InterVariable", "InterVariable Fallback", Inter, ui-sans-serif, system-ui,
     -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cr-font-mono: "BerkeleyMono", "BerkeleyMono Fallback", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  --cr-text-meta: 12px;
+  --cr-text-body: 14px;
+  --cr-weight-regular: 400;
   --cr-bg: oklch(0.9911 0 89.9);
   --cr-surface: oklch(0.9731 0 89.9);
   --cr-surface-raised: oklch(1 0 89.9);
@@ -1294,6 +1298,144 @@ button.sidebar-list-content {
   gap: 8px;
 }
 
+.codex-assistant-thread {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 14px;
+  max-width: 940px;
+  min-height: 520px;
+  margin: 0 auto;
+}
+
+.codex-assistant-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+.codex-assistant-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.codex-assistant-message {
+  border-radius: var(--cr-radius-lg);
+  background: var(--cr-surface-raised);
+  padding: 16px 18px;
+  box-shadow: var(--cr-shadow);
+}
+
+.codex-assistant-message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--cr-ink);
+  font-size: var(--cr-text-body);
+  font-weight: var(--cr-weight-regular);
+}
+
+.codex-assistant-message-header span:last-child {
+  overflow: hidden;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-assistant-message p,
+.codex-assistant-empty {
+  margin: 0;
+  color: var(--cr-ink);
+  font-size: var(--cr-text-body);
+  font-weight: var(--cr-weight-regular);
+  text-wrap: pretty;
+  white-space: pre-wrap;
+}
+
+.codex-assistant-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  border-radius: var(--cr-radius-lg);
+  background: var(--cr-surface-raised);
+  color: var(--cr-muted);
+  box-shadow: var(--cr-shadow);
+}
+
+.codex-assistant-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-surface);
+  color: var(--cr-muted);
+  padding: 9px 10px;
+  font-size: var(--cr-text-meta);
+}
+
+.codex-assistant-item-card code {
+  overflow: hidden;
+  color: var(--cr-muted);
+  font-family: var(--cr-font-mono);
+  font-size: var(--cr-text-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-assistant-composer {
+  display: grid;
+  gap: 10px;
+  border-radius: var(--cr-radius-lg);
+  background: var(--cr-surface-raised);
+  padding: 12px;
+  box-shadow: var(--cr-shadow);
+}
+
+.codex-assistant-composer textarea {
+  width: 100%;
+  min-height: 58px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-body);
+}
+
+.codex-assistant-composer textarea::placeholder {
+  color: var(--cr-muted);
+  opacity: 1;
+}
+
+.codex-assistant-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.codex-assistant-composer-actions span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-assistant-composer-actions button {
+  min-height: 32px;
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-surface);
+  color: var(--cr-muted);
+  padding: 0 14px;
+  cursor: default;
+}
+
 .review-pane {
   display: grid;
   min-width: 0;
@@ -1608,6 +1750,23 @@ button.sidebar-list-content {
   .composer-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .codex-assistant-thread {
+    min-height: 460px;
+  }
+
+  .codex-assistant-composer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .codex-assistant-composer-actions span {
+    white-space: normal;
+  }
+
+  .codex-assistant-composer-actions button {
+    width: 100%;
   }
 
   .composer-options {

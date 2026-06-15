@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { conversations, devices, sidebarProjects, tasks } from "../mockData";
+import { assistantThreads, conversations, devices, sidebarProjects, tasks } from "../mockData";
 import { createDefaultSidebarSectionState, createSidebarModel, toggleSidebarSection } from "../sidebarModel";
 import { AutomationsPage, ConversationMain, DevicesPage, SearchDialog } from "./main-panels";
 import { type AppView, Sidebar, type SidebarPressedItem } from "./sidebar";
@@ -29,6 +29,7 @@ export function CodexRemoteApp() {
     conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
     conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
     conversations[0]!;
+  const assistantThread = assistantThreads.find((thread) => thread.id === conversation.id) ?? null;
   const sidebarModel = useMemo(
     () => createSidebarModel({ conversations, expandedProjectIds, projects: sidebarProjects }),
     [expandedProjectIds],
@@ -113,7 +114,12 @@ export function CodexRemoteApp() {
     ) : activeView === "automations" ? (
       <AutomationsPage />
     ) : (
-      <ConversationMain conversation={conversation} device={device} selectedTaskId={selectedTaskId} />
+      <ConversationMain
+        assistantThread={assistantThread}
+        conversation={conversation}
+        device={device}
+        selectedTaskId={selectedTaskId}
+      />
     );
 
   return (

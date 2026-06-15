@@ -1,9 +1,12 @@
+import type { AssistantThreadSnapshot } from "../appServerMockAdapter";
 import type { BoardTask, Conversation, Device, DeviceConnectionStatus, TaskStatus } from "../mockData";
 import { conversations, devices, diffLines, searchRecents, tasks } from "../mockData";
+import { CodexAssistantThread } from "./codex-assistant-thread";
 import { Icon, iconForDevice } from "./icons";
 import { statusToClass } from "./sidebar";
 
 interface ConversationMainProps {
+  assistantThread: AssistantThreadSnapshot | null;
   conversation: Conversation;
   device: Device;
   selectedTaskId: string;
@@ -29,7 +32,7 @@ const statusText = {
   waiting: "Waiting",
 } satisfies Record<DeviceConnectionStatus | Conversation["status"] | TaskStatus, string>;
 
-export function ConversationMain({ conversation, device, selectedTaskId }: ConversationMainProps) {
+export function ConversationMain({ assistantThread, conversation, device, selectedTaskId }: ConversationMainProps) {
   const task = tasks.find((item) => item.id === selectedTaskId) ?? tasks[0]!;
   const linkedConversations = task.linkedConversationIds
     .map((id) => conversations.find((conversationItem) => conversationItem.id === id))
@@ -76,41 +79,7 @@ export function ConversationMain({ conversation, device, selectedTaskId }: Conve
             </div>
           </section>
 
-          <section aria-label="Conversation stream" className="message-stack">
-            <article className="message">
-              <div className="message-header">
-                <span className="speaker">User</span>
-                <span className="message-time">09:38</span>
-              </div>
-              <p>请调整侧边栏结构，保留设备、搜索、自动化入口，并将项目和对话记录按当前设备归组。</p>
-            </article>
-
-            <article className="message">
-              <div className="message-header">
-                <span className="speaker">Codex on {device.name}</span>
-                <span className="message-time">{conversation.updatedAt}</span>
-              </div>
-              <p>我会把这部分保持在前端 mock 层，菜单和弹窗先只承载交互形态，不绑定真实 app-server 操作。</p>
-              <FileChange path="apps/web/src/mockData.ts" />
-              <FileChange path="packages/ui/src/styles.css" />
-            </article>
-          </section>
-        </div>
-
-        <div className="composer-wrap">
-          <form className="composer">
-            <textarea aria-label="Follow-up message" placeholder="Ask for follow-up changes on the selected device" />
-            <div className="composer-actions">
-              <div className="composer-options">
-                <span className="badge">{device.name}</span>
-                <span className="badge">{conversation.sandbox}</span>
-                <span className="badge">{device.model}</span>
-              </div>
-              <button className="button primary" type="button">
-                Send
-              </button>
-            </div>
-          </form>
+          <CodexAssistantThread thread={assistantThread} />
         </div>
       </main>
 
@@ -284,15 +253,4 @@ function ReviewPane(props: { device: Device; linkedConversations: Conversation[]
 
 function Badge(props: { status: DeviceConnectionStatus | Conversation["status"] | TaskStatus }) {
   return <span className={`badge ${statusToClass(props.status)}`}>{statusText[props.status]}</span>;
-}
-
-function FileChange(props: { path: string }) {
-  return (
-    <div className="file-change">
-      <code>{props.path}</code>
-      <span>
-        <span className="diff-count">+228</span> <span className="diff-count remove">-0</span>
-      </span>
-    </div>
-  );
 }
