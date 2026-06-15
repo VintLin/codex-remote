@@ -55,7 +55,7 @@ export interface RawCodexItem {
   name?: string;
   arguments?: unknown;
   output?: unknown;
-  clientId?: string;
+  clientId?: string | null;
   server?: string;
   tool?: string;
   pluginId?: string | null;
