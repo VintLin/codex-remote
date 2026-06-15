@@ -11,6 +11,11 @@ export interface SidebarModel {
   freeConversations: Conversation[];
 }
 
+export interface ConversationNavigatorState {
+  nextConversationId: string | null;
+  previousConversationId: string | null;
+}
+
 export type SidebarSectionId = "pinned" | "projects" | "conversations";
 
 export type SidebarSectionState = Record<SidebarSectionId, boolean>;
@@ -47,5 +52,25 @@ export function createSidebarModel(params: CreateSidebarModelParams): SidebarMod
     pinnedProjects: projectGroups.filter((project) => project.pinned),
     projects: projectGroups.filter((project) => !project.pinned),
     freeConversations: params.conversations.filter((conversation) => !conversation.projectId && !conversation.pinned),
+  };
+}
+
+export function resolveConversationNavigator(model: SidebarModel, selectedConversationId: string): ConversationNavigatorState {
+  const projectGroup = [...model.pinnedProjects, ...model.projects].find((project) =>
+    project.conversations.some((conversation) => conversation.id === selectedConversationId),
+  );
+  const conversationScope = projectGroup?.conversations ?? model.freeConversations;
+  const selectedIndex = conversationScope.findIndex((conversation) => conversation.id === selectedConversationId);
+
+  if (selectedIndex === -1) {
+    return {
+      nextConversationId: null,
+      previousConversationId: null,
+    };
+  }
+
+  return {
+    nextConversationId: conversationScope[selectedIndex + 1]?.id ?? null,
+    previousConversationId: conversationScope[selectedIndex - 1]?.id ?? null,
   };
 }

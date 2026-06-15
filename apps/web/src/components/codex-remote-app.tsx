@@ -2,9 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { conversations, devices, sidebarProjects, tasks } from "../mockData";
-import { createDefaultSidebarSectionState, createSidebarModel, toggleSidebarSection } from "../sidebarModel";
-import { AutomationsPage, ConversationMain, DevicesPage, SearchDialog } from "./main-panels";
+import type { DetailTarget, LinkReference } from "../assistantTimeline";
+import { assistantThreads, conversations, devices, sidebarProjects } from "../mockData";
+import {
+  createDefaultSidebarSectionState,
+  createSidebarModel,
+  resolveConversationNavigator,
+  toggleSidebarSection,
+} from "../sidebarModel";
+import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
+import {
+  AutomationDetailPane,
+  AutomationsPage,
+  ConversationDetailPane,
+  ConversationMain,
+  DeviceDetailPane,
+  DevicesPage,
+  SearchDialog,
+} from "./main-panels";
 import { type AppView, Sidebar, type SidebarPressedItem } from "./sidebar";
 
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
@@ -13,7 +28,6 @@ export function CodexRemoteApp() {
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]!.id);
   const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]!.id);
-  const [selectedTaskId] = useState(tasks[0]!.id);
   const [expandedProjectIds, setExpandedProjectIds] = useState(
     () => new Set(sidebarProjects.filter((project) => project.expanded).map((project) => project.id)),
   );
@@ -21,6 +35,7 @@ export function CodexRemoteApp() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
+  const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -29,9 +44,14 @@ export function CodexRemoteApp() {
     conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
     conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
     conversations[0]!;
+  const assistantThread = assistantThreads.find((thread) => thread.id === conversation.id) ?? null;
   const sidebarModel = useMemo(
     () => createSidebarModel({ conversations, expandedProjectIds, projects: sidebarProjects }),
     [expandedProjectIds],
+  );
+  const conversationNavigator = useMemo(
+    () => resolveConversationNavigator(sidebarModel, selectedConversationId),
+    [selectedConversationId, sidebarModel],
   );
 
   useEffect(() => {
@@ -58,6 +78,10 @@ export function CodexRemoteApp() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isSearchOpen]);
+
+  useEffect(() => {
+    setSelectedDetailTarget(null);
+  }, [assistantThread?.id, conversation.id]);
 
   const pressSidebarItem = (nextPressedItem: Exclude<SidebarPressedItem, null>, options: { restoreFocus?: boolean } = {}) => {
     setPressedItem(nextPressedItem);
@@ -107,34 +131,62 @@ export function CodexRemoteApp() {
     setSectionState((current) => toggleSidebarSection(current, sectionId));
   };
 
-  const mainContent =
-    activeView === "devices" ? (
-      <DevicesPage onSelectDevice={selectDevice} selectedDeviceId={selectedDeviceId} />
-    ) : activeView === "automations" ? (
-      <AutomationsPage />
-    ) : (
-      <ConversationMain conversation={conversation} device={device} selectedTaskId={selectedTaskId} />
-    );
+  const mainContent = (() => {
+    if (activeView === "devices") {
+      return {
+        detail: <DeviceDetailPane selectedDeviceId={selectedDeviceId} />,
+        main: <DevicesPage onSelectDevice={selectDevice} selectedDeviceId={selectedDeviceId} />,
+      };
+    }
+
+    if (activeView === "automations") {
+      return {
+        detail: <AutomationDetailPane />,
+        main: <AutomationsPage />,
+      };
+    }
+
+    return {
+      detail: (
+        <ConversationDetailPane
+          conversationTitle={conversation.title}
+          onClose={() => setSelectedDetailTarget(null)}
+          target={selectedDetailTarget}
+        />
+      ),
+      main: (
+        <ConversationMain
+          assistantThread={assistantThread}
+          conversation={conversation}
+          device={device}
+          onOpenDetail={setSelectedDetailTarget}
+        />
+      ),
+    };
+  })();
+
+  const sidebarContent = (
+    <Sidebar
+      activeView={activeView}
+      conversationNavigator={conversationNavigator}
+      device={device}
+      model={sidebarModel}
+      onOpenSearch={() => setIsSearchOpen(true)}
+      onSelectAdjacentConversation={selectConversation}
+      onSelectConversation={selectConversation}
+      onSelectView={selectView}
+      onToggleProject={toggleProject}
+      pressedItem={pressedItem}
+      sectionState={sectionState}
+      selectedConversationId={selectedConversationId}
+      sidebarScrollRef={sidebarScrollRef}
+      onToggleSection={toggleSection}
+    />
+  );
 
   return (
     <>
-      <div className="app-shell min-h-screen">
-        <Sidebar
-          activeView={activeView}
-          device={device}
-          model={sidebarModel}
-          onOpenSearch={() => setIsSearchOpen(true)}
-          onSelectConversation={selectConversation}
-          onSelectView={selectView}
-          onToggleProject={toggleProject}
-          pressedItem={pressedItem}
-          sectionState={sectionState}
-          selectedConversationId={selectedConversationId}
-          sidebarScrollRef={sidebarScrollRef}
-          onToggleSection={toggleSection}
-        />
-        {mainContent}
-      </div>
+      <ResizableWorkspaceShell detail={mainContent.detail} main={mainContent.main} sidebar={sidebarContent} />
       <SearchDialog onClose={() => setIsSearchOpen(false)} open={isSearchOpen} />
     </>
   );
