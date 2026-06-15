@@ -1,0 +1,58 @@
+export interface RawThreadListFixture {
+  projectCwd: string;
+  capturedAt: string;
+  pages: RawThreadListPage[];
+}
+
+export interface RawThreadListPage {
+  data?: RawCodexThread[];
+  threads?: RawCodexThread[];
+  items?: RawCodexThread[];
+  cursor?: string | null;
+  nextCursor?: string | null;
+}
+
+export interface RawThreadReadFixture {
+  projectCwd: string;
+  capturedAt: string;
+  threads: Record<string, RawThreadReadResult>;
+}
+
+export interface RawThreadReadResult {
+  thread?: RawCodexThread;
+}
+
+export interface RawCodexThread {
+  id?: string;
+  sessionId?: string;
+  forkedFromId?: string | null;
+  parentThreadId?: string | null;
+  preview?: string;
+  modelProvider?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  status?: string;
+  cwd?: string;
+  name?: string | null;
+  turns?: RawCodexTurn[];
+}
+
+export interface RawCodexTurn {
+  id?: string;
+  status?: string;
+  items?: RawCodexItem[];
+}
+
+export interface RawCodexItem {
+  id?: string;
+  type?: string;
+  role?: string;
+  text?: string;
+  content?: unknown;
+  title?: string;
+  status?: string;
+  command?: string | string[];
+  name?: string;
+  arguments?: unknown;
+  output?: unknown;
+}
