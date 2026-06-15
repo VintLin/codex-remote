@@ -313,12 +313,14 @@ button {
 }
 
 .sidebar-header-separator {
-  &,
-  .sidebar-separator {
-    height: 1px;
-    margin: 8px 2px;
-    background: var(--cr-line);
-  }
+  margin: 8px 2px;
+}
+
+.sidebar-header-separator,
+.sidebar-separator {
+  height: 1px;
+  margin: 8px 2px;
+  background: var(--cr-line);
 }
 
 .nav-group {
