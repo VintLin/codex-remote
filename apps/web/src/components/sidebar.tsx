@@ -160,9 +160,11 @@ function DeviceWorkspaceNav(props: {
           label="置顶"
           onToggle={() => props.onToggleSection("pinned")}
         />
-        {props.sectionState.pinned
+        {props.sectionState.pinned ? (
+          props.model.pinnedProjects.length > 0
           ? props.model.pinnedProjects.map((project) => <ProjectGroup key={project.id} {...props} project={project} />)
-          : null}
+          : <EmptyProjectRow />
+        ) : null}
       </section>
 
       <section aria-label="项目" className="sidebar-section">
@@ -172,9 +174,11 @@ function DeviceWorkspaceNav(props: {
           label="项目"
           onToggle={() => props.onToggleSection("projects")}
         />
-        {props.sectionState.projects
+        {props.sectionState.projects ? (
+          props.model.projects.length > 0
           ? props.model.projects.map((project) => <ProjectGroup key={project.id} {...props} project={project} />)
-          : null}
+          : <EmptyProjectRow />
+        ) : null}
       </section>
 
       <section aria-label="对话" className="sidebar-section">
@@ -325,6 +329,10 @@ function ConversationRow(props: {
 
 function EmptyConversationRow() {
   return <SidebarListItem kind="empty" muted title="暂无对话" />;
+}
+
+function EmptyProjectRow() {
+  return <SidebarListItem kind="empty" muted title="暂无项目" />;
 }
 
 function SidebarListItem(props: SidebarListItemProps) {
