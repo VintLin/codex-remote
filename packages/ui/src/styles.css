@@ -313,14 +313,12 @@ button {
 }
 
 .sidebar-header-separator {
-  /* margin: 8px 2px; */
-}
-
-.sidebar-header-separator,
-.sidebar-separator {
-  height: 1px;
-  margin: 8px 2px;
-  background: var(--cr-line);
+  &,
+  .sidebar-separator {
+    height: 1px;
+    margin: 8px 2px;
+    background: var(--cr-line);
+  }
 }
 
 .nav-group {
@@ -408,7 +406,8 @@ button {
   align-items: center;
   gap: 6px;
   color: var(--cr-muted);
-  font-size: var(--cr-text-compact); /* font-size: 11px; */
+  font-size: 11px;
+  font-size: var(--cr-text-compact);
   font-weight: var(--cr-weight-regular);
 }
 
