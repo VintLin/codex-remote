@@ -1368,6 +1368,10 @@ button.sidebar-list-content {
   margin: 0 auto;
 }
 
+.codex-assistant-root {
+  display: contents;
+}
+
 .codex-assistant-scroll {
   min-height: 0;
   overflow: auto;
@@ -1456,20 +1460,14 @@ button.sidebar-list-content {
   box-shadow: var(--cr-shadow);
 }
 
-.codex-assistant-composer textarea {
+.codex-assistant-composer-input {
   width: 100%;
   min-height: 58px;
-  resize: none;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--cr-muted);
   font-size: var(--cr-text-body);
-}
-
-.codex-assistant-composer textarea::placeholder {
-  color: var(--cr-muted);
-  opacity: 1;
 }
 
 .codex-assistant-composer-actions {

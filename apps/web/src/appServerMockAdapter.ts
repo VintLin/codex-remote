@@ -1,11 +1,14 @@
 import type { BoardTask, Conversation, ConversationStatus, Device, SidebarProject } from "./mockData.ts";
 import type { RawCodexItem, RawCodexThread, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
+import type { MessageStatus, ThreadMessageLike } from "@assistant-ui/react";
 
 export interface AssistantMessageSnapshot {
   id: string;
   role: "user" | "assistant";
   itemType: string;
   contentText: string;
+  content: ThreadMessageLike["content"];
+  status?: MessageStatus;
   turnId?: string;
 }
 
@@ -250,14 +253,66 @@ function createMessageSnapshot(
 ): AssistantMessageSnapshot | undefined {
   const contentText = getItemText(item, itemType);
   const id = getNonEmptyString(item.id) ?? `${turnId ?? "turn"}-item-${index}`;
+  const role = getMessageRole(item);
   const base = {
     id,
-    role: getMessageRole(item),
+    role,
     itemType,
     contentText,
+    content: getAssistantMessageContent(id, itemType, contentText),
   };
+  const message =
+    role === "assistant" ? { ...base, status: { type: "complete", reason: "stop" } as const } : base;
 
-  return turnId ? { ...base, turnId } : base;
+  return turnId ? { ...message, turnId } : message;
+}
+
+function getAssistantMessageContent(
+  itemId: string,
+  itemType: string,
+  contentText: string,
+): ThreadMessageLike["content"] {
+  if (!isToolLikeItemType(itemType)) {
+    return [{ type: "text", text: contentText }];
+  }
+
+  return [
+    { type: "text", text: contentText },
+    {
+      type: "tool-call",
+      toolCallId: `${itemId}-tool`,
+      toolName: getToolName(itemType),
+      args: { itemType },
+      argsText: itemType,
+      result: contentText,
+    },
+  ];
+}
+
+function isToolLikeItemType(itemType: string): boolean {
+  const normalized = itemType.toLowerCase();
+  return (
+    normalized.includes("tool") ||
+    normalized.includes("exec") ||
+    normalized.includes("patch") ||
+    normalized.includes("filechange") ||
+    normalized.includes("command") ||
+    normalized.includes("search")
+  );
+}
+
+function getToolName(itemType: string): string {
+  const normalized = itemType.toLowerCase();
+  if (normalized.includes("patch") || normalized.includes("filechange")) {
+    return "codex_file_change";
+  }
+  if (normalized.includes("search")) {
+    return "codex_search";
+  }
+  if (normalized.includes("exec") || normalized.includes("command")) {
+    return "codex_execution";
+  }
+  return "codex_tool";
 }
 
 function getMessageRole(item: RawCodexItem): AssistantMessageSnapshot["role"] {

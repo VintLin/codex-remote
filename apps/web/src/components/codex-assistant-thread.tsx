@@ -1,6 +1,16 @@
 "use client";
 
-import { ThreadPrimitive } from "@assistant-ui/react";
+import {
+  AssistantRuntimeProvider,
+  ComposerPrimitive,
+  MessagePrimitive,
+  ThreadPrimitive,
+  type TextMessagePartProps,
+  type ThreadMessageLike,
+  type ToolCallMessagePartProps,
+  useExternalStoreRuntime,
+} from "@assistant-ui/react";
+import { useCallback, useMemo } from "react";
 
 import type { AssistantMessageSnapshot, AssistantThreadSnapshot } from "../appServerMockAdapter";
 
@@ -9,76 +19,120 @@ interface CodexAssistantThreadProps {
 }
 
 export function CodexAssistantThread({ thread }: CodexAssistantThreadProps) {
-  const messages = thread?.messages ?? [];
+  return <CodexAssistantRuntimeThread key={thread?.id ?? "empty-thread"} thread={thread} />;
+}
+
+function CodexAssistantRuntimeThread({ thread }: CodexAssistantThreadProps) {
+  const messages = useMemo(() => thread?.messages ?? [], [thread]);
+  const convertMessage = useCallback((message: AssistantMessageSnapshot): ThreadMessageLike => {
+    return {
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      status: message.status,
+      metadata: {
+        custom: {
+          contentText: message.contentText,
+          itemType: message.itemType,
+          turnId: message.turnId ?? null,
+        },
+      },
+    };
+  }, []);
+  const runtime = useExternalStoreRuntime<AssistantMessageSnapshot>({
+    messages,
+    convertMessage,
+    isDisabled: true,
+    isSendDisabled: true,
+    onNew: async () => {},
+  });
 
   return (
-    <section aria-label="Conversation thread" className="codex-assistant-thread">
-      <ThreadPrimitive.Root className="codex-assistant-scroll">
-        {messages.length > 0 ? (
-          <div className="codex-assistant-message-list">
-            {messages.map((message) => (
-              <article className="codex-assistant-message" data-role={message.role} key={message.id}>
-                <header className="codex-assistant-message-header">
-                  <span>{message.role === "user" ? "User" : "Codex"}</span>
-                  <span>{message.itemType}</span>
-                </header>
-                <p>{message.contentText}</p>
-                {isToolLikeItem(message) ? <ToolItemCard message={message} /> : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="codex-assistant-empty">暂无历史消息</div>
-        )}
-      </ThreadPrimitive.Root>
-
-      <form aria-disabled="true" className="codex-assistant-composer">
-        <textarea
-          aria-label="Follow-up message"
-          disabled
-          placeholder="Streaming transport unavailable: 当前仅展示 app-server 历史快照，follow-up 发送暂不可用。"
-        />
-        <div className="codex-assistant-composer-actions">
-          <span>Live app-server streaming 尚未接入</span>
-          <button disabled type="button">
-            Send
-          </button>
-        </div>
-      </form>
-    </section>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <section aria-label="Conversation thread" className="codex-assistant-thread">
+        <ThreadPrimitive.Root className="codex-assistant-root">
+          <ThreadPrimitive.ViewportProvider>
+            <div className="codex-assistant-scroll">
+              <ThreadPrimitive.Empty>
+                <div className="codex-assistant-empty">暂无历史消息</div>
+              </ThreadPrimitive.Empty>
+              <div className="codex-assistant-message-list">
+                <ThreadPrimitive.Messages>
+                  {({ message }) => <CodexAssistantMessage itemType={getMessageItemType(message)} role={message.role} />}
+                </ThreadPrimitive.Messages>
+              </div>
+            </div>
+            <ComposerPrimitive.Root aria-disabled="true" className="codex-assistant-composer">
+              <div
+                aria-label="Follow-up message"
+                aria-disabled="true"
+                className="codex-assistant-composer-input"
+                role="textbox"
+              >
+                Streaming transport unavailable: 当前仅展示 app-server 历史快照，follow-up 发送暂不可用。
+              </div>
+              <div className="codex-assistant-composer-actions">
+                <span>Live app-server streaming 尚未接入</span>
+                <ComposerPrimitive.Send disabled type="button">
+                  Send
+                </ComposerPrimitive.Send>
+              </div>
+            </ComposerPrimitive.Root>
+          </ThreadPrimitive.ViewportProvider>
+        </ThreadPrimitive.Root>
+      </section>
+    </AssistantRuntimeProvider>
   );
 }
 
-function ToolItemCard({ message }: { message: AssistantMessageSnapshot }) {
+function CodexAssistantMessage(props: { itemType: string; role: "assistant" | "system" | "user" }) {
+  return (
+    <MessagePrimitive.Root className="codex-assistant-message" data-role={props.role}>
+      <header className="codex-assistant-message-header">
+        <span>{props.role === "user" ? "User" : "Codex"}</span>
+        <span>{props.itemType}</span>
+      </header>
+      <MessagePrimitive.Content
+        components={{
+          Text: CodexAssistantTextPart,
+          tools: {
+            Fallback: CodexAssistantToolPart,
+          },
+        }}
+      />
+      <MessagePrimitive.Error />
+    </MessagePrimitive.Root>
+  );
+}
+
+function CodexAssistantTextPart(props: TextMessagePartProps) {
+  return <p>{props.text}</p>;
+}
+
+function CodexAssistantToolPart(props: ToolCallMessagePartProps<Record<string, unknown>, unknown>) {
+  const itemType = typeof props.args["itemType"] === "string" ? props.args["itemType"] : props.toolName;
+
   return (
     <div className="codex-assistant-item-card">
-      <span>{getToolItemLabel(message.itemType)}</span>
-      <code>{message.itemType}</code>
+      <span>{getToolItemLabel(props.toolName)}</span>
+      <code>{itemType}</code>
     </div>
   );
 }
 
-function isToolLikeItem(message: AssistantMessageSnapshot): boolean {
-  const itemType = message.itemType.toLowerCase();
-  return (
-    itemType.includes("tool") ||
-    itemType.includes("exec") ||
-    itemType.includes("patch") ||
-    itemType.includes("filechange") ||
-    itemType.includes("command") ||
-    itemType.includes("search")
-  );
+function getMessageItemType(message: { metadata?: { custom?: Record<string, unknown> } }): string {
+  const itemType = message.metadata?.custom?.["itemType"];
+  return typeof itemType === "string" ? itemType : "message";
 }
 
-function getToolItemLabel(itemType: string): string {
-  const normalized = itemType.toLowerCase();
-  if (normalized.includes("patch") || normalized.includes("filechange")) {
+function getToolItemLabel(toolName: string): string {
+  if (toolName === "codex_file_change") {
     return "File or patch item";
   }
-  if (normalized.includes("search")) {
+  if (toolName === "codex_search") {
     return "Search item";
   }
-  if (normalized.includes("exec") || normalized.includes("command")) {
+  if (toolName === "codex_execution") {
     return "Execution item";
   }
   return "Tool item";

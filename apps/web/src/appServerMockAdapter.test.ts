@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import listFixture from "./fixtures/app-server/050_codex_remote.thread-list.json" with { type: "json" };
@@ -133,6 +134,37 @@ test("when deriving messages, should handle empty turns and unknown items", () =
   assert.equal(messages[0]?.id, "item-unknown");
   assert.equal(messages[0]?.role, "assistant");
   assert.match(messages[0]?.contentText ?? "", /something\/new/);
+});
+
+test("when deriving messages, should expose assistant-ui compatible content parts", () => {
+  const thread: RawCodexThread = {
+    id: "thread-assistant-ui",
+    turns: [
+      {
+        id: "turn-a",
+        items: [{ id: "item-text", type: "agentMessage", text: "Assistant text" }],
+      },
+    ],
+  };
+
+  const messages = deriveAssistantMessages(thread);
+
+  assert.equal(messages[0]?.contentText, "Assistant text");
+  assert.deepEqual(messages[0]?.content, [{ type: "text", text: "Assistant text" }]);
+});
+
+test("when rendering the assistant thread, should use assistant-ui runtime and primitives", () => {
+  const source = readFileSync(new URL("./components/codex-assistant-thread.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /AssistantRuntimeProvider/);
+  assert.match(source, /useExternalStoreRuntime/);
+  assert.match(source, /MessagePrimitive/);
+  assert.match(source, /ComposerPrimitive/);
+  assert.match(source, /ThreadPrimitive\.ViewportProvider/);
+  assert.doesNotMatch(source, /<ThreadPrimitive\.Viewport[\\s>]/);
+  assert.doesNotMatch(source, /ComposerPrimitive\.Input/);
+  assert.doesNotMatch(source, /<form\b/);
+  assert.doesNotMatch(source, /<textarea\b/);
 });
 
 test("when deriving messages, should guard malformed raw item ids and types", () => {
