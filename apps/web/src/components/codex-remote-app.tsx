@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { DetailTarget, LinkReference } from "../assistantTimeline";
 import { assistantThreads, conversations, devices, sidebarProjects } from "../mockData";
 import {
   createDefaultSidebarSectionState,
@@ -9,7 +10,16 @@ import {
   resolveConversationNavigator,
   toggleSidebarSection,
 } from "../sidebarModel";
-import { AutomationsPage, ConversationMain, DevicesPage, SearchDialog } from "./main-panels";
+import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
+import {
+  AutomationDetailPane,
+  AutomationsPage,
+  ConversationDetailPane,
+  ConversationMain,
+  DeviceDetailPane,
+  DevicesPage,
+  SearchDialog,
+} from "./main-panels";
 import { type AppView, Sidebar, type SidebarPressedItem } from "./sidebar";
 
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
@@ -25,6 +35,7 @@ export function CodexRemoteApp() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
+  const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -67,6 +78,10 @@ export function CodexRemoteApp() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isSearchOpen]);
+
+  useEffect(() => {
+    setSelectedDetailTarget(null);
+  }, [assistantThread?.id, conversation.id]);
 
   const pressSidebarItem = (nextPressedItem: Exclude<SidebarPressedItem, null>, options: { restoreFocus?: boolean } = {}) => {
     setPressedItem(nextPressedItem);
@@ -116,40 +131,62 @@ export function CodexRemoteApp() {
     setSectionState((current) => toggleSidebarSection(current, sectionId));
   };
 
-  const mainContent =
-    activeView === "devices" ? (
-      <DevicesPage onSelectDevice={selectDevice} selectedDeviceId={selectedDeviceId} />
-    ) : activeView === "automations" ? (
-      <AutomationsPage />
-    ) : (
-      <ConversationMain
-        assistantThread={assistantThread}
-        conversation={conversation}
-        device={device}
-      />
-    );
+  const mainContent = (() => {
+    if (activeView === "devices") {
+      return {
+        detail: <DeviceDetailPane selectedDeviceId={selectedDeviceId} />,
+        main: <DevicesPage onSelectDevice={selectDevice} selectedDeviceId={selectedDeviceId} />,
+      };
+    }
+
+    if (activeView === "automations") {
+      return {
+        detail: <AutomationDetailPane />,
+        main: <AutomationsPage />,
+      };
+    }
+
+    return {
+      detail: (
+        <ConversationDetailPane
+          conversationTitle={conversation.title}
+          onClose={() => setSelectedDetailTarget(null)}
+          target={selectedDetailTarget}
+        />
+      ),
+      main: (
+        <ConversationMain
+          assistantThread={assistantThread}
+          conversation={conversation}
+          device={device}
+          onOpenDetail={setSelectedDetailTarget}
+        />
+      ),
+    };
+  })();
+
+  const sidebarContent = (
+    <Sidebar
+      activeView={activeView}
+      conversationNavigator={conversationNavigator}
+      device={device}
+      model={sidebarModel}
+      onOpenSearch={() => setIsSearchOpen(true)}
+      onSelectAdjacentConversation={selectConversation}
+      onSelectConversation={selectConversation}
+      onSelectView={selectView}
+      onToggleProject={toggleProject}
+      pressedItem={pressedItem}
+      sectionState={sectionState}
+      selectedConversationId={selectedConversationId}
+      sidebarScrollRef={sidebarScrollRef}
+      onToggleSection={toggleSection}
+    />
+  );
 
   return (
     <>
-      <div className="app-shell min-h-screen">
-        <Sidebar
-          activeView={activeView}
-          conversationNavigator={conversationNavigator}
-          device={device}
-          model={sidebarModel}
-          onOpenSearch={() => setIsSearchOpen(true)}
-          onSelectAdjacentConversation={selectConversation}
-          onSelectConversation={selectConversation}
-          onSelectView={selectView}
-          onToggleProject={toggleProject}
-          pressedItem={pressedItem}
-          sectionState={sectionState}
-          selectedConversationId={selectedConversationId}
-          sidebarScrollRef={sidebarScrollRef}
-          onToggleSection={toggleSection}
-        />
-        {mainContent}
-      </div>
+      <ResizableWorkspaceShell detail={mainContent.detail} main={mainContent.main} sidebar={sidebarContent} />
       <SearchDialog onClose={() => setIsSearchOpen(false)} open={isSearchOpen} />
     </>
   );

@@ -74,8 +74,11 @@
   --cr-radius-md: 8px;
   --cr-radius-lg: 12px;
   --cr-sidebar-width: 280px;
-  --cr-main-min: 480px;
-  --cr-review-width: 420px;
+  --cr-sidebar-min: 220px;
+  --cr-main-min: 520px;
+  --cr-review-width: 380px;
+  --cr-review-min: 300px;
+  --cr-review-max: 560px;
   --cr-topbar-height: 56px;
   background: var(--cr-bg);
   color: var(--cr-ink);
@@ -206,12 +209,46 @@ button {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--cr-sidebar-width) minmax(var(--cr-main-min), 1fr) var(--cr-review-width);
+  width: 100vw;
+  min-width: var(--cr-main-min);
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
   background: var(--cr-bg);
+}
+
+.workspace-panel {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden !important;
+}
+
+.app-shell [data-panel] {
+  overflow: hidden !important;
+}
+
+.workspace-resize-handle {
+  position: relative;
+  width: 1px;
+  min-width: 1px;
+  background: var(--cr-line-soft);
+  outline: none;
+}
+
+.workspace-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 9px;
+}
+
+.workspace-resize-handle:hover,
+.workspace-resize-handle:focus-visible,
+.workspace-resize-handle[data-resize-handle-state="drag"] {
+  background: var(--cr-muted);
 }
 
 .sidebar {
@@ -2257,46 +2294,7 @@ button.codex-assistant-tool-row[aria-expanded="true"] .icon:last-child {
   display: none;
 }
 
-@media (max-width: 1180px) {
-  body {
-    overflow: auto;
-  }
-
-  .app-shell {
-    grid-template-columns: 248px minmax(0, 1fr);
-    height: auto;
-    min-height: 100vh;
-    overflow: auto;
-  }
-
-  .review-pane {
-    grid-column: 2;
-    min-height: auto;
-    border-top: 1px solid var(--cr-line-soft);
-    border-left: 0;
-  }
-}
-
 @media (max-width: 820px) {
-  .app-shell {
-    display: block;
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-  }
-
-  .sidebar,
-  .main-pane,
-  .review-pane {
-    height: auto;
-    min-height: auto;
-  }
-
-  .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--cr-line);
-  }
-
   .context-grid,
   .run-card {
     grid-template-columns: 1fr;
