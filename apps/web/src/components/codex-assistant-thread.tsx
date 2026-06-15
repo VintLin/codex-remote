@@ -31,7 +31,7 @@ interface RuntimeMessageSnapshot {
   id: string;
   role: "assistant" | "system" | "user";
   content: ThreadMessageLike["content"];
-  status: ThreadMessageLike["status"];
+  status?: ThreadMessageLike["status"];
 }
 
 interface ProcessedRunRow {
@@ -72,7 +72,7 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
       id: message.id,
       role: message.role,
       content: message.content,
-      status: message.status,
+      ...(message.status ? { status: message.status } : {}),
     };
   }, []);
   const runtime = useExternalStoreRuntime<RuntimeMessageSnapshot>({
@@ -279,12 +279,16 @@ function getRuntimeMessages(thread: AppServerAssistantThreadSnapshot | null): Ru
   }
 
   return thread.timeline.turns.flatMap((turn) =>
-    turn.nodes.map((node) => ({
-      id: node.id,
-      role: getNodeRuntimeRole(node),
-      content: [{ type: "text", text: getRuntimeMessageText(node) }],
-      status: { type: "complete", reason: "stop" },
-    })),
+    turn.nodes.map((node) => {
+      const role = getNodeRuntimeRole(node);
+
+      return {
+        id: node.id,
+        role,
+        content: [{ type: "text", text: getRuntimeMessageText(node) }],
+        ...(role === "assistant" ? { status: { type: "complete", reason: "stop" } } : {}),
+      };
+    }),
   );
 }
 

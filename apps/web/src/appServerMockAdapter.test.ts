@@ -184,3 +184,11 @@ test("when rendering the assistant thread, should keep assistant-ui runtime and 
   assert.doesNotMatch(source, /<form\b/);
   assert.doesNotMatch(source, /<textarea\b/);
 });
+
+test("non-assistant runtime messages should not receive status", () => {
+  const source = readFileSync(new URL("./components/codex-assistant-thread.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /status\?: ThreadMessageLike\["status"\];/);
+  assert.match(source, /role === "assistant"\s*\?\s*\{\s*status:/);
+  assert.doesNotMatch(source, /status: message\.status,/);
+});
