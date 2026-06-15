@@ -313,27 +313,14 @@ button {
 }
 
 .sidebar-header-separator {
+  /* margin: 8px 2px; */
+}
+
+.sidebar-header-separator,
+.sidebar-separator {
   height: 1px;
   margin: 8px 2px;
   background: var(--cr-line);
-}
-
-.traffic-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-}
-
-.traffic-dot.red {
-  background: var(--cr-danger);
-}
-
-.traffic-dot.yellow {
-  background: var(--cr-warning);
-}
-
-.traffic-dot.green {
-  background: var(--cr-success);
 }
 
 .nav-group {
@@ -405,7 +392,7 @@ button {
   gap: 9px;
   min-height: 34px;
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: var(--cr-text-list);
   font-weight: var(--cr-weight-regular);
 }
 
@@ -421,7 +408,7 @@ button {
   align-items: center;
   gap: 6px;
   color: var(--cr-muted);
-  font-size: 11px;
+  font-size: var(--cr-text-compact); /* font-size: 11px; */
   font-weight: var(--cr-weight-regular);
 }
 
@@ -455,12 +442,6 @@ button {
   border-radius: 999px;
   background: color-mix(in oklch, var(--cr-muted) 34%, transparent);
   background-clip: content-box;
-}
-
-.sidebar-separator {
-  height: 1px;
-  margin: 8px 2px;
-  background: var(--cr-line);
 }
 
 .sidebar-section {
