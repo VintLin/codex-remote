@@ -25,7 +25,7 @@ test("when tool-like items are consecutive, should group them and collapse child
   const group = timeline.turns[0]?.nodes[2];
 
   assert.equal(group?.type, "toolGroup");
-  assert.equal(group.summary, "已编辑 1 个文件 已运行 1 条命令");
+  assert.equal(group.summary, "已编辑 2 个文件 已运行 1 条命令");
   assert.equal(group.defaultCollapsed, true);
   assert.deepEqual(group.calls.map((child) => `${child.id}:${child.defaultCollapsed}`), ["file-a:true", "mcp-a:true"]);
   assert.deepEqual(group.sourceItemIds, ["file-a", "mcp-a"]);
@@ -52,9 +52,12 @@ test("when file changes contain a diff, should generate a workspace diff DetailT
   assert.equal(fileChange.kind, "fileChange");
   assert.equal(fileChange.detailPlacement, "workspace");
   assert.equal(fileChange.detailTarget.type, "diff");
-  assert.equal(fileChange.detailTarget.title, "sample.ts");
-  assert.equal(fileChange.detailTarget.path, "/tmp/sample.ts");
-  assert.equal(fileChange.detailTarget.diff, "@@ -1 +1 @@\n-old\n+new\n");
+  assert.equal(fileChange.detailTarget.title, "已编辑 2 个文件");
+  assert.equal(fileChange.detailTarget.changes.length, 2);
+  assert.deepEqual(
+    fileChange.detailTarget.changes.map((change) => change.path),
+    ["/tmp/sample.ts", "/tmp/second.ts"],
+  );
 });
 
 test("when raw turn includes timing, should pass timing fields into timeline turn", () => {
@@ -136,6 +139,11 @@ function createSyntheticThread(): RawCodexThread {
                 path: "/tmp/sample.ts",
                 kind: { type: "modify" },
                 diff: "@@ -1 +1 @@\n-old\n+new\n",
+              },
+              {
+                path: "/tmp/second.ts",
+                kind: "add",
+                diff: "@@ -0,0 +1 @@\n+second\n",
               },
             ],
           },

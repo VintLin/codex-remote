@@ -40,6 +40,11 @@ export interface RawCodexThread {
 export interface RawCodexTurn {
   id?: string;
   status?: string;
+  itemsView?: unknown;
+  error?: unknown;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  durationMs?: number | null;
   items?: RawCodexItem[];
 }
 

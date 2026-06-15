@@ -74,9 +74,7 @@ export type DetailTarget =
   | {
       type: "diff";
       title: string;
-      path: string;
-      diff: string;
-      changeKind: string;
+      changes: Array<{ path: string; diff: string; changeKind: string }>;
     }
   | {
       type: "file";
@@ -323,8 +321,16 @@ function createDetailTarget(item: RawCodexItem, kind: ToolCallKind): DetailTarge
 }
 
 function createFileChangeDetailTarget(changes: RawCodexFileChange[]): DetailTarget {
-  const firstChange = changes[0];
-  if (!firstChange) {
+  const normalizedChanges = changes.map((change) => {
+    const path = getNonEmptyString(change.path) ?? "unknown-file";
+    return {
+      path,
+      diff: getNonEmptyString(change.diff) ?? "",
+      changeKind: getFileChangeKind(change),
+    };
+  });
+
+  if (normalizedChanges.length === 0) {
     return {
       type: "unknown",
       title: "File change",
@@ -332,24 +338,24 @@ function createFileChangeDetailTarget(changes: RawCodexFileChange[]): DetailTarg
     };
   }
 
-  const path = getNonEmptyString(firstChange.path) ?? "unknown-file";
-  const title = getPathTitle(path) ?? path;
-  const diff = getNonEmptyString(firstChange.diff);
-  if (diff) {
-    return {
-      type: "diff",
-      title,
-      path,
-      diff,
-      changeKind: getFileChangeKind(firstChange),
-    };
+  return {
+    type: "diff",
+    title: getFileChangeDetailTitle(normalizedChanges),
+    changes: normalizedChanges,
+  };
+}
+
+function getFileChangeDetailTitle(changes: Array<{ path: string }>): string {
+  if (changes.length > 1) {
+    return `已编辑 ${changes.length} 个文件`;
   }
 
-  return {
-    type: "file",
-    title,
-    path,
-  };
+  const firstChange = changes[0];
+  if (!firstChange) {
+    return "File change";
+  }
+
+  return getPathTitle(firstChange.path) ?? firstChange.path;
 }
 
 function getDetailPlacement(kind: ToolCallKind, detailTarget: DetailTarget): DetailPlacement {
