@@ -1,16 +1,6 @@
 import type { BoardTask, Conversation, ConversationStatus, Device, SidebarProject } from "./mockData.ts";
-import type { RawCodexItem, RawCodexThread, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
-import type { MessageStatus, ThreadMessageLike } from "@assistant-ui/react";
-
-export interface AssistantMessageSnapshot {
-  id: string;
-  role: "user" | "assistant";
-  itemType: string;
-  contentText: string;
-  content: ThreadMessageLike["content"];
-  status?: MessageStatus;
-  turnId?: string;
-}
+import type { RawCodexThread, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
+import { deriveAssistantTimeline, type AssistantTimeline } from "./assistantTimeline.ts";
 
 export interface AssistantThreadSnapshot {
   id: string;
@@ -22,7 +12,7 @@ export interface AssistantThreadSnapshot {
   updatedAt: string;
   forkedFromId: string | null;
   parentThreadId: string | null;
-  messages: AssistantMessageSnapshot[];
+  timeline: AssistantTimeline;
 }
 
 export interface SearchRecent {
@@ -78,7 +68,7 @@ export function createAppServerMockData({ list, reads }: CreateAppServerMockData
       updatedAt: conversation.updatedAt,
       forkedFromId: thread?.forkedFromId ?? null,
       parentThreadId: thread?.parentThreadId ?? null,
-      messages: thread ? deriveAssistantMessages(thread) : [],
+      timeline: deriveAssistantTimeline(thread ?? { id: conversation.id, turns: [] }),
     };
   });
 
@@ -119,23 +109,6 @@ export function createAppServerMockData({ list, reads }: CreateAppServerMockData
   };
 }
 
-export function deriveAssistantMessages(thread: RawCodexThread): AssistantMessageSnapshot[] {
-  const messages: AssistantMessageSnapshot[] = [];
-
-  for (const turn of thread.turns ?? []) {
-    const turnId = getNonEmptyString(turn.id);
-    for (const [index, item] of (turn.items ?? []).entries()) {
-      const itemType = getNonEmptyString(item.type) ?? "unknown";
-      const message = createMessageSnapshot(item, itemType, turnId, index);
-      if (message) {
-        messages.push(message);
-      }
-    }
-  }
-
-  return messages;
-}
-
 export function getThreadTitle(thread: Pick<RawCodexThread, "id" | "name" | "preview">): string {
   const name = getNonEmptyString(thread.name);
   if (name) {
@@ -164,7 +137,7 @@ function createConversation({
   const threadId = getThreadId(thread);
   const readableThread = getReadableThread(threadId, reads);
   const sourceThread = readableThread ?? thread;
-  const messages = deriveAssistantMessages(sourceThread);
+  const timeline = deriveAssistantTimeline(sourceThread);
 
   return {
     id: threadId,
@@ -174,7 +147,7 @@ function createConversation({
     projectName,
     status: normalizeConversationStatus(sourceThread.status as unknown),
     updatedAt: formatRelativeTime(reads.capturedAt, sourceThread.updatedAt),
-    summary: summarizeThread(sourceThread, messages),
+    summary: summarizeThread(sourceThread, timeline),
     sandbox: DEFAULT_SANDBOX,
     approval: DEFAULT_APPROVAL,
   };
@@ -245,155 +218,25 @@ function normalizeStatusText(value: string): string {
   return value.toLowerCase().replace(/[^a-z]/g, "");
 }
 
-function createMessageSnapshot(
-  item: RawCodexItem,
-  itemType: string,
-  turnId: string | undefined,
-  index: number,
-): AssistantMessageSnapshot | undefined {
-  const contentText = getItemText(item, itemType);
-  const id = getNonEmptyString(item.id) ?? `${turnId ?? "turn"}-item-${index}`;
-  const role = getMessageRole(item);
-  const base = {
-    id,
-    role,
-    itemType,
-    contentText,
-    content: getAssistantMessageContent(id, itemType, contentText),
-  };
-  const message =
-    role === "assistant" ? { ...base, status: { type: "complete", reason: "stop" } as const } : base;
-
-  return turnId ? { ...message, turnId } : message;
-}
-
-function getAssistantMessageContent(
-  itemId: string,
-  itemType: string,
-  contentText: string,
-): ThreadMessageLike["content"] {
-  if (!isToolLikeItemType(itemType)) {
-    return [{ type: "text", text: contentText }];
-  }
-
-  return [
-    { type: "text", text: contentText },
-    {
-      type: "tool-call",
-      toolCallId: `${itemId}-tool`,
-      toolName: getToolName(itemType),
-      args: { itemType },
-      argsText: itemType,
-      result: contentText,
-    },
-  ];
-}
-
-function isToolLikeItemType(itemType: string): boolean {
-  const normalized = itemType.toLowerCase();
-  return (
-    normalized.includes("tool") ||
-    normalized.includes("exec") ||
-    normalized.includes("patch") ||
-    normalized.includes("filechange") ||
-    normalized.includes("command") ||
-    normalized.includes("search")
-  );
-}
-
-function getToolName(itemType: string): string {
-  const normalized = itemType.toLowerCase();
-  if (normalized.includes("patch") || normalized.includes("filechange")) {
-    return "codex_file_change";
-  }
-  if (normalized.includes("search")) {
-    return "codex_search";
-  }
-  if (normalized.includes("exec") || normalized.includes("command")) {
-    return "codex_execution";
-  }
-  return "codex_tool";
-}
-
-function getMessageRole(item: RawCodexItem): AssistantMessageSnapshot["role"] {
-  if (item.role === "user" || item.type === "userMessage") {
-    return "user";
-  }
-
-  return "assistant";
-}
-
-function getItemText(item: RawCodexItem, itemType: string): string {
-  const text = getNonEmptyString(item.text);
-  if (text) {
-    return text;
-  }
-
-  const contentText = getContentText(item.content);
-  if (contentText) {
-    return contentText;
-  }
-
-  const title = getNonEmptyString(item.title);
-  if (title) {
-    return title;
-  }
-
-  const command = getCommandText(item.command);
-  if (command) {
-    return command;
-  }
-
-  return `Unsupported Codex item: ${itemType}`;
-}
-
-function getContentText(content: unknown): string {
-  if (typeof content === "string") {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    return content.map(getContentText).filter(Boolean).join("\n").trim();
-  }
-
-  if (!isRecord(content)) {
-    return "";
-  }
-
-  const text = content["text"];
-  if (typeof text === "string") {
-    return text.trim();
-  }
-
-  const value = content["value"];
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  const fragments = content["fragments"];
-  if (Array.isArray(fragments)) {
-    return fragments.map(getContentText).filter(Boolean).join("\n").trim();
-  }
-
-  return "";
-}
-
-function getCommandText(command: string | string[] | undefined): string {
-  if (typeof command === "string") {
-    return command.trim();
-  }
-
-  if (Array.isArray(command)) {
-    return command.join(" ").trim();
-  }
-
-  return "";
-}
-
-function summarizeThread(thread: RawCodexThread, messages: AssistantMessageSnapshot[]): string {
-  const latestMessage = [...messages].reverse().find((message) => message.contentText.trim().length > 0);
-  const sourceText = latestMessage?.contentText ?? firstLine(thread.preview) ?? "No preview available.";
+function summarizeThread(thread: RawCodexThread, timeline: AssistantTimeline): string {
+  const sourceText = getLatestTimelineText(timeline) ?? firstLine(thread.preview) ?? getThreadTitle(thread);
   return truncate(sourceText.replace(/\s+/g, " ").trim(), 96);
+}
+
+function getLatestTimelineText(timeline: AssistantTimeline): string | undefined {
+  for (const turn of [...timeline.turns].reverse()) {
+    for (const node of [...turn.nodes].reverse()) {
+      if (node.type === "text" && node.text.trim().length > 0) {
+        return node.text;
+      }
+
+      if (node.type === "contextCompaction" && node.text.trim().length > 0) {
+        return node.text;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function createTasks(projectName: string, conversations: Conversation[]): BoardTask[] {

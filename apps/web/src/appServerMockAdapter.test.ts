@@ -4,12 +4,8 @@ import test from "node:test";
 
 import listFixture from "./fixtures/app-server/050_codex_remote.thread-list.json" with { type: "json" };
 import readFixture from "./fixtures/app-server/050_codex_remote.thread-read.json" with { type: "json" };
-import {
-  createAppServerMockData,
-  deriveAssistantMessages,
-  getThreadTitle,
-} from "./appServerMockAdapter.ts";
-import type { RawCodexThread, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
+import { createAppServerMockData, getThreadTitle } from "./appServerMockAdapter.ts";
+import type { RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
 
 const list = listFixture as unknown as RawThreadListFixture;
 const reads = readFixture as unknown as RawThreadReadFixture;
@@ -111,83 +107,80 @@ test("when deriving assistant threads, should preserve fork metadata from select
   );
 });
 
+test("when deriving assistant threads, should expose assistant timeline nodes", () => {
+  const syntheticList: RawThreadListFixture = {
+    projectCwd: "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+    capturedAt: "2026-06-15T00:00:00.000Z",
+    pages: [
+      {
+        data: [{ id: "thread-with-turns", name: "Thread with turns", updatedAt: 1_797_249_600 }],
+      },
+    ],
+  };
+  const syntheticReads: RawThreadReadFixture = {
+    projectCwd: syntheticList.projectCwd,
+    capturedAt: syntheticList.capturedAt,
+    threads: {
+      "thread-with-turns": {
+        thread: {
+          id: "thread-with-turns",
+          name: "Thread with turns",
+          updatedAt: 1_797_249_600,
+          turns: [
+            {
+              id: "turn-a",
+              status: "completed",
+              startedAt: 1_797_249_500,
+              completedAt: 1_797_249_545,
+              durationMs: 45_250,
+              items: [{ id: "item-a", type: "agentMessage", text: "Turn A" }],
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  const data = createAppServerMockData({ list: syntheticList, reads: syntheticReads });
+
+  assert.equal(data.assistantThreads[0]?.timeline.threadId, "thread-with-turns");
+  assert.deepEqual(data.assistantThreads[0]?.timeline.turns, [
+    {
+      id: "turn-a",
+      status: "completed",
+      startedAt: 1_797_249_500,
+      completedAt: 1_797_249_545,
+      durationMs: 45_250,
+      nodes: [
+        {
+          type: "text",
+          id: "item-a",
+          turnId: "turn-a",
+          sourceItemIds: ["item-a"],
+          role: "assistant",
+          text: "Turn A",
+          links: [],
+        },
+      ],
+    },
+  ]);
+});
+
 test("when resolving titles, should prefer name then preview then fallback", () => {
   assert.equal(getThreadTitle({ id: "a", name: "Named", preview: "Preview" }), "Named");
   assert.equal(getThreadTitle({ id: "b", name: "", preview: "Preview\nsecond line" }), "Preview");
   assert.equal(getThreadTitle({ id: "c", name: null, preview: "" }), "Untitled thread");
 });
 
-test("when deriving messages, should handle empty turns and unknown items", () => {
-  const thread: RawCodexThread = {
-    id: "thread-empty",
-    turns: [
-      {
-        id: "turn-a",
-        items: [{ id: "item-unknown", type: "something/new", content: { value: 1 } }],
-      },
-    ],
-  };
-
-  const messages = deriveAssistantMessages(thread);
-
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0]?.id, "item-unknown");
-  assert.equal(messages[0]?.role, "assistant");
-  assert.match(messages[0]?.contentText ?? "", /something\/new/);
-});
-
-test("when deriving messages, should expose assistant-ui compatible content parts", () => {
-  const thread: RawCodexThread = {
-    id: "thread-assistant-ui",
-    turns: [
-      {
-        id: "turn-a",
-        items: [{ id: "item-text", type: "agentMessage", text: "Assistant text" }],
-      },
-    ],
-  };
-
-  const messages = deriveAssistantMessages(thread);
-
-  assert.equal(messages[0]?.contentText, "Assistant text");
-  assert.deepEqual(messages[0]?.content, [{ type: "text", text: "Assistant text" }]);
-});
-
-test("when rendering the assistant thread, should use assistant-ui runtime and primitives", () => {
+test("when rendering the assistant thread, should keep assistant-ui runtime and composer primitives", () => {
   const source = readFileSync(new URL("./components/codex-assistant-thread.tsx", import.meta.url), "utf8");
 
   assert.match(source, /AssistantRuntimeProvider/);
   assert.match(source, /useExternalStoreRuntime/);
-  assert.match(source, /MessagePrimitive/);
   assert.match(source, /ComposerPrimitive/);
   assert.match(source, /ThreadPrimitive\.ViewportProvider/);
   assert.doesNotMatch(source, /<ThreadPrimitive\.Viewport[\\s>]/);
   assert.doesNotMatch(source, /ComposerPrimitive\.Input/);
   assert.doesNotMatch(source, /<form\b/);
   assert.doesNotMatch(source, /<textarea\b/);
-});
-
-test("when deriving messages, should guard malformed raw item ids and types", () => {
-  const thread: RawCodexThread = {
-    id: "thread-malformed",
-    turns: [
-      {
-        id: 42 as unknown as string,
-        items: [
-          {
-            id: { value: "bad-id" } as unknown as string,
-            type: { value: "bad-type" } as unknown as string,
-            content: { value: 1 },
-          },
-        ],
-      },
-    ],
-  };
-
-  const messages = deriveAssistantMessages(thread);
-
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0]?.id, "turn-item-0");
-  assert.equal(messages[0]?.itemType, "unknown");
-  assert.equal(messages[0]?.contentText, "Unsupported Codex item: unknown");
 });
