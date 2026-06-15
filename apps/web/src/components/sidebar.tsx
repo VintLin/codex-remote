@@ -1,5 +1,11 @@
 import type { Conversation, Device } from "../mockData";
-import type { SidebarProjectGroup, SidebarModel, SidebarSectionId, SidebarSectionState } from "../sidebarModel";
+import type {
+  ConversationNavigatorState,
+  SidebarProjectGroup,
+  SidebarModel,
+  SidebarSectionId,
+  SidebarSectionState,
+} from "../sidebarModel";
 import { ActionMenu, type SidebarActionGroup } from "./action-menu";
 import { Icon, iconForDevice, type IconName } from "./icons";
 
@@ -8,9 +14,11 @@ export type SidebarPressedItem = { kind: "project" | "conversation"; id: string 
 
 interface SidebarProps {
   activeView: AppView;
+  conversationNavigator: ConversationNavigatorState;
   device: Device;
   model: SidebarModel;
   onOpenSearch: () => void;
+  onSelectAdjacentConversation: (conversationId: string) => void;
   onSelectView: (view: AppView) => void;
   onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
   onToggleSection: (sectionId: SidebarSectionId) => void;
@@ -42,20 +50,51 @@ interface SidebarListItemProps {
 export function Sidebar(props: SidebarProps) {
   return (
     <aside aria-label="Workspace navigation" className="sidebar">
-      <div aria-hidden="true" className="sidebar-window-controls">
+      <div className="sidebar-window-controls">
         <button className="chrome-control" tabIndex={-1} type="button">
           <Icon name="shrink" />
         </button>
-        <button className="chrome-control" tabIndex={-1} type="button">
+        <button
+          aria-label="切换到上一条对话"
+          className="chrome-control chrome-control-nav"
+          disabled={!props.conversationNavigator.previousConversationId}
+          onClick={() => {
+            if (props.conversationNavigator.previousConversationId) {
+              props.onSelectAdjacentConversation(props.conversationNavigator.previousConversationId);
+            }
+          }}
+          type="button"
+        >
           ‹
         </button>
-        <button className="chrome-control" tabIndex={-1} type="button">
+        <button
+          aria-label="切换到下一条对话"
+          className="chrome-control chrome-control-nav"
+          disabled={!props.conversationNavigator.nextConversationId}
+          onClick={() => {
+            if (props.conversationNavigator.nextConversationId) {
+              props.onSelectAdjacentConversation(props.conversationNavigator.nextConversationId);
+            }
+          }}
+          type="button"
+        >
           ›
         </button>
       </div>
 
       <nav aria-label="Primary" className="primary-nav">
-        <NavButton active={props.activeView === "devices"} icon="laptop" label="设备" onClick={() => props.onSelectView("devices")} />
+        <NavButton
+          active={props.activeView === "devices"}
+          icon="laptop"
+          label="设备"
+          onClick={() => props.onSelectView("devices")}
+          trailing={
+            <span className="nav-device-status">
+              <span aria-hidden="true" className={`status-dot ${statusToClass(props.device.status)}`} />
+              <span>{props.device.name}</span>
+            </span>
+          }
+        />
         <NavButton icon="search" label="搜索" onClick={props.onOpenSearch} />
         <NavButton
           active={props.activeView === "automations"}
@@ -64,11 +103,6 @@ export function Sidebar(props: SidebarProps) {
           onClick={() => props.onSelectView("automations")}
         />
       </nav>
-
-      <div className="sidebar-device-context">
-        <span aria-hidden="true" className={`status-dot ${statusToClass(props.device.status)}`} />
-        <span>{props.device.name}</span>
-      </div>
 
       <div className="sidebar-scroll" ref={props.sidebarScrollRef}>
         <DeviceWorkspaceNav
@@ -94,13 +128,14 @@ export function Sidebar(props: SidebarProps) {
   );
 }
 
-function NavButton(props: { active?: boolean; icon: IconName; label: string; onClick: () => void }) {
+function NavButton(props: { active?: boolean; icon: IconName; label: string; onClick: () => void; trailing?: React.ReactNode }) {
   return (
     <button className={`nav-button${props.active ? " is-active" : ""}`} onClick={props.onClick} type="button">
       <span className="nav-glyph">
         <Icon name={props.icon} />
       </span>
       <span>{props.label}</span>
+      {props.trailing ? <span className="nav-button-trailing">{props.trailing}</span> : null}
     </button>
   );
 }

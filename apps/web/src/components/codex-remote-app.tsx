@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { assistantThreads, conversations, devices, sidebarProjects, tasks } from "../mockData";
-import { createDefaultSidebarSectionState, createSidebarModel, toggleSidebarSection } from "../sidebarModel";
+import {
+  createDefaultSidebarSectionState,
+  createSidebarModel,
+  resolveConversationNavigator,
+  toggleSidebarSection,
+} from "../sidebarModel";
 import { AutomationsPage, ConversationMain, DevicesPage, SearchDialog } from "./main-panels";
 import { type AppView, Sidebar, type SidebarPressedItem } from "./sidebar";
 
@@ -33,6 +38,10 @@ export function CodexRemoteApp() {
   const sidebarModel = useMemo(
     () => createSidebarModel({ conversations, expandedProjectIds, projects: sidebarProjects }),
     [expandedProjectIds],
+  );
+  const conversationNavigator = useMemo(
+    () => resolveConversationNavigator(sidebarModel, selectedConversationId),
+    [selectedConversationId, sidebarModel],
   );
 
   useEffect(() => {
@@ -127,9 +136,11 @@ export function CodexRemoteApp() {
       <div className="app-shell min-h-screen">
         <Sidebar
           activeView={activeView}
+          conversationNavigator={conversationNavigator}
           device={device}
           model={sidebarModel}
           onOpenSearch={() => setIsSearchOpen(true)}
+          onSelectAdjacentConversation={selectConversation}
           onSelectConversation={selectConversation}
           onSelectView={selectView}
           onToggleProject={toggleProject}
