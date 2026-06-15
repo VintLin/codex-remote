@@ -50,59 +50,65 @@ interface SidebarListItemProps {
 export function Sidebar(props: SidebarProps) {
   return (
     <aside aria-label="Workspace navigation" className="sidebar">
-      <div className="sidebar-window-controls">
-        <button className="chrome-control" tabIndex={-1} type="button">
-          <Icon name="shrink" />
-        </button>
-        <button
-          aria-label="切换到上一条对话"
-          className="chrome-control chrome-control-nav"
-          disabled={!props.conversationNavigator.previousConversationId}
-          onClick={() => {
-            if (props.conversationNavigator.previousConversationId) {
-              props.onSelectAdjacentConversation(props.conversationNavigator.previousConversationId);
-            }
-          }}
-          type="button"
-        >
-          ‹
-        </button>
-        <button
-          aria-label="切换到下一条对话"
-          className="chrome-control chrome-control-nav"
-          disabled={!props.conversationNavigator.nextConversationId}
-          onClick={() => {
-            if (props.conversationNavigator.nextConversationId) {
-              props.onSelectAdjacentConversation(props.conversationNavigator.nextConversationId);
-            }
-          }}
-          type="button"
-        >
-          ›
-        </button>
-      </div>
+      <div className="sidebar-header">
+        <div className="sidebar-header-controls">
+          <button className="sidebar-header-control" tabIndex={-1} type="button">
+            <Icon name="shrink" />
+          </button>
+          <div className="sidebar-header-nav">
+            <button
+              aria-label="切换到上一条对话"
+              className="sidebar-header-control"
+              disabled={!props.conversationNavigator.previousConversationId}
+              onClick={() => {
+                if (props.conversationNavigator.previousConversationId) {
+                  props.onSelectAdjacentConversation(props.conversationNavigator.previousConversationId);
+                }
+              }}
+              type="button"
+            >
+              ‹
+            </button>
+            <button
+              aria-label="切换到下一条对话"
+              className="sidebar-header-control"
+              disabled={!props.conversationNavigator.nextConversationId}
+              onClick={() => {
+                if (props.conversationNavigator.nextConversationId) {
+                  props.onSelectAdjacentConversation(props.conversationNavigator.nextConversationId);
+                }
+              }}
+              type="button"
+            >
+              ›
+            </button>
+          </div>
+        </div>
 
-      <nav aria-label="Primary" className="primary-nav">
-        <NavButton
-          active={props.activeView === "devices"}
-          icon="laptop"
-          label="设备"
-          onClick={() => props.onSelectView("devices")}
-          trailing={
-            <span className="nav-device-status">
-              <span aria-hidden="true" className={`status-dot ${statusToClass(props.device.status)}`} />
-              <span>{props.device.name}</span>
-            </span>
-          }
-        />
-        <NavButton icon="search" label="搜索" onClick={props.onOpenSearch} />
-        <NavButton
-          active={props.activeView === "automations"}
-          icon="reload"
-          label="自动化"
-          onClick={() => props.onSelectView("automations")}
-        />
-      </nav>
+        <nav aria-label="Primary" className="primary-nav">
+          <NavButton
+            active={props.activeView === "devices"}
+            icon="laptop"
+            label="设备"
+            onClick={() => props.onSelectView("devices")}
+            trailing={
+              <span className="nav-device-status">
+                <span aria-hidden="true" className={`status-dot ${statusToClass(props.device.status)}`} />
+                <span>{props.device.name}</span>
+              </span>
+            }
+          />
+          <NavButton icon="search" label="搜索" onClick={props.onOpenSearch} />
+          <NavButton
+            active={props.activeView === "automations"}
+            icon="reload"
+            label="自动化"
+            onClick={() => props.onSelectView("automations")}
+          />
+        </nav>
+
+        <div className="sidebar-header-separator" />
+      </div>
 
       <div className="sidebar-scroll" ref={props.sidebarScrollRef}>
         <DeviceWorkspaceNav
@@ -151,8 +157,6 @@ function DeviceWorkspaceNav(props: {
 }) {
   return (
     <>
-      <div className="sidebar-separator" />
-
       <section aria-label="置顶" className="sidebar-section">
         <SectionHeading
           actionGroup="section-pinned"
