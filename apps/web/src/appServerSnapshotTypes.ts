@@ -55,4 +55,26 @@ export interface RawCodexItem {
   name?: string;
   arguments?: unknown;
   output?: unknown;
+  clientId?: string;
+  server?: string;
+  tool?: string;
+  pluginId?: string | null;
+  result?: unknown;
+  error?: unknown;
+  durationMs?: number | null;
+  query?: string;
+  action?: unknown;
+  changes?: RawCodexFileChange[];
 }
+
+export interface RawCodexFileChange {
+  path?: string;
+  kind?: RawCodexFileChangeKind;
+  diff?: string;
+}
+
+export type RawCodexFileChangeKind =
+  | string
+  | {
+      type?: string;
+    };
