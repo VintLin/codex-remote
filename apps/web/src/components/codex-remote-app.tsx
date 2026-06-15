@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { assistantThreads, conversations, devices, sidebarProjects, tasks } from "../mockData";
+import { assistantThreads, conversations, devices, sidebarProjects } from "../mockData";
 import {
   createDefaultSidebarSectionState,
   createSidebarModel,
@@ -18,7 +18,6 @@ export function CodexRemoteApp() {
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]!.id);
   const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]!.id);
-  const [selectedTaskId] = useState(tasks[0]!.id);
   const [expandedProjectIds, setExpandedProjectIds] = useState(
     () => new Set(sidebarProjects.filter((project) => project.expanded).map((project) => project.id)),
   );
@@ -127,7 +126,6 @@ export function CodexRemoteApp() {
         assistantThread={assistantThread}
         conversation={conversation}
         device={device}
-        selectedTaskId={selectedTaskId}
       />
     );
 

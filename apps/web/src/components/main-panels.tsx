@@ -15,7 +15,6 @@ interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
   conversation: Conversation;
   device: Device;
-  selectedTaskId: string;
 }
 
 interface DevicesPageProps {
