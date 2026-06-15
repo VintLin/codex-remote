@@ -263,19 +263,27 @@ button {
   border-right: 1px solid var(--cr-line);
 }
 
-.traffic,
-.sidebar-window-controls {
-  display: flex;
-  align-items: center;
+.sidebar-header {
+  display: grid;
   gap: 8px;
-  height: 28px;
 }
 
-.sidebar-window-controls {
+.sidebar-header-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 32px;
   padding: 0 2px;
 }
 
-.chrome-control {
+.sidebar-header-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-header-control {
   display: grid;
   width: 24px;
   height: 24px;
@@ -285,27 +293,29 @@ button {
   color: var(--cr-muted);
   font-size: var(--cr-text-list);
   line-height: 1;
-  pointer-events: none;
-}
-
-.chrome-control-nav {
   cursor: pointer;
-  pointer-events: auto;
 }
 
-.chrome-control-nav:hover:not(:disabled) {
+.sidebar-header-control:hover:not(:disabled),
+.sidebar-header-control:focus-visible:not(:disabled) {
   background: var(--cr-sidebar-strong);
   color: var(--cr-ink);
 }
 
-.chrome-control-nav:disabled {
+.sidebar-header-control:disabled {
   color: color-mix(in oklch, var(--cr-muted) 42%, transparent);
   cursor: default;
 }
 
-.chrome-control .icon {
+.sidebar-header-control .icon {
   width: 13px;
   height: 13px;
+}
+
+.sidebar-header-separator {
+  height: 1px;
+  margin: 8px 2px;
+  background: var(--cr-line);
 }
 
 .traffic-dot {
@@ -377,6 +387,7 @@ button {
 .nav-button.is-active {
   background: color-mix(in oklch, var(--cr-bg) 70%, var(--cr-sidebar-strong));
   color: var(--cr-ink-strong);
+  font-weight: var(--cr-weight-emphasis);
 }
 
 .nav-button:active,
@@ -392,9 +403,9 @@ button {
   grid-template-columns: auto minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 9px;
-  min-height: 32px;
+  min-height: 34px;
   padding: 6px 8px;
-  font-size: var(--cr-text-body);
+  font-size: 13px;
   font-weight: var(--cr-weight-regular);
 }
 
@@ -409,8 +420,8 @@ button {
   min-width: 0;
   align-items: center;
   gap: 6px;
-  color: var(--cr-muted-strong);
-  font-size: var(--cr-text-meta);
+  color: var(--cr-muted);
+  font-size: 11px;
   font-weight: var(--cr-weight-regular);
 }
 
