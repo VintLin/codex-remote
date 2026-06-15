@@ -10,6 +10,8 @@ test("when the sidebar header is rendered, should use application header semanti
   assert.match(sidebarComponent, /className="sidebar-header"/);
   assert.match(sidebarComponent, /className="sidebar-header-controls"/);
   assert.doesNotMatch(sidebarComponent, /className="sidebar-window-controls"/);
+  assert.match(sidebarComponent, /<span aria-hidden="true" className="sidebar-header-control sidebar-header-control-decorative">/);
+  assert.match(sidebarComponent, /className="sidebar-header-control sidebar-header-control-button"/);
 });
 
 test("when the sidebar header styles are defined, should keep the compact spacing contract from the approved design", () => {

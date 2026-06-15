@@ -52,13 +52,13 @@ export function Sidebar(props: SidebarProps) {
     <aside aria-label="Workspace navigation" className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-header-controls">
-          <button className="sidebar-header-control" tabIndex={-1} type="button">
+          <span aria-hidden="true" className="sidebar-header-control sidebar-header-control-decorative">
             <Icon name="shrink" />
-          </button>
+          </span>
           <div className="sidebar-header-nav">
             <button
               aria-label="切换到上一条对话"
-              className="sidebar-header-control"
+              className="sidebar-header-control sidebar-header-control-button"
               disabled={!props.conversationNavigator.previousConversationId}
               onClick={() => {
                 if (props.conversationNavigator.previousConversationId) {
@@ -71,7 +71,7 @@ export function Sidebar(props: SidebarProps) {
             </button>
             <button
               aria-label="切换到下一条对话"
-              className="sidebar-header-control"
+              className="sidebar-header-control sidebar-header-control-button"
               disabled={!props.conversationNavigator.nextConversationId}
               onClick={() => {
                 if (props.conversationNavigator.nextConversationId) {

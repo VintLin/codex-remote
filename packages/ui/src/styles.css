@@ -293,18 +293,25 @@ button {
   color: var(--cr-muted);
   font-size: var(--cr-text-list);
   line-height: 1;
+}
+
+.sidebar-header-control-button {
   cursor: pointer;
 }
 
-.sidebar-header-control:hover:not(:disabled),
-.sidebar-header-control:focus-visible:not(:disabled) {
+.sidebar-header-control-button:hover:not(:disabled),
+.sidebar-header-control-button:focus-visible:not(:disabled) {
   background: var(--cr-sidebar-strong);
   color: var(--cr-ink);
 }
 
-.sidebar-header-control:disabled {
+.sidebar-header-control-button:disabled {
   color: color-mix(in oklch, var(--cr-muted) 42%, transparent);
   cursor: default;
+}
+
+.sidebar-header-control-decorative {
+  pointer-events: none;
 }
 
 .sidebar-header-control .icon {
