@@ -12,6 +12,7 @@ HOST="127.0.0.1"
 READY_TIMEOUT="20"
 
 mkdir -p "$LOG_DIR"
+: >"$LOG_FILE"
 
 is_pid_running() {
   local pid="$1"
@@ -50,7 +51,7 @@ log_file = os.environ["LOG_FILE"]
 
 with open(log_file, "ab", buffering=0) as log:
     process = subprocess.Popen(
-        ["bash", "-lc", "pnpm build && exec pnpm start"],
+        ["bash", "-lc", "exec pnpm dev"],
         cwd=app_dir,
         env=os.environ.copy(),
         stdin=subprocess.DEVNULL,

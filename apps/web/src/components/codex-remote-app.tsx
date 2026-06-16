@@ -175,14 +175,14 @@ export function CodexRemoteApp() {
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
             onBack={() => setMobilePane("sidebar")}
+            onExpandDetail={() => setIsDetailCollapsed(false)}
+            onExpandSidebar={() => setIsSidebarCollapsed(false)}
             onOpenDetail={() => {
               if (isMobileViewport) {
                 setMobilePane("detail");
               }
             }}
             onSelectDevice={selectDevice}
-            onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
-            onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
             selectedDeviceId={selectedDeviceId}
           />
         ),
@@ -205,8 +205,8 @@ export function CodexRemoteApp() {
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
             onBack={() => setMobilePane("sidebar")}
-            onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
-            onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+            onExpandDetail={() => setIsDetailCollapsed(false)}
+            onExpandSidebar={() => setIsSidebarCollapsed(false)}
           />
         ),
       };
@@ -220,7 +220,6 @@ export function CodexRemoteApp() {
           isMobile={isMobileViewport}
           onBack={() => setMobilePane("main")}
           onCollapse={() => setIsDetailCollapsed(true)}
-          onClose={() => setSelectedDetailTarget(null)}
           target={selectedDetailTarget}
         />
       ),
@@ -228,19 +227,21 @@ export function CodexRemoteApp() {
         <ConversationMain
           assistantThread={assistantThread}
           conversation={conversation}
-          device={device}
           isDetailCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}
           isSidebarCollapsed={isSidebarCollapsed}
+          nextConversationId={conversationNavigator.nextConversationId}
           onBack={() => setMobilePane("sidebar")}
+          onExpandDetail={() => setIsDetailCollapsed(false)}
+          onExpandSidebar={() => setIsSidebarCollapsed(false)}
           onOpenDetail={(target) => {
             setSelectedDetailTarget(target);
             if (isMobileViewport) {
               setMobilePane("detail");
             }
           }}
-          onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
-          onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          onSelectAdjacentConversation={selectConversation}
+          previousConversationId={conversationNavigator.previousConversationId}
         />
       ),
     };

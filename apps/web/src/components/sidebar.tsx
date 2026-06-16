@@ -94,7 +94,7 @@ export function Sidebar(props: SidebarProps) {
               onClick={props.onCollapseSidebar}
               type="button"
             >
-              <Icon className="sidebar-toggle-icon" name="right" />
+              <Icon className="sidebar-toggle-icon" name={props.isCollapsed ? "panel-left-open" : "panel-left-close"} />
             </button>
           )}
           <div className="sidebar-header-nav">
@@ -109,7 +109,7 @@ export function Sidebar(props: SidebarProps) {
               }}
               type="button"
             >
-              ‹
+              <Icon name="arrow-left" />
             </button>
             <button
               aria-label="切换到下一条对话"
@@ -122,7 +122,7 @@ export function Sidebar(props: SidebarProps) {
               }}
               type="button"
             >
-              ›
+              <Icon name="arrow-right" />
             </button>
           </div>
         </div>

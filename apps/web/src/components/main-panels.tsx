@@ -4,6 +4,7 @@ import type { DetailTarget, LinkReference } from "../assistantTimeline";
 import type { AssistantThreadSnapshot } from "../appServerMockAdapter";
 import type { Conversation, Device, DeviceConnectionStatus, TaskStatus } from "../mockData";
 import { devices, searchRecents } from "../mockData";
+import { ActionMenu } from "./action-menu";
 import { CodexAssistantThread } from "./codex-assistant-thread";
 import { DetailWorkspace } from "./detail-workspace";
 import { Icon, iconForDevice } from "./icons";
@@ -12,14 +13,16 @@ import { statusToClass } from "./sidebar";
 interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
   conversation: Conversation;
-  device: Device;
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
   onBack?: () => void;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
-  onToggleDetailCollapsed: () => void;
-  onToggleSidebarCollapsed: () => void;
+  onSelectAdjacentConversation: (conversationId: string) => void;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
+  previousConversationId: string | null;
+  nextConversationId: string | null;
 }
 
 interface DevicesPageProps {
@@ -27,11 +30,11 @@ interface DevicesPageProps {
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
   onBack?: () => void;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
   onOpenDetail?: (deviceId: string) => void;
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
-  onToggleDetailCollapsed: () => void;
-  onToggleSidebarCollapsed: () => void;
 }
 
 interface SearchDialogProps {
@@ -52,54 +55,68 @@ const statusText = {
 export function ConversationMain({
   assistantThread,
   conversation,
-  device,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
+  nextConversationId,
   onBack,
+  onExpandDetail,
+  onExpandSidebar,
   onOpenDetail,
-  onToggleDetailCollapsed,
-  onToggleSidebarCollapsed,
+  onSelectAdjacentConversation,
+  previousConversationId,
 }: ConversationMainProps) {
-  const showDesktopConversationToolbar = !isMobile;
-
   return (
     <main className="main-pane">
       <header className="topbar">
-        <div className="topbar-leading">
+        <div className="topbar-leading conversation-topbar-leading">
           {isMobile && onBack ? (
             <HeaderBackButton label="返回导航" onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+            <div className="conversation-collapsed-sidebar-controls">
+              <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+              <button
+                aria-label="切换到上一条对话"
+                className="icon-button conversation-nav-button"
+                disabled={!previousConversationId}
+                onClick={() => {
+                  if (previousConversationId) {
+                    onSelectAdjacentConversation(previousConversationId);
+                  }
+                }}
+                type="button"
+              >
+                <Icon name="arrow-left" />
+              </button>
+              <button
+                aria-label="切换到下一条对话"
+                className="icon-button conversation-nav-button"
+                disabled={!nextConversationId}
+                onClick={() => {
+                  if (nextConversationId) {
+                    onSelectAdjacentConversation(nextConversationId);
+                  }
+                }}
+                type="button"
+              >
+                <Icon name="arrow-right" />
+              </button>
+            </div>
           ) : null}
-          <div className="workspace-title">
+          <div className="workspace-title conversation-title">
             <h1>{conversation.title}</h1>
-            <span>
-              {device.name} / {conversation.projectName}
-            </span>
+            {!isMobile ? <ActionMenu ariaLabel="打开对话操作菜单" className="conversation-title-menu" group="conversation" /> : null}
           </div>
         </div>
         <div aria-label="Conversation controls" className="toolbar conversation-toolbar">
-          {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+          {!isMobile ? (
+            <button aria-label="布局列表" className="icon-button conversation-layout-button" type="button">
+              <Icon name="layout-list" />
+            </button>
           ) : null}
-          {showDesktopConversationToolbar ? (
-            <>
-              <button aria-label="运行上下文" className="icon-button is-raised" type="button">
-                <Icon name="inbox" />
-                <Icon name="down" />
-              </button>
-              <button aria-label="对话概览" className="icon-button" type="button">
-                <Icon name="information-o" />
-              </button>
-              <button aria-label="切换布局" className="icon-button" type="button">
-                <Icon name="shrink" />
-              </button>
-              <button aria-label="More actions" className="icon-button" type="button">
-                <Icon name="more" />
-              </button>
-            </>
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
@@ -116,7 +133,6 @@ export function ConversationDetailPane({
   isCollapsed,
   isMobile,
   onBack,
-  onClose,
   onCollapse,
   target,
 }: {
@@ -124,7 +140,6 @@ export function ConversationDetailPane({
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
-  onClose: () => void;
   onCollapse: () => void;
   target: DetailTarget | LinkReference | null;
 }) {
@@ -134,7 +149,6 @@ export function ConversationDetailPane({
       isCollapsed={isCollapsed}
       isMobile={isMobile}
       onBack={onBack}
-      onClose={onClose}
       onCollapse={onCollapse}
       target={target}
     />
@@ -146,10 +160,10 @@ export function DevicesPage({
   isMobile = false,
   isSidebarCollapsed,
   onBack,
+  onExpandDetail,
+  onExpandSidebar,
   onOpenDetail,
   onSelectDevice,
-  onToggleDetailCollapsed,
-  onToggleSidebarCollapsed,
   selectedDeviceId,
 }: DevicesPageProps) {
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
@@ -161,7 +175,7 @@ export function DevicesPage({
             <HeaderBackButton label="返回导航" onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title">
             <h1>设备</h1>
@@ -170,7 +184,7 @@ export function DevicesPage({
         </div>
         <div className="toolbar">
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
           <button className="button primary" type="button">
             <Icon name="plus" />
@@ -272,15 +286,15 @@ export function AutomationsPage({
   isMobile = false,
   isSidebarCollapsed,
   onBack,
-  onToggleDetailCollapsed,
-  onToggleSidebarCollapsed,
+  onExpandDetail,
+  onExpandSidebar,
 }: {
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
   onBack?: () => void;
-  onToggleDetailCollapsed: () => void;
-  onToggleSidebarCollapsed: () => void;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
 }) {
   return (
     <main className="main-pane devices-page">
@@ -290,7 +304,7 @@ export function AutomationsPage({
             <HeaderBackButton label="返回导航" onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title">
             <h1>自动化</h1>
@@ -299,7 +313,7 @@ export function AutomationsPage({
         </div>
         <div className="toolbar">
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
@@ -377,6 +391,11 @@ function SidebarToggleButton(props: {
   label: string;
   onClick: () => void;
 }) {
+  const iconName =
+    props.direction === "left"
+      ? props.collapsed ? "panel-left-open" : "panel-left-close"
+      : props.collapsed ? "panel-right-open" : "panel-right-close";
+
   return (
     <button
       aria-label={props.label}
@@ -386,7 +405,7 @@ function SidebarToggleButton(props: {
       onClick={props.onClick}
       type="button"
     >
-      <Icon className="sidebar-toggle-icon" name="right" />
+      <Icon className="sidebar-toggle-icon" name={iconName} />
     </button>
   );
 }

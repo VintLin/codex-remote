@@ -19,34 +19,36 @@ interface ActionMenuItem {
 
 const actionItems = {
   project: [
-    { icon: "plus", label: "新对话" },
-    { icon: "folder-open", label: "创建工作树" },
-    { icon: "up", label: "置顶" },
-    { icon: "setting-o", label: "重命名" },
+    { icon: "message-circle-plus", label: "新对话" },
+    { icon: "shrink", label: "创建工作树" },
+    { icon: "pin", label: "置顶" },
+    { icon: "pencil", label: "重命名" },
     { icon: "inbox", label: "归档" },
     { icon: "delete", label: "移除" },
   ],
   conversation: [
-    { icon: "up", label: "置顶" },
+    { icon: "pin", label: "置顶" },
     { icon: "inbox", label: "归档" },
   ],
   "section-pinned": [
-    { icon: "time-o", label: "按创建时间排序" },
+    { icon: "clock", label: "按创建时间排序" },
     { icon: "reload", label: "按更新时间排序" },
   ],
   "section-projects": [
     { icon: "inbox", label: "归档所有聊天" },
-    { icon: "time-o", label: "按创建时间排序" },
+    { icon: "clock", label: "按创建时间排序" },
     { icon: "reload", label: "按更新时间排序" },
   ],
   "section-conversations": [
     { icon: "inbox", label: "归档所有聊天" },
-    { icon: "time-o", label: "按创建时间排序" },
+    { icon: "clock", label: "按创建时间排序" },
     { icon: "reload", label: "按更新时间排序" },
   ],
 } satisfies Record<SidebarActionGroup, ActionMenuItem[]>;
 
 interface ActionMenuProps {
+  ariaLabel?: string;
+  className?: string;
   group: SidebarActionGroup;
 }
 
@@ -59,7 +61,7 @@ const actionMenuWidth = 188;
 const viewportPadding = 8;
 const triggerGap = 6;
 
-export function ActionMenu({ group }: ActionMenuProps) {
+export function ActionMenu({ ariaLabel = "打开操作菜单", className, group }: ActionMenuProps) {
   const actions = actionItems[group];
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -130,12 +132,12 @@ export function ActionMenu({ group }: ActionMenuProps) {
   }, [open]);
 
   return (
-    <div className={`action-menu${open ? " is-open" : ""}`}>
+    <div className={`action-menu${open ? " is-open" : ""}${className ? ` ${className}` : ""}`}>
       <button
         ref={buttonRef}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label="打开操作菜单"
+        aria-label={ariaLabel}
         className="action-menu-trigger"
         onClick={(event) => {
           event.stopPropagation();

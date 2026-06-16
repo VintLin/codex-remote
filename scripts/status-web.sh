@@ -14,6 +14,29 @@ is_pid_running() {
   kill -0 "$pid" >/dev/null 2>&1
 }
 
+detect_mode() {
+  local pids="$1"
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    local ppid
+    local command
+    ppid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+    command="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+    if [[ -n "${ppid:-}" ]]; then
+      command+=" $(ps -p "$ppid" -o args= 2>/dev/null || true)"
+    fi
+    if [[ "$command" == *"next dev"* ]]; then
+      echo "development"
+      return
+    fi
+    if [[ "$command" == *"next start"* || "$command" == *"next-server"* ]]; then
+      echo "production"
+      return
+    fi
+  done <<<"$pids"
+  echo "unknown"
+}
+
 find_port_pids() {
   lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null || true
 }
@@ -49,6 +72,7 @@ fi
 
 echo "Web server status: running"
 echo "URL: http://$HOST:$PORT"
+echo "Mode: $(detect_mode "$port_pids")"
 echo "PID file: ${pid_file_value:-none}"
 
 if [[ -n "${port_pids:-}" ]]; then

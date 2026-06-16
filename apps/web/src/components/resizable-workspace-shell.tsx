@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import {
   Group as PanelGroup,
   Panel,
@@ -26,6 +26,14 @@ interface PanelLimits {
   rightMaxSize: number;
 }
 
+interface WorkspaceMeasurements {
+  rightWidth: number;
+  shellWidth: number;
+  leftWidth: number;
+}
+
+const collapseThresholdBufferPx = 4;
+
 export function ResizableWorkspaceShell({
   detail,
   isDetailCollapsed,
@@ -36,12 +44,41 @@ export function ResizableWorkspaceShell({
   sidebar,
 }: ResizableWorkspaceShellProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const sidebarTransitionRef = useRef(false);
+  const detailTransitionRef = useRef(false);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
   const [panelLimits, setPanelLimits] = useState<PanelLimits>(() => ({
     leftMaxSize: appPanelLayout.left.defaultSize,
     rightMaxSize: appPanelLayout.right.maxSize,
   }));
+  const [shellWidth, setShellWidth] = useState(0);
+
+  const measureWorkspace = useCallback((): WorkspaceMeasurements | null => {
+    const shell = shellRef.current;
+    const leftPanel = leftPanelRef.current;
+    const rightPanel = rightPanelRef.current;
+    if (!shell || !leftPanel || !rightPanel) {
+      return null;
+    }
+
+    return {
+      shellWidth: shell.getBoundingClientRect().width,
+      leftWidth: leftPanel.isCollapsed() ? 0 : leftPanel.getSize().inPixels,
+      rightWidth: rightPanel.isCollapsed() ? 0 : rightPanel.getSize().inPixels,
+    };
+  }, [leftPanelRef, rightPanelRef]);
+
+  const mainMinSizePercent =
+    shellWidth > 0 ? Math.min((appPanelLayout.main.minSize / shellWidth) * 100, 100) : appPanelLayout.main.minSize;
+  const leftCollapseThreshold = Math.max(
+    appPanelLayout.left.collapsedSize,
+    appPanelLayout.left.minSize - collapseThresholdBufferPx,
+  );
+  const rightCollapseThreshold = Math.max(
+    appPanelLayout.right.collapsedSize,
+    appPanelLayout.right.minSize - collapseThresholdBufferPx,
+  );
 
   const blurActiveElement = useCallback(() => {
     const activeElement = document.activeElement;
@@ -49,6 +86,26 @@ export function ResizableWorkspaceShell({
       activeElement.blur();
     }
   }, []);
+
+  function schedulePanelExpand(expand: () => void) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        expand();
+        syncPanelLimits();
+      });
+    });
+  }
+
+  function markProgrammaticTransition(transitionRef: MutableRefObject<boolean>, action: () => void) {
+    transitionRef.current = true;
+    action();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        transitionRef.current = false;
+        syncPanelLimits();
+      });
+    });
+  }
 
   const collapseSidebar = useCallback(() => {
     const leftPanel = leftPanelRef.current;
@@ -58,19 +115,47 @@ export function ResizableWorkspaceShell({
     }
 
     blurActiveElement();
-    leftPanel.collapse();
-    onSidebarCollapsedChange(true);
+    markProgrammaticTransition(sidebarTransitionRef, () => {
+      leftPanel.collapse();
+      onSidebarCollapsedChange(true);
+    });
   }, [blurActiveElement, leftPanelRef, onSidebarCollapsedChange]);
 
   const expandSidebar = useCallback(() => {
     const leftPanel = leftPanelRef.current;
-    if (!leftPanel) {
+    const rightPanel = rightPanelRef.current;
+    const measurements = measureWorkspace();
+    if (!leftPanel || !rightPanel || !measurements) {
       return;
     }
 
-    leftPanel.expand();
-    onSidebarCollapsedChange(false);
-  }, [leftPanelRef, onSidebarCollapsedChange]);
+    const requiredWidth =
+      appPanelLayout.left.minSize +
+      measurements.rightWidth +
+      appPanelLayout.main.minSize +
+      appPanelLayout.resizeHandleWidth * 2;
+
+    if (requiredWidth > measurements.shellWidth && !rightPanel.isCollapsed()) {
+      rightPanel.collapse();
+      onDetailCollapsedChange(true);
+      schedulePanelExpand(() => {
+        const nextLeftPanel = leftPanelRef.current;
+        if (!nextLeftPanel) {
+          return;
+        }
+        markProgrammaticTransition(sidebarTransitionRef, () => {
+          nextLeftPanel.expand();
+          onSidebarCollapsedChange(false);
+        });
+      });
+      return;
+    }
+
+    markProgrammaticTransition(sidebarTransitionRef, () => {
+      leftPanel.expand();
+      onSidebarCollapsedChange(false);
+    });
+  }, [leftPanelRef, measureWorkspace, onDetailCollapsedChange, onSidebarCollapsedChange, rightPanelRef, schedulePanelExpand]);
 
   const collapseDetail = useCallback(() => {
     const rightPanel = rightPanelRef.current;
@@ -80,19 +165,47 @@ export function ResizableWorkspaceShell({
     }
 
     blurActiveElement();
-    rightPanel.collapse();
-    onDetailCollapsedChange(true);
+    markProgrammaticTransition(detailTransitionRef, () => {
+      rightPanel.collapse();
+      onDetailCollapsedChange(true);
+    });
   }, [blurActiveElement, onDetailCollapsedChange, rightPanelRef]);
 
   const expandDetail = useCallback(() => {
     const rightPanel = rightPanelRef.current;
-    if (!rightPanel) {
+    const leftPanel = leftPanelRef.current;
+    const measurements = measureWorkspace();
+    if (!rightPanel || !leftPanel || !measurements) {
       return;
     }
 
-    rightPanel.expand();
-    onDetailCollapsedChange(false);
-  }, [onDetailCollapsedChange, rightPanelRef]);
+    const requiredWidth =
+      measurements.leftWidth +
+      appPanelLayout.right.minSize +
+      appPanelLayout.main.minSize +
+      appPanelLayout.resizeHandleWidth * 2;
+
+    if (requiredWidth > measurements.shellWidth && !leftPanel.isCollapsed()) {
+      leftPanel.collapse();
+      onSidebarCollapsedChange(true);
+      schedulePanelExpand(() => {
+        const nextRightPanel = rightPanelRef.current;
+        if (!nextRightPanel) {
+          return;
+        }
+        markProgrammaticTransition(detailTransitionRef, () => {
+          nextRightPanel.expand();
+          onDetailCollapsedChange(false);
+        });
+      });
+      return;
+    }
+
+    markProgrammaticTransition(detailTransitionRef, () => {
+      rightPanel.expand();
+      onDetailCollapsedChange(false);
+    });
+  }, [leftPanelRef, measureWorkspace, onDetailCollapsedChange, onSidebarCollapsedChange, rightPanelRef, schedulePanelExpand]);
 
   const syncPanelLimits = useCallback(() => {
     const shell = shellRef.current;
@@ -131,7 +244,12 @@ export function ResizableWorkspaceShell({
 
   const resizeLeftPanel = useCallback(
     (panelSize: PanelSize) => {
-      if (panelSize.inPixels <= appPanelLayout.left.minSize && !isSidebarCollapsed) {
+      if (sidebarTransitionRef.current) {
+        syncPanelLimits();
+        return;
+      }
+
+      if (panelSize.inPixels <= leftCollapseThreshold && !isSidebarCollapsed) {
         collapseSidebar();
         return;
       }
@@ -142,12 +260,17 @@ export function ResizableWorkspaceShell({
 
       syncPanelLimits();
     },
-    [collapseSidebar, isSidebarCollapsed, onSidebarCollapsedChange, syncPanelLimits],
+    [collapseSidebar, isSidebarCollapsed, leftCollapseThreshold, onSidebarCollapsedChange, syncPanelLimits],
   );
 
   const resizeRightPanel = useCallback(
     (panelSize: PanelSize) => {
-      if (panelSize.inPixels <= appPanelLayout.right.minSize && !isDetailCollapsed) {
+      if (detailTransitionRef.current) {
+        syncPanelLimits();
+        return;
+      }
+
+      if (panelSize.inPixels <= rightCollapseThreshold && !isDetailCollapsed) {
         collapseDetail();
         return;
       }
@@ -158,7 +281,7 @@ export function ResizableWorkspaceShell({
 
       syncPanelLimits();
     },
-    [collapseDetail, isDetailCollapsed, onDetailCollapsedChange, syncPanelLimits],
+    [collapseDetail, isDetailCollapsed, onDetailCollapsedChange, rightCollapseThreshold, syncPanelLimits],
   );
 
   useEffect(() => {
@@ -185,9 +308,15 @@ export function ResizableWorkspaceShell({
       return;
     }
 
+    const updateShellWidth = () => setShellWidth(shell.getBoundingClientRect().width);
+
+    updateShellWidth();
     syncPanelLimits();
 
-    const resizeObserver = new ResizeObserver(syncPanelLimits);
+    const resizeObserver = new ResizeObserver(() => {
+      updateShellWidth();
+      syncPanelLimits();
+    });
     resizeObserver.observe(shell);
 
     return () => resizeObserver.disconnect();
@@ -224,7 +353,7 @@ export function ResizableWorkspaceShell({
         className="workspace-panel workspace-panel-main"
         groupResizeBehavior="preserve-relative-size"
         id={appPanelLayout.main.id}
-        minSize={appPanelLayout.main.minSize}
+        minSize={mainMinSizePercent}
         onResize={syncPanelLimits}
       >
         {main}

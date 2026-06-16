@@ -203,10 +203,10 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
                     <Icon name="down" />
                   </button>
                   <button aria-label="语音输入" className="codex-assistant-composer-icon" disabled type="button">
-                    <Icon name="time-o" />
+                    <Icon name="mic" />
                   </button>
                   <ComposerPrimitive.Send aria-label="发送" className="codex-assistant-send" disabled type="button">
-                    <Icon name="up" />
+                    <Icon name="arrow-up" />
                   </ComposerPrimitive.Send>
                 </div>
                 <span className="codex-assistant-composer-note">当前仅展示 app-server 历史快照</span>

@@ -30,6 +30,7 @@ test("when the primary nav styles are updated, should keep the compact nav heigh
   assert.match(sharedStyles, /\.nav-button\s*\{[^}]*min-height:\s*var\(--cr-control-size\);/s);
   assert.match(sharedStyles, /\.nav-button\s*\{[^}]*font-size:\s*var\(--cr-text-body\);/s);
   assert.match(sharedStyles, /\.nav-device-status\s*\{[^}]*font-size:\s*var\(--cr-text-compact\);/s);
+  assert.match(sharedStyles, /\.nav-glyph\s*\{[^}]*background:\s*transparent;/s);
 });
 
 test("when sidebar project and conversation rows are refined, should keep the reference-inspired compact row rhythm", () => {
@@ -60,6 +61,7 @@ test("when sidebar controls are hovered, should use one consistent gray hover ba
   assert.match(sharedStyles, /\.sidebar-heading:hover,[^}]*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
   assert.match(sharedStyles, /\.sidebar-list-icon-button:hover,[^}]*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
   assert.match(sharedStyles, /\.action-menu-trigger:hover,[^}]*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
+  assert.match(sharedStyles, /\.icon-button:hover,[^}]*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
 });
 
 test("when the sidebar list is separated from surrounding chrome, should use a scroll fade mask instead of a solid divider", () => {
@@ -86,4 +88,9 @@ test("when container borders are aligned to the reference visual language, shoul
 test("when mobile navigation is active, should promote full-page back navigation instead of desktop expand or collapse controls", () => {
   assert.match(sharedStyles, /\.mobile-back-icon\s*\{[^}]*transform:\s*rotate\(180deg\);/s);
   assert.match(sharedStyles, /\.review-pane\.mobile-pane\s*\{[^}]*border-left:\s*0;/s);
+});
+
+test("when sidebar panels are collapsed or expanded, should switch to panel-specific glyphs instead of rotating one shared icon", () => {
+  assert.doesNotMatch(sharedStyles, /\.sidebar-toggle-button\[data-direction="left"\]\[data-state="expanded"\] \.sidebar-toggle-icon,[^}]*transform:\s*rotate\(180deg\);/s);
+  assert.match(sidebarComponent, /name=\{props\.isCollapsed \? "panel-left-open" : "panel-left-close"\}/);
 });

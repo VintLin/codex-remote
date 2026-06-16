@@ -2,24 +2,38 @@ import type { Device } from "../mockData";
 
 export type IconName =
   | "apple"
+  | "arrow-left"
+  | "arrow-right"
+  | "arrow-up"
+  | "clock"
   | "delete"
   | "down"
   | "folder"
   | "folder-open"
+  | "globe"
   | "inbox"
   | "information-o"
   | "laptop"
+  | "layout-list"
+  | "message-circle-plus"
+  | "mic"
   | "mobile"
   | "more"
+  | "panel-left-close"
+  | "panel-left-open"
+  | "panel-right-close"
+  | "panel-right-open"
+  | "pencil"
+  | "pin"
   | "plus"
   | "reload"
   | "right"
   | "search"
   | "setting-o"
   | "shrink"
-  | "time-o"
-  | "up"
-  | "windows";
+  | "square-terminal"
+  | "windows"
+  | "x";
 
 interface IconProps {
   className?: string;
