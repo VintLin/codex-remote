@@ -6,6 +6,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Codex Remote",
   description: "Self-hosted multi-device Codex control plane",
+  icons: {
+    icon: [{ url: "/codex.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

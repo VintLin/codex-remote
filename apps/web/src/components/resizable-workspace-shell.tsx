@@ -13,7 +13,11 @@ import { appPanelLayout } from "../appLayout";
 
 interface ResizableWorkspaceShellProps {
   detail: ReactNode;
+  isDetailCollapsed: boolean;
+  isSidebarCollapsed: boolean;
   main: ReactNode;
+  onDetailCollapsedChange: (collapsed: boolean) => void;
+  onSidebarCollapsedChange: (collapsed: boolean) => void;
   sidebar: ReactNode;
 }
 
@@ -22,7 +26,15 @@ interface PanelLimits {
   rightMaxSize: number;
 }
 
-export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWorkspaceShellProps) {
+export function ResizableWorkspaceShell({
+  detail,
+  isDetailCollapsed,
+  isSidebarCollapsed,
+  main,
+  onDetailCollapsedChange,
+  onSidebarCollapsedChange,
+  sidebar,
+}: ResizableWorkspaceShellProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
@@ -30,6 +42,57 @@ export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWork
     leftMaxSize: appPanelLayout.left.defaultSize,
     rightMaxSize: appPanelLayout.right.maxSize,
   }));
+
+  const blurActiveElement = useCallback(() => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  }, []);
+
+  const collapseSidebar = useCallback(() => {
+    const leftPanel = leftPanelRef.current;
+    if (!leftPanel || leftPanel.isCollapsed()) {
+      onSidebarCollapsedChange(true);
+      return;
+    }
+
+    blurActiveElement();
+    leftPanel.collapse();
+    onSidebarCollapsedChange(true);
+  }, [blurActiveElement, leftPanelRef, onSidebarCollapsedChange]);
+
+  const expandSidebar = useCallback(() => {
+    const leftPanel = leftPanelRef.current;
+    if (!leftPanel) {
+      return;
+    }
+
+    leftPanel.expand();
+    onSidebarCollapsedChange(false);
+  }, [leftPanelRef, onSidebarCollapsedChange]);
+
+  const collapseDetail = useCallback(() => {
+    const rightPanel = rightPanelRef.current;
+    if (!rightPanel || rightPanel.isCollapsed()) {
+      onDetailCollapsedChange(true);
+      return;
+    }
+
+    blurActiveElement();
+    rightPanel.collapse();
+    onDetailCollapsedChange(true);
+  }, [blurActiveElement, onDetailCollapsedChange, rightPanelRef]);
+
+  const expandDetail = useCallback(() => {
+    const rightPanel = rightPanelRef.current;
+    if (!rightPanel) {
+      return;
+    }
+
+    rightPanel.expand();
+    onDetailCollapsedChange(false);
+  }, [onDetailCollapsedChange, rightPanelRef]);
 
   const syncPanelLimits = useCallback(() => {
     const shell = shellRef.current;
@@ -41,13 +104,13 @@ export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWork
 
     const shellWidth = shell.getBoundingClientRect().width;
     const handlesWidth = appPanelLayout.resizeHandleWidth * 2;
-    const leftWidth = leftPanel.getSize().inPixels;
+    const leftWidth = leftPanel.isCollapsed() ? 0 : leftPanel.getSize().inPixels;
     const rightWidth = rightPanel.isCollapsed() ? 0 : rightPanel.getSize().inPixels;
     const rightAvailableWidth = shellWidth - leftWidth - appPanelLayout.main.minSize - handlesWidth;
     const leftAvailableWidth = shellWidth - rightWidth - appPanelLayout.main.minSize - handlesWidth;
 
     if (rightAvailableWidth < appPanelLayout.right.minSize && !rightPanel.isCollapsed()) {
-      rightPanel.collapse();
+      collapseDetail();
     }
 
     const nextLimits = {
@@ -64,27 +127,57 @@ export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWork
         ? current
         : nextLimits,
     );
-  }, [leftPanelRef, rightPanelRef]);
+  }, [collapseDetail, leftPanelRef, rightPanelRef]);
 
   const resizeLeftPanel = useCallback(
     (panelSize: PanelSize) => {
-      syncPanelLimits();
-      if (panelSize.inPixels <= appPanelLayout.left.minSize) {
-        window.requestAnimationFrame(() => leftPanelRef.current?.collapse());
+      if (panelSize.inPixels <= appPanelLayout.left.minSize && !isSidebarCollapsed) {
+        collapseSidebar();
+        return;
       }
+
+      if (panelSize.inPixels > appPanelLayout.left.collapsedSize && isSidebarCollapsed) {
+        onSidebarCollapsedChange(false);
+      }
+
+      syncPanelLimits();
     },
-    [leftPanelRef, syncPanelLimits],
+    [collapseSidebar, isSidebarCollapsed, onSidebarCollapsedChange, syncPanelLimits],
   );
 
   const resizeRightPanel = useCallback(
     (panelSize: PanelSize) => {
-      syncPanelLimits();
-      if (panelSize.inPixels <= appPanelLayout.right.minSize) {
-        window.requestAnimationFrame(() => rightPanelRef.current?.collapse());
+      if (panelSize.inPixels <= appPanelLayout.right.minSize && !isDetailCollapsed) {
+        collapseDetail();
+        return;
       }
+
+      if (panelSize.inPixels > appPanelLayout.right.collapsedSize && isDetailCollapsed) {
+        onDetailCollapsedChange(false);
+      }
+
+      syncPanelLimits();
     },
-    [rightPanelRef, syncPanelLimits],
+    [collapseDetail, isDetailCollapsed, onDetailCollapsedChange, syncPanelLimits],
   );
+
+  useEffect(() => {
+    if (isSidebarCollapsed) {
+      collapseSidebar();
+      return;
+    }
+
+    expandSidebar();
+  }, [collapseSidebar, expandSidebar, isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (isDetailCollapsed) {
+      collapseDetail();
+      return;
+    }
+
+    expandDetail();
+  }, [collapseDetail, expandDetail, isDetailCollapsed]);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -123,7 +216,8 @@ export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWork
       </Panel>
       <PanelResizeHandle
         aria-label="调整左侧边栏宽度"
-        className="workspace-resize-handle workspace-resize-handle-left"
+        className={`workspace-resize-handle workspace-resize-handle-left${isSidebarCollapsed ? " is-disabled" : ""}`}
+        disabled={isSidebarCollapsed}
         id="left-main-resize"
       />
       <Panel
@@ -137,7 +231,8 @@ export function ResizableWorkspaceShell({ detail, main, sidebar }: ResizableWork
       </Panel>
       <PanelResizeHandle
         aria-label="调整右侧边栏宽度"
-        className="workspace-resize-handle workspace-resize-handle-right"
+        className={`workspace-resize-handle workspace-resize-handle-right${isDetailCollapsed ? " is-disabled" : ""}`}
+        disabled={isDetailCollapsed}
         id="main-right-resize"
       />
       <Panel

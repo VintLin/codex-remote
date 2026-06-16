@@ -3,27 +3,50 @@ import { Icon } from "./icons";
 
 interface DetailWorkspaceProps {
   conversationTitle: string;
-  onClose?: () => void;
+  isCollapsed: boolean;
+  isMobile?: boolean | undefined;
+  onBack?: (() => void) | undefined;
+  onClose?: (() => void) | undefined;
+  onCollapse?: (() => void) | undefined;
   target: DetailTarget | LinkReference | null;
 }
 
-export function DetailWorkspace({ conversationTitle, onClose, target }: DetailWorkspaceProps) {
+export function DetailWorkspace({ conversationTitle, isCollapsed, isMobile = false, onBack, onClose, onCollapse, target }: DetailWorkspaceProps) {
   const title = target?.title || "详情";
 
   return (
-    <aside aria-label={`${conversationTitle} detail workspace`} className="review-pane detail-workspace">
+    <aside aria-label={`${conversationTitle} detail workspace`} className={`review-pane detail-workspace${isMobile ? " mobile-pane" : ""}`}>
       <header className="review-header">
         <div className="review-title">
+          {isMobile && onBack ? (
+            <button aria-label="返回对话" className="icon-button mobile-back-button" onClick={onBack} type="button">
+              <Icon className="mobile-back-icon" name="right" />
+            </button>
+          ) : null}
           <span className="nav-glyph">
             <Icon name="information-o" />
           </span>
           <span>{title}</span>
         </div>
-        {onClose ? (
-          <button aria-label="清空详情" className="icon-button" onClick={onClose} type="button">
-            <Icon name="delete" />
-          </button>
-        ) : null}
+        <div className="toolbar">
+          {!isMobile && !isCollapsed && onCollapse ? (
+            <button
+              aria-label="收起右侧边栏"
+              className="icon-button sidebar-toggle-button"
+              data-direction="right"
+              data-state="expanded"
+              onClick={onCollapse}
+              type="button"
+            >
+              <Icon className="sidebar-toggle-icon" name="right" />
+            </button>
+          ) : null}
+          {onClose ? (
+            <button aria-label="清空详情" className="icon-button" onClick={onClose} type="button">
+              <Icon name="delete" />
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div className="review-scroll">

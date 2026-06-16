@@ -4,6 +4,9 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "turbo dev",
+    "web:start": "bash scripts/start-web.sh",
+    "web:status": "bash scripts/status-web.sh",
+    "web:stop": "bash scripts/stop-web.sh",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",

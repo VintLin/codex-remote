@@ -23,6 +23,7 @@ import {
 import { type AppView, Sidebar, type SidebarPressedItem } from "./sidebar";
 
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
+type MobileWorkspacePane = "detail" | "main" | "sidebar";
 
 export function CodexRemoteApp() {
   const [activeView, setActiveView] = useState<AppView>("conversation");
@@ -32,7 +33,11 @@ export function CodexRemoteApp() {
     () => new Set(sidebarProjects.filter((project) => project.expanded).map((project) => project.id)),
   );
   const [sectionState, setSectionState] = useState(createDefaultSidebarSectionState);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isDetailCollapsed, setIsDetailCollapsed] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobilePane, setMobilePane] = useState<MobileWorkspacePane>("sidebar");
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
@@ -83,6 +88,21 @@ export function CodexRemoteApp() {
     setSelectedDetailTarget(null);
   }, [assistantThread?.id, conversation.id]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => {
+      const nextIsMobile = mediaQuery.matches;
+      setIsMobileViewport(nextIsMobile);
+      if (!nextIsMobile) {
+        setMobilePane("sidebar");
+      }
+    };
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
   const pressSidebarItem = (nextPressedItem: Exclude<SidebarPressedItem, null>, options: { restoreFocus?: boolean } = {}) => {
     setPressedItem(nextPressedItem);
     setFocusTarget(options.restoreFocus === false ? null : nextPressedItem);
@@ -99,6 +119,9 @@ export function CodexRemoteApp() {
 
   const selectView = (view: AppView) => {
     setActiveView(view);
+    if (isMobileViewport) {
+      setMobilePane("main");
+    }
   };
 
   const selectDevice = (nextDeviceId: string) => {
@@ -125,6 +148,9 @@ export function CodexRemoteApp() {
     pressSidebarItem({ kind: "conversation", id: conversationId });
     setSelectedConversationId(conversationId);
     setActiveView("conversation");
+    if (isMobileViewport) {
+      setMobilePane("main");
+    }
   };
 
   const toggleSection = (sectionId: Parameters<typeof toggleSidebarSection>[1]) => {
@@ -134,15 +160,55 @@ export function CodexRemoteApp() {
   const mainContent = (() => {
     if (activeView === "devices") {
       return {
-        detail: <DeviceDetailPane selectedDeviceId={selectedDeviceId} />,
-        main: <DevicesPage onSelectDevice={selectDevice} selectedDeviceId={selectedDeviceId} />,
+        detail: (
+          <DeviceDetailPane
+            isCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            onBack={() => setMobilePane("main")}
+            onCollapse={() => setIsDetailCollapsed(true)}
+            selectedDeviceId={selectedDeviceId}
+          />
+        ),
+        main: (
+          <DevicesPage
+            isDetailCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onBack={() => setMobilePane("sidebar")}
+            onOpenDetail={() => {
+              if (isMobileViewport) {
+                setMobilePane("detail");
+              }
+            }}
+            onSelectDevice={selectDevice}
+            onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
+            onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+            selectedDeviceId={selectedDeviceId}
+          />
+        ),
       };
     }
 
     if (activeView === "automations") {
       return {
-        detail: <AutomationDetailPane />,
-        main: <AutomationsPage />,
+        detail: (
+          <AutomationDetailPane
+            isCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            onBack={() => setMobilePane("main")}
+            onCollapse={() => setIsDetailCollapsed(true)}
+          />
+        ),
+        main: (
+          <AutomationsPage
+            isDetailCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onBack={() => setMobilePane("sidebar")}
+            onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
+            onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          />
+        ),
       };
     }
 
@@ -150,6 +216,10 @@ export function CodexRemoteApp() {
       detail: (
         <ConversationDetailPane
           conversationTitle={conversation.title}
+          isCollapsed={isDetailCollapsed}
+          isMobile={isMobileViewport}
+          onBack={() => setMobilePane("main")}
+          onCollapse={() => setIsDetailCollapsed(true)}
           onClose={() => setSelectedDetailTarget(null)}
           target={selectedDetailTarget}
         />
@@ -159,7 +229,18 @@ export function CodexRemoteApp() {
           assistantThread={assistantThread}
           conversation={conversation}
           device={device}
-          onOpenDetail={setSelectedDetailTarget}
+          isDetailCollapsed={isDetailCollapsed}
+          isMobile={isMobileViewport}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onBack={() => setMobilePane("sidebar")}
+          onOpenDetail={(target) => {
+            setSelectedDetailTarget(target);
+            if (isMobileViewport) {
+              setMobilePane("detail");
+            }
+          }}
+          onToggleDetailCollapsed={() => setIsDetailCollapsed((current) => !current)}
+          onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
         />
       ),
     };
@@ -170,7 +251,10 @@ export function CodexRemoteApp() {
       activeView={activeView}
       conversationNavigator={conversationNavigator}
       device={device}
+      isCollapsed={isSidebarCollapsed}
+      isMobile={isMobileViewport}
       model={sidebarModel}
+      onCollapseSidebar={() => setIsSidebarCollapsed(true)}
       onOpenSearch={() => setIsSearchOpen(true)}
       onSelectAdjacentConversation={selectConversation}
       onSelectConversation={selectConversation}
@@ -186,7 +270,23 @@ export function CodexRemoteApp() {
 
   return (
     <>
-      <ResizableWorkspaceShell detail={mainContent.detail} main={mainContent.main} sidebar={sidebarContent} />
+      {isMobileViewport ? (
+        <div className="mobile-shell">
+          {mobilePane === "sidebar" ? sidebarContent : null}
+          {mobilePane === "main" ? mainContent.main : null}
+          {mobilePane === "detail" ? mainContent.detail : null}
+        </div>
+      ) : (
+        <ResizableWorkspaceShell
+          detail={mainContent.detail}
+          isDetailCollapsed={isDetailCollapsed}
+          isSidebarCollapsed={isSidebarCollapsed}
+          main={mainContent.main}
+          onDetailCollapsedChange={setIsDetailCollapsed}
+          onSidebarCollapsedChange={setIsSidebarCollapsed}
+          sidebar={sidebarContent}
+        />
+      )}
       <SearchDialog onClose={() => setIsSearchOpen(false)} open={isSearchOpen} />
     </>
   );

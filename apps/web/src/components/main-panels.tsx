@@ -13,12 +13,25 @@ interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
   conversation: Conversation;
   device: Device;
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  onBack?: () => void;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
+  onToggleDetailCollapsed: () => void;
+  onToggleSidebarCollapsed: () => void;
 }
 
 interface DevicesPageProps {
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  onBack?: () => void;
+  onOpenDetail?: (deviceId: string) => void;
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
+  onToggleDetailCollapsed: () => void;
+  onToggleSidebarCollapsed: () => void;
 }
 
 interface SearchDialogProps {
@@ -36,30 +49,58 @@ const statusText = {
   waiting: "Waiting",
 } satisfies Record<DeviceConnectionStatus | Conversation["status"] | TaskStatus, string>;
 
-export function ConversationMain({ assistantThread, conversation, device, onOpenDetail }: ConversationMainProps) {
+export function ConversationMain({
+  assistantThread,
+  conversation,
+  device,
+  isDetailCollapsed,
+  isMobile = false,
+  isSidebarCollapsed,
+  onBack,
+  onOpenDetail,
+  onToggleDetailCollapsed,
+  onToggleSidebarCollapsed,
+}: ConversationMainProps) {
+  const showDesktopConversationToolbar = !isMobile;
+
   return (
     <main className="main-pane">
       <header className="topbar">
-        <div className="workspace-title">
-          <h1>{conversation.title}</h1>
-          <span>
-            {device.name} / {conversation.projectName}
-          </span>
+        <div className="topbar-leading">
+          {isMobile && onBack ? (
+            <HeaderBackButton label="返回导航" onClick={onBack} />
+          ) : null}
+          {!isMobile && isSidebarCollapsed ? (
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+          ) : null}
+          <div className="workspace-title">
+            <h1>{conversation.title}</h1>
+            <span>
+              {device.name} / {conversation.projectName}
+            </span>
+          </div>
         </div>
         <div aria-label="Conversation controls" className="toolbar conversation-toolbar">
-          <button aria-label="运行上下文" className="icon-button is-raised" type="button">
-            <Icon name="inbox" />
-            <Icon name="down" />
-          </button>
-          <button aria-label="对话概览" className="icon-button" type="button">
-            <Icon name="information-o" />
-          </button>
-          <button aria-label="切换布局" className="icon-button" type="button">
-            <Icon name="shrink" />
-          </button>
-          <button aria-label="More actions" className="icon-button" type="button">
-            <Icon name="more" />
-          </button>
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+          ) : null}
+          {showDesktopConversationToolbar ? (
+            <>
+              <button aria-label="运行上下文" className="icon-button is-raised" type="button">
+                <Icon name="inbox" />
+                <Icon name="down" />
+              </button>
+              <button aria-label="对话概览" className="icon-button" type="button">
+                <Icon name="information-o" />
+              </button>
+              <button aria-label="切换布局" className="icon-button" type="button">
+                <Icon name="shrink" />
+              </button>
+              <button aria-label="More actions" className="icon-button" type="button">
+                <Icon name="more" />
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -72,36 +113,85 @@ export function ConversationMain({ assistantThread, conversation, device, onOpen
 
 export function ConversationDetailPane({
   conversationTitle,
+  isCollapsed,
+  isMobile,
+  onBack,
   onClose,
+  onCollapse,
   target,
 }: {
   conversationTitle: string;
+  isCollapsed: boolean;
+  isMobile?: boolean;
+  onBack?: () => void;
   onClose: () => void;
+  onCollapse: () => void;
   target: DetailTarget | LinkReference | null;
 }) {
-  return <DetailWorkspace conversationTitle={conversationTitle} onClose={onClose} target={target} />;
+  return (
+    <DetailWorkspace
+      conversationTitle={conversationTitle}
+      isCollapsed={isCollapsed}
+      isMobile={isMobile}
+      onBack={onBack}
+      onClose={onClose}
+      onCollapse={onCollapse}
+      target={target}
+    />
+  );
 }
 
-export function DevicesPage({ onSelectDevice, selectedDeviceId }: DevicesPageProps) {
+export function DevicesPage({
+  isDetailCollapsed,
+  isMobile = false,
+  isSidebarCollapsed,
+  onBack,
+  onOpenDetail,
+  onSelectDevice,
+  onToggleDetailCollapsed,
+  onToggleSidebarCollapsed,
+  selectedDeviceId,
+}: DevicesPageProps) {
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
   return (
     <main className="main-pane devices-page">
       <header className="topbar">
-        <div className="workspace-title">
-          <h1>设备</h1>
-          <span>管理当前 Control Plane 可见的设备</span>
+        <div className="topbar-leading">
+          {isMobile && onBack ? (
+            <HeaderBackButton label="返回导航" onClick={onBack} />
+          ) : null}
+          {!isMobile && isSidebarCollapsed ? (
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+          ) : null}
+          <div className="workspace-title">
+            <h1>设备</h1>
+            <span>管理当前 Control Plane 可见的设备</span>
+          </div>
         </div>
-        <button className="button primary" type="button">
-          <Icon name="plus" />
-          新增设备
-        </button>
+        <div className="toolbar">
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+          ) : null}
+          <button className="button primary" type="button">
+            <Icon name="plus" />
+            新增设备
+          </button>
+        </div>
       </header>
 
       <div className="content-scroll">
         <section aria-label="Device list" className="device-grid">
           {devices.map((device) => (
             <article className={`device-card${device.id === selectedDeviceId ? " is-selected" : ""}`} key={device.id}>
-              <button className="device-card-main" data-select-device={device.id} onClick={() => onSelectDevice(device.id)} type="button">
+              <button
+                className="device-card-main"
+                data-select-device={device.id}
+                onClick={() => {
+                  onSelectDevice(device.id);
+                  onOpenDetail?.(device.id);
+                }}
+                type="button"
+              >
                 <span className="device-icon">
                   <Icon name={iconForDevice(device)} />
                 </span>
@@ -130,36 +220,87 @@ export function DevicesPage({ onSelectDevice, selectedDeviceId }: DevicesPagePro
   );
 }
 
-export function DeviceDetailPane({ selectedDeviceId }: { selectedDeviceId: string }) {
+export function DeviceDetailPane({
+  isCollapsed,
+  isMobile = false,
+  onBack,
+  onCollapse,
+  selectedDeviceId,
+}: {
+  isCollapsed: boolean;
+  isMobile?: boolean;
+  onBack?: () => void;
+  onCollapse: () => void;
+  selectedDeviceId: string;
+}) {
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
 
   return (
-    <aside aria-label="Device detail" className="review-pane device-detail-pane">
+    <aside aria-label="Device detail" className={`review-pane device-detail-pane${isMobile ? " mobile-pane" : ""}`}>
       <header className="review-header">
         <div className="review-title">
+          {isMobile && onBack ? <HeaderBackButton label="返回设备列表" onClick={onBack} /> : null}
           <span className="nav-glyph">
             <Icon name={iconForDevice(selectedDevice)} />
           </span>
           <span>设备详情</span>
         </div>
+        {!isMobile && !isCollapsed ? (
+          <SidebarToggleButton direction="right" label="收起右侧边栏" onClick={onCollapse} />
+        ) : null}
       </header>
       <div className="review-scroll">
         <section className="linked-task">
           <h2>{selectedDevice.name}</h2>
-          <p>这里只展示设备选择页面的样式状态。真实编辑、删除和新增设备逻辑后续接入 Control Plane API。</p>
+          <p>状态：{statusText[selectedDevice.status]}</p>
+          <p>IP：{selectedDevice.ip}</p>
+          <p>最后上线：{selectedDevice.lastOnlineAt}</p>
+        </section>
+        <section className="linked-task">
+          <h2>当前上下文</h2>
+          <p>项目：{selectedDevice.currentProject}</p>
+          <p>模型：{selectedDevice.model}</p>
+          <p>真实编辑、删除和新增设备逻辑后续接入 Control Plane API。</p>
         </section>
       </div>
     </aside>
   );
 }
 
-export function AutomationsPage() {
+export function AutomationsPage({
+  isDetailCollapsed,
+  isMobile = false,
+  isSidebarCollapsed,
+  onBack,
+  onToggleDetailCollapsed,
+  onToggleSidebarCollapsed,
+}: {
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  onBack?: () => void;
+  onToggleDetailCollapsed: () => void;
+  onToggleSidebarCollapsed: () => void;
+}) {
   return (
     <main className="main-pane devices-page">
       <header className="topbar">
-        <div className="workspace-title">
-          <h1>自动化</h1>
-          <span>后续用于展示当前设备上的自动化任务</span>
+        <div className="topbar-leading">
+          {isMobile && onBack ? (
+            <HeaderBackButton label="返回导航" onClick={onBack} />
+          ) : null}
+          {!isMobile && isSidebarCollapsed ? (
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onToggleSidebarCollapsed} />
+          ) : null}
+          <div className="workspace-title">
+            <h1>自动化</h1>
+            <span>后续用于展示当前设备上的自动化任务</span>
+          </div>
+        </div>
+        <div className="toolbar">
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onToggleDetailCollapsed} />
+          ) : null}
         </div>
       </header>
       <div className="content-scroll">
@@ -172,8 +313,33 @@ export function AutomationsPage() {
   );
 }
 
-export function AutomationDetailPane() {
-  return <aside aria-label="Automation detail" className="review-pane device-detail-pane" />;
+export function AutomationDetailPane({
+  isCollapsed,
+  isMobile = false,
+  onBack,
+  onCollapse,
+}: {
+  isCollapsed: boolean;
+  isMobile?: boolean;
+  onBack?: () => void;
+  onCollapse: () => void;
+}) {
+  return (
+    <aside aria-label="Automation detail" className={`review-pane device-detail-pane${isMobile ? " mobile-pane" : ""}`}>
+      <header className="review-header">
+        <div className="review-title">
+          {isMobile && onBack ? <HeaderBackButton label="返回自动化列表" onClick={onBack} /> : null}
+          <span className="nav-glyph">
+            <Icon name="reload" />
+          </span>
+          <span>自动化详情</span>
+        </div>
+        {!isMobile && !isCollapsed ? (
+          <SidebarToggleButton direction="right" label="收起右侧边栏" onClick={onCollapse} />
+        ) : null}
+      </header>
+    </aside>
+  );
 }
 
 export function SearchDialog({ onClose, open }: SearchDialogProps) {
@@ -203,4 +369,32 @@ export function SearchDialog({ onClose, open }: SearchDialogProps) {
 
 function Badge(props: { status: DeviceConnectionStatus | Conversation["status"] | TaskStatus }) {
   return <span className={`badge ${statusToClass(props.status)}`}>{statusText[props.status]}</span>;
+}
+
+function SidebarToggleButton(props: {
+  collapsed?: boolean;
+  direction: "left" | "right";
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={props.label}
+      className="icon-button sidebar-toggle-button"
+      data-direction={props.direction}
+      data-state={props.collapsed ? "collapsed" : "expanded"}
+      onClick={props.onClick}
+      type="button"
+    >
+      <Icon className="sidebar-toggle-icon" name="right" />
+    </button>
+  );
+}
+
+function HeaderBackButton(props: { label: string; onClick: () => void }) {
+  return (
+    <button aria-label={props.label} className="icon-button mobile-back-button" onClick={props.onClick} type="button">
+      <Icon className="mobile-back-icon" name="right" />
+    </button>
+  );
 }

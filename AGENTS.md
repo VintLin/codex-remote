@@ -23,6 +23,16 @@
 - 第一版运行形态：Web UI + Control Plane Server + Device Worker
 - 后续移动端：iOS App 复用 Control Plane API contract，不直接复用 Web UI runtime
 
+本地网站启停约定：
+
+- 启动当前网站：`pnpm web:start`
+- 查看当前网站状态：`pnpm web:status`
+- 关闭当前网站：`pnpm web:stop`
+- 默认 Web 开发服务器运行在 `http://127.0.0.1:5173`
+- 启动脚本会写入 `logs/web-dev.pid` 和 `logs/web-dev.log`
+- 状态脚本会输出 `pid`、端口监听状态和最近日志
+- 如果 `5173` 已被占用，先执行 `pnpm web:stop`，再重新启动
+
 提交前默认执行：
 
 ```bash

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import type { Conversation, Device } from "../mockData";
 import type {
   ConversationNavigatorState,
@@ -16,7 +18,10 @@ interface SidebarProps {
   activeView: AppView;
   conversationNavigator: ConversationNavigatorState;
   device: Device;
+  isCollapsed: boolean;
+  isMobile?: boolean;
   model: SidebarModel;
+  onCollapseSidebar: () => void;
   onOpenSearch: () => void;
   onSelectAdjacentConversation: (conversationId: string) => void;
   onSelectView: (view: AppView) => void;
@@ -38,6 +43,7 @@ interface SidebarListItemProps {
   kind: "project" | "conversation" | "empty";
   left?: React.ReactNode;
   muted?: boolean;
+  nested?: boolean;
   onClick?: React.MouseEventHandler<HTMLDivElement | HTMLButtonElement>;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onMouseDown?: React.MouseEventHandler<HTMLDivElement>;
@@ -48,13 +54,49 @@ interface SidebarListItemProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  const [scrollMaskState, setScrollMaskState] = useState({ atBottom: true, atTop: true });
+
+  useEffect(() => {
+    const scrollElement = props.sidebarScrollRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const updateScrollMaskState = () => {
+      const { clientHeight, scrollHeight, scrollTop } = scrollElement;
+      const maxScrollTop = Math.max(scrollHeight - clientHeight, 0);
+      setScrollMaskState({
+        atBottom: scrollTop >= maxScrollTop - 1,
+        atTop: scrollTop <= 1,
+      });
+    };
+
+    updateScrollMaskState();
+    scrollElement.addEventListener("scroll", updateScrollMaskState, { passive: true });
+    window.addEventListener("resize", updateScrollMaskState);
+
+    return () => {
+      scrollElement.removeEventListener("scroll", updateScrollMaskState);
+      window.removeEventListener("resize", updateScrollMaskState);
+    };
+  }, [props.sidebarScrollRef, props.model, props.sectionState]);
+
   return (
     <aside aria-label="Workspace navigation" className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-header-controls">
-          <span aria-hidden="true" className="sidebar-header-control sidebar-header-control-decorative">
-            <Icon name="shrink" />
-          </span>
+          {props.isMobile ? <span /> : (
+            <button
+              aria-label={props.isCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
+              className="sidebar-header-control sidebar-header-control-button sidebar-toggle-button"
+              data-direction="left"
+              data-state={props.isCollapsed ? "collapsed" : "expanded"}
+              onClick={props.onCollapseSidebar}
+              type="button"
+            >
+              <Icon className="sidebar-toggle-icon" name="right" />
+            </button>
+          )}
           <div className="sidebar-header-nav">
             <button
               aria-label="切换到上一条对话"
@@ -110,7 +152,12 @@ export function Sidebar(props: SidebarProps) {
         <div className="sidebar-header-separator" />
       </div>
 
-      <div className="sidebar-scroll" ref={props.sidebarScrollRef}>
+      <div
+        className="sidebar-scroll sidebar-scroll-mask"
+        data-bottom={scrollMaskState.atBottom ? "true" : "false"}
+        data-top={scrollMaskState.atTop ? "true" : "false"}
+        ref={props.sidebarScrollRef}
+      >
         <DeviceWorkspaceNav
           model={props.model}
           onSelectConversation={props.onSelectConversation}
@@ -246,7 +293,11 @@ function ProjectGroup(props: {
 }) {
   return (
     <>
-      <ProjectRow onToggleProject={props.onToggleProject} project={props.project} />
+      <ProjectRow
+        onToggleProject={props.onToggleProject}
+        project={props.project}
+        selected={props.project.conversations.some((conversation) => conversation.id === props.selectedConversationId)}
+      />
       {props.project.expanded ? (
         <div className="nested-list">
           {props.project.conversations.length > 0
@@ -254,6 +305,7 @@ function ProjectGroup(props: {
                 <ConversationRow
                   key={conversation.id}
                   conversation={conversation}
+                  nested
                   onSelectConversation={props.onSelectConversation}
                   pressedItem={props.pressedItem}
                   selectedConversationId={props.selectedConversationId}
@@ -269,6 +321,7 @@ function ProjectGroup(props: {
 function ProjectRow(props: {
   onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
   project: SidebarProjectGroup;
+  selected: boolean;
 }) {
   const expandedLabel = props.project.expanded ? "收起项目" : "展开项目";
   return (
@@ -306,6 +359,7 @@ function ProjectRow(props: {
         }
         event.preventDefault();
       }}
+      selected={props.selected}
       title={props.project.name}
     />
   );
@@ -313,6 +367,7 @@ function ProjectRow(props: {
 
 function ConversationRow(props: {
   conversation: Conversation;
+  nested?: boolean;
   onSelectConversation: (conversationId: string) => void;
   pressedItem: SidebarPressedItem;
   selectedConversationId: string;
@@ -322,6 +377,7 @@ function ConversationRow(props: {
       actionGroup="conversation"
       contentAttributes={{ "data-conversation-id": props.conversation.id }}
       kind="conversation"
+      nested={props.nested ?? false}
       onClick={() => props.onSelectConversation(props.conversation.id)}
       pressed={props.pressedItem?.kind === "conversation" && props.pressedItem.id === props.conversation.id}
       selected={props.conversation.id === props.selectedConversationId}
@@ -344,6 +400,7 @@ function SidebarListItem(props: SidebarListItemProps) {
     "sidebar-list-item",
     `sidebar-list-item-${props.kind}`,
     props.expanded ? "is-expanded" : "",
+    props.nested ? "is-nested" : "",
     props.pressed ? "is-pressed" : "",
     props.selected ? "is-selected" : "",
     props.muted ? "is-muted" : "",
