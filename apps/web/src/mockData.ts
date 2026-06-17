@@ -1,6 +1,6 @@
-import listFixture from "./fixtures/app-server/050_codex_remote.thread-list.json" with { type: "json" };
-import readFixture from "./fixtures/app-server/050_codex_remote.thread-read.json" with { type: "json" };
-import sidebarStateFixture from "./fixtures/app-server/050_codex_remote.sidebar-state.json" with { type: "json" };
+import listFixture from "./fixtures/app-server/demo.thread-list.json" with { type: "json" };
+import readFixture from "./fixtures/app-server/demo.thread-read.json" with { type: "json" };
+import sidebarStateFixture from "./fixtures/app-server/demo.sidebar-state.json" with { type: "json" };
 import { createAppServerMockData } from "./appServerMockAdapter.ts";
 import type { RawSidebarProjectStateFixture, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
 

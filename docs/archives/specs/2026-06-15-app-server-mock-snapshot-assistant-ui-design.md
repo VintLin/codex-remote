@@ -10,7 +10,7 @@ This is a prototype bridge toward the later Worker / Control Plane architecture.
 
 Current implementation target:
 
-- Fetch a one-time app-server snapshot for `/Users/Vint/Repos/01_Project_Personal/050_codex_remote`.
+- Fetch a one-time app-server snapshot for `/workspace/codex-remote`.
 - Preserve raw app-server responses as JSON fixtures.
 - Derive sidebar projects, conversation rows, search recents, and assistant thread messages from that single raw source.
 - Replace the hand-written main message stack with an `assistant-ui` thread surface.
@@ -35,8 +35,8 @@ The only factual source for Codex conversation history in this prototype is the 
 
 For the current snapshot prototype, the source of truth is:
 
-- `apps/web/src/fixtures/app-server/050_codex_remote.thread-list.json`
-- `apps/web/src/fixtures/app-server/050_codex_remote.thread-read.json`
+- `apps/web/src/fixtures/app-server/demo.thread-list.json`
+- `apps/web/src/fixtures/app-server/demo.thread-read.json`
 
 For the future live implementation, the same logical source will become the Worker / Control Plane response that wraps Codex app-server data. UI-facing shapes must still be derived through the same adapter boundary.
 
@@ -66,7 +66,7 @@ The snapshot is collected from Codex app-server with `thread/list`:
 
 ```json
 {
-  "cwd": "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+  "cwd": "/workspace/codex-remote",
   "archived": false
 }
 ```

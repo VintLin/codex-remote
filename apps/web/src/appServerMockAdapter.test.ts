@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import listFixture from "./fixtures/app-server/050_codex_remote.thread-list.json" with { type: "json" };
-import readFixture from "./fixtures/app-server/050_codex_remote.thread-read.json" with { type: "json" };
-import sidebarStateFixture from "./fixtures/app-server/050_codex_remote.sidebar-state.json" with { type: "json" };
+import listFixture from "./fixtures/app-server/demo.thread-list.json" with { type: "json" };
+import readFixture from "./fixtures/app-server/demo.thread-read.json" with { type: "json" };
+import sidebarStateFixture from "./fixtures/app-server/demo.sidebar-state.json" with { type: "json" };
 import { createAppServerMockData, getThreadTitle } from "./appServerMockAdapter.ts";
 import type {
   RawCodexThread,
@@ -107,19 +107,69 @@ test("when deriving mock data, should follow the original Codex App project orde
   const data = createAppServerMockData({ list, reads, sidebarState });
 
   assert.ok(data.sidebarProjects.length >= 2);
-  assert.equal(data.sidebarProjects[0]?.path, "/Users/Vint/Repos/04_Skills/03_电脑管家 Skills");
-  assert.equal(data.sidebarProjects[1]?.path, list.projectCwd);
-  assert.equal(data.sidebarProjects[1]?.pinned, false);
+  assert.deepEqual(
+    data.sidebarProjects.map((project) => project.path),
+    sidebarState.projectOrder,
+  );
+  assert.equal(data.sidebarProjects[0]?.pinned, false);
+  assert.equal(data.sidebarProjects[1]?.pinned, true);
   assert.ok(data.conversations.length > 0);
   const projectIds = new Set(data.sidebarProjects.map((project) => project.id));
-  assert.ok(data.conversations.every((conversation) => projectIds.has(conversation.projectId ?? "")));
+  assert.ok(data.conversations.every((conversation) => conversation.projectId === undefined || projectIds.has(conversation.projectId)));
 });
 
 test("when Codex App has a renamed worktree project, should keep it as an independent project", () => {
-  const data = createAppServerMockData({ list, reads, sidebarState });
-  const worktreePath = "/Users/Vint/Documents/Codex/skill-flow-feat-cross-platform";
+  const worktreePath = "/workspace/worktrees/skill-flow-feat-cross-platform";
+  const baseProjectPath = "/workspace/projects/01_skill-flow";
+  const syntheticList: RawThreadListFixture = {
+    projectCwd: worktreePath,
+    capturedAt: "2026-06-15T00:00:00.000Z",
+    pages: [
+      {
+        data: [
+          {
+            id: "thread-worktree",
+            cwd: worktreePath,
+            name: "Worktree discussion",
+            updatedAt: 1_797_249_600,
+            gitInfo: { branch: "feat-cross-platform" },
+          } as unknown as RawCodexThread,
+        ],
+      },
+    ],
+  };
+  const syntheticReads: RawThreadReadFixture = {
+    projectCwd: syntheticList.projectCwd,
+    capturedAt: syntheticList.capturedAt,
+    threads: {
+      "thread-worktree": {
+        thread: {
+          id: "thread-worktree",
+          cwd: worktreePath,
+          name: "Worktree discussion",
+          updatedAt: 1_797_249_600,
+          gitInfo: { branch: "feat-cross-platform" },
+        } as unknown as RawCodexThread,
+      },
+    },
+  };
+  const syntheticSidebarState: RawSidebarProjectStateFixture = {
+    projectOrder: [baseProjectPath, worktreePath],
+    savedWorkspaceRoots: [baseProjectPath, worktreePath],
+    activeWorkspaceRoots: [worktreePath],
+    pinnedProjectIds: [],
+    collapsedGroups: {},
+    labels: {
+      [worktreePath]: "跨平台-跨平台",
+    },
+    projectlessThreadIds: [],
+    threadWorkspaceRootHints: {},
+    threadProjectlessOutputDirectories: {},
+  };
+  const data = createAppServerMockData({ list: syntheticList, reads: syntheticReads, sidebarState: syntheticSidebarState });
+
   const project = data.sidebarProjects.find((item) => item.path === worktreePath);
-  const conversation = data.conversations.find((item) => item.id === "019e53ea-d0b0-7141-a789-f92abec44593");
+  const conversation = data.conversations.find((item) => item.id === "thread-worktree");
 
   assert.equal(project?.name, "跨平台-跨平台");
   assert.equal(conversation?.projectId, project?.id);
@@ -287,7 +337,7 @@ test("when Codex App marks a thread as projectless, should keep it in independen
         data: [
           {
             id: "thread-projectless",
-            cwd: "/Users/Vint/Documents/Codex",
+            cwd: "/workspace/projectless",
             name: "Temporary discussion",
             updatedAt: 1_797_249_600,
           },
@@ -315,10 +365,10 @@ test("when Codex App marks a thread as projectless, should keep it in independen
     labels: {},
     projectlessThreadIds: ["thread-projectless"],
     threadWorkspaceRootHints: {
-      "thread-projectless": "/Users/Vint/Documents/Codex",
+      "thread-projectless": "/workspace/projectless",
     },
     threadProjectlessOutputDirectories: {
-      "thread-projectless": "/Users/Vint/Documents/Codex/2026-06-15/example/outputs",
+      "thread-projectless": "/workspace/projectless/2026-06-15/example/outputs",
     },
   };
 
@@ -350,8 +400,8 @@ test("when Codex App marks a thread as projectless, should keep it in independen
 });
 
 test("when workspace root hints point at a base project, should not override Codex App project roots", () => {
-  const worktreePath = "/Users/Vint/Documents/Codex/skill-flow-feat-cross-platform";
-  const baseProjectPath = "/Users/Vint/Repos/01_Project_Personal/020_skill_flow/01_skill-flow";
+  const worktreePath = "/workspace/worktrees/skill-flow-feat-cross-platform";
+  const baseProjectPath = "/workspace/projects/01_skill-flow";
   const syntheticList: RawThreadListFixture = {
     projectCwd: worktreePath,
     capturedAt: "2026-06-15T00:00:00.000Z",
@@ -404,7 +454,7 @@ test("when workspace root hints point at a base project, should not override Cod
 
 test("when deriving assistant threads, should preserve fork metadata from selected raw threads", () => {
   const syntheticList: RawThreadListFixture = {
-    projectCwd: "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+    projectCwd: "/workspace/codex-remote",
     capturedAt: "2026-06-15T00:00:00.000Z",
     pages: [
       {
@@ -468,7 +518,7 @@ test("when deriving assistant threads, should preserve fork metadata from select
 
 test("when deriving assistant threads, should expose assistant timeline nodes", () => {
   const syntheticList: RawThreadListFixture = {
-    projectCwd: "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+    projectCwd: "/workspace/codex-remote",
     capturedAt: "2026-06-15T00:00:00.000Z",
     pages: [
       {
@@ -536,7 +586,7 @@ test("when resolving titles from markdown previews, should use rendered text and
     getThreadTitle({
       id: "markdown-link",
       name: null,
-      preview: "[$browser-action](/Users/Vint/.codex/skills/browser-action/SKILL.md) 继续按 [任务目标.md](任务目标.md) 爬取帖子内容。",
+      preview: "[$browser-action](/workspace/skills/browser-action/SKILL.md) 继续按 [任务目标.md](任务目标.md) 爬取帖子内容。",
     }),
     "继续按 任务目标.md 爬取帖子内容。",
   );

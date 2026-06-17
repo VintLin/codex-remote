@@ -31,7 +31,7 @@
 
 新的候选 SVG 来源目录：
 
-- `/Users/Vint/Downloads/svg`
+- `/path/to/svg`
 
 ## 当前使用审计
 
@@ -83,8 +83,8 @@ SVG URL 映射：
 ## 执行策略
 
 1. 删除 `apps/web/public/icons/` 下旧 SVG。
-2. 将 `/Users/Vint/Downloads/svg` 中 SVG 全量复制到 `apps/web/public/icons/`。
-3. 将 `/Users/Vint/Downloads/svg/codex.svg` 覆盖到 `apps/web/public/codex.svg`。
+2. 将 `/path/to/svg` 中 SVG 全量复制到 `apps/web/public/icons/`。
+3. 将 `/path/to/svg/codex.svg` 覆盖到 `apps/web/public/codex.svg`。
 4. 更新 `IconName` 与 CSS URL 映射。
 5. 对语义冲突的场景做最小拆分：
    - `time-o` 拆为 `clock` 与 `mic`

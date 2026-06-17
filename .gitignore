@@ -18,6 +18,8 @@ packages/*/dist/
 out/
 apps/*/.next/
 apps/*/out/
+apps/*/.local-fixtures/
+apps/*/src/fixtures/app-server/050_codex_remote.*.json
 
 # Turborepo
 .turbo/

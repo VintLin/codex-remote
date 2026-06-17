@@ -130,7 +130,7 @@ Create `apps/web/src/assistantTimeline.test.ts` with:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import readFixture from "./fixtures/app-server/050_codex_remote.thread-read.json" with { type: "json" };
+import readFixture from "./fixtures/app-server/demo.thread-read.json" with { type: "json" };
 import {
   classifyLinkTarget,
   deriveAssistantTimeline,
@@ -191,9 +191,9 @@ test("when file changes are present, should generate right-side diff detail targ
 });
 
 test("when classifying links, should route skill file image url anchor and unknown targets", () => {
-  assert.deepEqual(classifyLinkTarget("Skill", "/Users/Vint/.skillflow/source/git/foo/SKILL.md"), {
+  assert.deepEqual(classifyLinkTarget("Skill", "/workspace/skills/foo/SKILL.md"), {
     type: "skill",
-    href: "/Users/Vint/.skillflow/source/git/foo/SKILL.md",
+    href: "/workspace/skills/foo/SKILL.md",
     label: "Skill",
     title: "SKILL.md",
   });
@@ -227,7 +227,7 @@ function createThreadWithMixedItems(): RawCodexThread {
         completedAt: 1_797_249_030,
         durationMs: 30_000,
         items: [
-          { id: "user-a", type: "userMessage", content: [{ type: "text", text: "Please update [Skill](/Users/Vint/.skillflow/source/git/foo/SKILL.md)" }] },
+          { id: "user-a", type: "userMessage", content: [{ type: "text", text: "Please update [Skill](/workspace/skills/foo/SKILL.md)" }] },
           { id: "assistant-a", type: "agentMessage", text: "我先编辑文件。" },
           {
             id: "file-a",
@@ -726,7 +726,7 @@ Replace the "when deriving assistant threads, should expose complete app-server 
 ```ts
 test("when deriving assistant threads, should expose timeline snapshots from app-server turns", () => {
   const syntheticList: RawThreadListFixture = {
-    projectCwd: "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+    projectCwd: "/workspace/codex-remote",
     capturedAt: "2026-06-15T00:00:00.000Z",
     pages: [
       {

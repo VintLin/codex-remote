@@ -121,7 +121,7 @@ test("when raw turn includes timing, should pass timing fields into timeline tur
 });
 
 test("when classifying markdown links, should route skill/file/image/url/anchor/unknown targets", () => {
-  const skillHref = "/Users/Vint/.skillflow/source/git/foo/SKILL.md";
+  const skillHref = "/workspace/skills/foo/SKILL.md";
 
   assert.deepEqual(classifyLinkTarget("Skill", skillHref), {
     type: "skill",
@@ -219,7 +219,7 @@ function createSyntheticThread(): RawCodexThread {
 }
 
 function readThreadReadFixture(): RawThreadReadFixture {
-  const fixturePath = join(process.cwd(), "src/fixtures/app-server/050_codex_remote.thread-read.json");
+  const fixturePath = join(process.cwd(), "src/fixtures/app-server/demo.thread-read.json");
   return JSON.parse(readFileSync(fixturePath, "utf8")) as RawThreadReadFixture;
 }
 

@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
-const projectCwd = "/Users/Vint/Repos/01_Project_Personal/050_codex_remote";
-const outDir = path.resolve("apps/web/src/fixtures/app-server");
-const listOut = path.join(outDir, "050_codex_remote.thread-list.json");
-const readOut = path.join(outDir, "050_codex_remote.thread-read.json");
-const sidebarStateOut = path.join(outDir, "050_codex_remote.sidebar-state.json");
+const projectCwd = process.env.CODEX_REMOTE_SNAPSHOT_CWD ?? process.cwd();
+const outDir = path.resolve("apps/web/.local-fixtures/app-server");
+const listOut = path.join(outDir, "demo.thread-list.json");
+const readOut = path.join(outDir, "demo.thread-read.json");
+const sidebarStateOut = path.join(outDir, "demo.sidebar-state.json");
 const requestTimeoutMs = 30_000;
 
 let nextId = 1;

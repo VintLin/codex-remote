@@ -1,0 +1,31 @@
+{
+  "projectOrder": [
+    "/workspace/codex-remote",
+    "/workspace/example-worker"
+  ],
+  "savedWorkspaceRoots": [
+    "/workspace/codex-remote",
+    "/workspace/example-worker"
+  ],
+  "activeWorkspaceRoots": [
+    "/workspace/codex-remote"
+  ],
+  "pinnedProjectIds": [
+    "/workspace/example-worker"
+  ],
+  "collapsedGroups": {
+    "/workspace/example-worker": true
+  },
+  "labels": {
+    "/workspace/example-worker": "Example worker"
+  },
+  "projectlessThreadIds": [
+    "demo-thread-projectless"
+  ],
+  "threadWorkspaceRootHints": {
+    "demo-thread-projectless": "/workspace/projectless"
+  },
+  "threadProjectlessOutputDirectories": {
+    "demo-thread-projectless": "/workspace/projectless/outputs"
+  }
+}
