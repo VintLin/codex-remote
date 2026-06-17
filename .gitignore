@@ -9,3 +9,4 @@ apps/*/.next/
 dist/
 apps/*/dist/
 packages/*/dist/
+logs/
