@@ -41,6 +41,12 @@ interface ProcessedRunRow {
   type: "processedRun";
 }
 
+const accessModeOptions = [
+  { key: "approval-request", label: "请求批准", icon: "hand" },
+  { key: "approval-delegate", label: "替我审批", icon: "shield-check" },
+  { key: "full-access", label: "完全访问", icon: "shield-alert" },
+] as const;
+
 type TimelineRow =
   | ProcessedRunRow
   | {
@@ -62,11 +68,15 @@ export function CodexAssistantThread({ onOpenDetail = noopOpenDetail, thread }: 
 }
 
 function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAssistantThreadProps>) {
+  const [accessMenuOpen, setAccessMenuOpen] = useState(false);
+  const [selectedAccessMode, setSelectedAccessMode] = useState<(typeof accessModeOptions)[number]["key"]>("full-access");
   const [expandedRunIds, setExpandedRunIds] = useState(() => new Set<string>());
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const accessMenuRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messages = useMemo(() => getRuntimeMessages(thread), [thread]);
   const rows = useMemo(() => getTimelineRows(thread), [thread]);
+  const selectedAccessModeLabel = accessModeOptions.find((option) => option.key === selectedAccessMode)?.label ?? "完全访问";
   const convertMessage = useCallback((message: RuntimeMessageSnapshot): ThreadMessageLike => {
     return {
       id: message.id,
@@ -136,6 +146,28 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
     };
   }, [scrollToLatest, thread?.id]);
 
+  useEffect(() => {
+    if (!accessMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (accessMenuRef.current?.contains(target)) {
+        return;
+      }
+      setAccessMenuOpen(false);
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [accessMenuOpen]);
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <section aria-label="Conversation thread" className="codex-assistant-thread">
@@ -190,11 +222,40 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
                   <button aria-label="添加附件" className="codex-assistant-composer-icon" disabled type="button">
                     <Icon name="plus" />
                   </button>
-                  <button className="codex-assistant-access" disabled type="button">
-                    <span className="codex-assistant-access-dot" />
-                    完全访问
-                    <Icon name="down" />
-                  </button>
+                  <div className="codex-assistant-access-wrap" ref={accessMenuRef}>
+                    <button
+                      aria-expanded={accessMenuOpen}
+                      aria-haspopup="menu"
+                      className="codex-assistant-access"
+                      data-mode={selectedAccessMode}
+                      onClick={() => setAccessMenuOpen((current) => !current)}
+                      type="button"
+                    >
+                      <Icon name={accessModeOptions.find((option) => option.key === selectedAccessMode)?.icon ?? "shield-alert"} />
+                      {selectedAccessModeLabel}
+                      <Icon name="down" />
+                    </button>
+                    {accessMenuOpen ? (
+                      <div aria-label="权限模式" className="codex-assistant-access-menu" role="menu">
+                        {accessModeOptions.map((option) => (
+                          <button
+                            aria-pressed={option.key === selectedAccessMode}
+                            className={`codex-assistant-access-option${option.key === selectedAccessMode ? " is-selected" : ""}`}
+                            key={option.key}
+                            onClick={() => {
+                              setSelectedAccessMode(option.key);
+                              setAccessMenuOpen(false);
+                            }}
+                            role="menuitemradio"
+                            type="button"
+                          >
+                            <Icon name={option.icon} />
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="codex-assistant-composer-right">
                   <button className="codex-assistant-model" disabled type="button">

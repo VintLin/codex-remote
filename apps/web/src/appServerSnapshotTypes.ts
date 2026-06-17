@@ -4,6 +4,18 @@ export interface RawThreadListFixture {
   pages: RawThreadListPage[];
 }
 
+export interface RawSidebarProjectStateFixture {
+  projectOrder: string[];
+  savedWorkspaceRoots: string[];
+  activeWorkspaceRoots: string[];
+  pinnedProjectIds: string[];
+  collapsedGroups: Record<string, boolean>;
+  labels: Record<string, string>;
+  projectlessThreadIds: string[];
+  threadWorkspaceRootHints: Record<string, string>;
+  threadProjectlessOutputDirectories: Record<string, string>;
+}
+
 export interface RawThreadListPage {
   data?: RawCodexThread[];
   threads?: RawCodexThread[];

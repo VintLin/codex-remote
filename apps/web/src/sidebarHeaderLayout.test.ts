@@ -20,9 +20,12 @@ test("when the sidebar header styles are defined, should keep the compact spacin
   assert.match(sharedStyles, /--cr-control-size:\s*32px;/);
   assert.match(sharedStyles, /--cr-control-size-mobile:\s*36px;/);
   assert.match(sharedStyles, /--cr-stroke:\s*1px solid var\(--cr-line\);/);
-  assert.match(sharedStyles, /\.sidebar-header\s*\{[^}]*gap:\s*8px;/s);
+  assert.match(sharedStyles, /\.sidebar-header\s*\{[^}]*gap:\s*3px;/s);
   assert.match(sharedStyles, /\.sidebar-header-controls\s*\{[^}]*height:\s*var\(--cr-control-size\);/s);
-  assert.match(sharedStyles, /\.sidebar-header-separator\s*\{[^}]*height:\s*var\(--cr-separator-space\);[^}]*background:\s*transparent;/s);
+  assert.match(
+    sharedStyles,
+    /\.sidebar-header-separator\s*\{[^}]*height:\s*var\(--cr-sidebar-header-separator-height\);[^}]*background:\s*transparent;/s,
+  );
   assert.match(sharedStyles, /\.sidebar-header-control\s*\{[^}]*width:\s*var\(--cr-control-size\);[^}]*height:\s*var\(--cr-control-size\);/s);
 });
 
@@ -38,6 +41,10 @@ test("when sidebar project and conversation rows are refined, should keep the re
     sharedStyles,
     /\.sidebar-heading\s*\{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*var\(--cr-sidebar-slot-size\) minmax\(0, 1fr\) var\(--cr-sidebar-trailing-width\);[^}]*min-height:\s*var\(--cr-control-size\);/s,
   );
+  assert.match(
+    sharedStyles,
+    /\.sidebar-heading\s*\{[^}]*color:\s*var\(--cr-muted\);[^}]*font-size:\s*var\(--cr-text-body\);[^}]*font-weight:\s*var\(--cr-weight-regular\);/s,
+  );
   assert.match(sharedStyles, /\.sidebar-list-item\s*\{[^}]*min-height:\s*var\(--cr-control-size\);/s);
   assert.match(
     sharedStyles,
@@ -45,15 +52,29 @@ test("when sidebar project and conversation rows are refined, should keep the re
   );
   assert.match(sharedStyles, /\.sidebar-list-meta\s*\{[^}]*font-size:\s*var\(--cr-text-compact\);/s);
   assert.match(sharedStyles, /\.nested-list\s*\{[^}]*padding-left:\s*0;/s);
-  assert.match(sharedStyles, /\.sidebar-list-item-conversation\.is-nested\s*\{[^}]*padding-left:\s*17px;/s);
-  assert.match(sharedStyles, /\.sidebar-list-item-project \.item-title\s*\{[^}]*color:\s*var\(--cr-muted\);[^}]*font-weight:\s*var\(--cr-weight-emphasis\);/s);
-  assert.match(sharedStyles, /\.sidebar-list-item-conversation \.item-title\s*\{[^}]*color:\s*var\(--cr-ink-strong\);[^}]*font-size:\s*var\(--cr-text-body\);/s);
+  assert.match(sharedStyles, /\.sidebar-list-item-conversation\.is-nested\s*\{[^}]*padding-left:\s*0;/s);
+  assert.match(sharedStyles, /\.sidebar-list-item-project\.is-expanded \.sidebar-list-inline\s*\{[^}]*transform:\s*rotate\(90deg\);/s);
+  assert.match(
+    sharedStyles,
+    /\.sidebar-list-item:hover \.sidebar-list-inline,\s*\.sidebar-list-item:focus-within \.sidebar-list-inline,\s*\.sidebar-list-item\.is-pressed \.sidebar-list-inline\s*\{\s*opacity:\s*1;\s*\}/s,
+  );
+  assert.match(
+    sharedStyles,
+    /\.sidebar-list-item-project \.item-title,\s*\.sidebar-list-item-conversation \.item-title\s*\{[^}]*color:\s*var\(--cr-ink-strong\);[^}]*font-size:\s*var\(--cr-text-body\);[^}]*font-weight:\s*var\(--cr-weight-regular\);/s,
+  );
+  assert.match(
+    sharedStyles,
+    /\.sidebar-list-item-empty \.item-title\s*\{[^}]*color:\s*var\(--cr-sidebar-muted\);[^}]*font-size:\s*var\(--cr-text-body\);[^}]*font-weight:\s*var\(--cr-weight-regular\);/s,
+  );
 });
 
 test("when sidebar items are selected, should promote them above hover with a stronger selected layer", () => {
   assert.match(sharedStyles, /--cr-sidebar-selected:\s*oklch\(0\.941 0 89\.9\);/);
   assert.match(sharedStyles, /\.sidebar-list-item-conversation\.is-selected\s*\{[^}]*background:\s*var\(--cr-sidebar-selected\);/s);
-  assert.match(sharedStyles, /\.sidebar-list-item-project\.is-selected \.item-title\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
+  assert.match(
+    sharedStyles,
+    /\.sidebar-list-item-project\.is-selected \.item-title,\s*\.sidebar-list-item-conversation\.is-selected \.item-title\s*\{[^}]*color:\s*var\(--cr-ink-strong\);/s,
+  );
 });
 
 test("when sidebar controls are hovered, should use one consistent gray hover background", () => {
@@ -76,13 +97,36 @@ test("when container borders are aligned to the reference visual language, shoul
   assert.match(sharedStyles, /--cr-radius-xl:\s*16px;/);
   assert.match(sharedStyles, /\.topbar\s*\{[^}]*border-bottom:\s*var\(--cr-stroke\);/s);
   assert.match(sharedStyles, /\.review-header\s*\{[^}]*border-bottom:\s*var\(--cr-stroke\);/s);
-  assert.match(sharedStyles, /\.search-dialog\s*\{[^}]*border:\s*var\(--cr-stroke\);[^}]*border-radius:\s*var\(--cr-radius-xl\);/s);
-  assert.match(sharedStyles, /\.search-dialog\s*\{[^}]*box-shadow:\s*var\(--cr-shadow-hover\);/s);
-  assert.match(sharedStyles, /\.search-input\s*\{[^}]*border-bottom:\s*var\(--cr-stroke\);/s);
+  assert.match(
+    sharedStyles,
+    /\.search-dialog\s*\{[^}]*border:\s*var\(--cr-stroke\);[^}]*border-radius:\s*var\(--cr-radius-card\);[^}]*background:\s*var\(--cr-bg\);/s,
+  );
+  assert.match(sharedStyles, /\.search-dialog\s*\{[^}]*padding:\s*12px 8px 10px;/s);
+  assert.match(sharedStyles, /\.search-dialog\s*\{[^}]*box-shadow:\s*var\(--cr-shadow\);/s);
+  assert.match(
+    sharedStyles,
+    /\.search-input-shell\s*\{[^}]*min-height:\s*var\(--cr-search-input-shell-min-height\);[^}]*margin:\s*0 6px 8px;[^}]*border-bottom:\s*var\(--cr-stroke\);/s,
+  );
+  assert.match(sharedStyles, /\.search-input\s*\{[^}]*appearance:\s*none;[^}]*-webkit-appearance:\s*none;[^}]*box-shadow:\s*none;/s);
+  assert.match(sharedStyles, /\.search-input:focus,\s*\.search-input:focus-visible\s*\{[^}]*outline:\s*none;[^}]*box-shadow:\s*none;/s);
   assert.match(sharedStyles, /\.codex-assistant-composer\s*\{[^}]*border:\s*var\(--cr-stroke\);[^}]*border-radius:\s*var\(--cr-radius-xl\);/s);
   assert.match(sharedStyles, /\.codex-assistant-composer\s*\{[^}]*box-shadow:\s*var\(--cr-shadow\);/s);
+  assert.match(sharedStyles, /\.icon-shield-alert\s*\{[^}]*shield-alert\.svg/);
+  assert.match(sharedStyles, /\.icon-hand\s*\{[^}]*hand\.svg/);
+  assert.match(sharedStyles, /\.icon-shield-check\s*\{[^}]*shield-check\.svg/);
+  assert.match(sharedStyles, /\.codex-assistant-access-menu\s*\{[^}]*position:\s*absolute;[^}]*bottom:\s*calc\(100% \+ 8px\);[^}]*border:\s*var\(--cr-stroke\);/s);
+  assert.match(sharedStyles, /\.codex-assistant-access-option:hover,[^}]*\.codex-assistant-access-option\.is-selected\s*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
+  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="approval-request"\]\s*\{[^}]*color:\s*var\(--cr-ink\);/s);
+  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="approval-delegate"\]\s*\{[^}]*color:\s*var\(--cr-accent\);/s);
+  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="full-access"\]\s*\{[^}]*color:\s*var\(--cr-danger\);/s);
   assert.match(sharedStyles, /\.panel,\s*\.run-card,\s*\.composer\s*\{[^}]*border:\s*var\(--cr-stroke\);/s);
   assert.match(sharedStyles, /\.approval-box,\s*\.linked-task,\s*\.diff-panel\s*\{[^}]*border:\s*var\(--cr-stroke\);/s);
+  assert.match(sharedStyles, /\.search-results\s*\{[^}]*gap:\s*2px;/s);
+  assert.match(sharedStyles, /\.search-result\.is-active,\s*\.search-result:hover\s*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
+  assert.match(sharedStyles, /\.codex-markdown :where\(ul, ol\)\s*\{[^}]*list-style-position:\s*outside;[^}]*padding-left:\s*1\.35em;/s);
+  assert.match(sharedStyles, /\.codex-markdown ul\s*\{[^}]*list-style-type:\s*disc;/s);
+  assert.match(sharedStyles, /\.codex-markdown ol\s*\{[^}]*list-style-type:\s*decimal;/s);
+  assert.match(sharedStyles, /\.codex-markdown li::marker\s*\{[^}]*color:\s*var\(--cr-muted\);/s);
 });
 
 test("when mobile navigation is active, should promote full-page back navigation instead of desktop expand or collapse controls", () => {

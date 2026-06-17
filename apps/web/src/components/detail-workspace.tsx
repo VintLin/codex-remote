@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { DetailTarget, LinkReference } from "../assistantTimeline";
 import { Icon } from "./icons";
+import { RightDetailPane } from "./right-detail-pane";
 
 interface DetailWorkspaceProps {
   conversationTitle: string;
@@ -18,43 +19,19 @@ export function DetailWorkspace({ conversationTitle, isCollapsed, isMobile = fal
   const showWorkspaceMeta = target !== null;
 
   return (
-    <aside aria-label={`${conversationTitle} detail workspace`} className={`review-pane detail-workspace${isMobile ? " mobile-pane" : ""}`}>
-      <header className="review-header">
-        <div className="review-title">
-          {isMobile && onBack ? (
-            <button aria-label="返回对话" className="icon-button mobile-back-button" onClick={onBack} type="button">
-              <Icon className="mobile-back-icon" name="right" />
-            </button>
-          ) : null}
-          {showWorkspaceMeta ? (
-            <>
-              <span className="nav-glyph detail-workspace-glyph">
-                <Icon name={workspaceMeta.icon} />
-              </span>
-              <span>{workspaceMeta.label}</span>
-            </>
-          ) : null}
-        </div>
-        <div className="toolbar">
-          {!isMobile && !isCollapsed && onCollapse ? (
-            <button
-              aria-label="收起右侧边栏"
-              className="icon-button sidebar-toggle-button"
-              data-direction="right"
-              data-state="expanded"
-              onClick={onCollapse}
-              type="button"
-            >
-              <Icon className="sidebar-toggle-icon" name="panel-right-close" />
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="review-scroll">
-        {target ? <DetailContent target={target} /> : <DetailEmptyState selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
-      </div>
-    </aside>
+    <RightDetailPane
+      ariaLabel={`${conversationTitle} detail workspace`}
+      backLabel="返回对话"
+      className="detail-workspace"
+      isCollapsed={isCollapsed}
+      isMobile={isMobile}
+      onBack={onBack}
+      onCollapse={onCollapse}
+      title={showWorkspaceMeta ? workspaceMeta.label : undefined}
+      titleIcon={showWorkspaceMeta ? workspaceMeta.icon : undefined}
+    >
+      {target ? <DetailContent target={target} /> : <DetailEmptyState selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
+    </RightDetailPane>
   );
 }
 

@@ -1,7 +1,8 @@
 import listFixture from "./fixtures/app-server/050_codex_remote.thread-list.json" with { type: "json" };
 import readFixture from "./fixtures/app-server/050_codex_remote.thread-read.json" with { type: "json" };
+import sidebarStateFixture from "./fixtures/app-server/050_codex_remote.sidebar-state.json" with { type: "json" };
 import { createAppServerMockData } from "./appServerMockAdapter.ts";
-import type { RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
+import type { RawSidebarProjectStateFixture, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
 
 export type DeviceConnectionStatus = "Connected" | "Not connected";
 export type ConversationStatus = "running" | "waiting" | "done" | "failed";
@@ -60,6 +61,7 @@ export interface DiffLine {
 const appServerMockData = createAppServerMockData({
   list: listFixture as unknown as RawThreadListFixture,
   reads: readFixture as unknown as RawThreadReadFixture,
+  sidebarState: sidebarStateFixture as unknown as RawSidebarProjectStateFixture,
 });
 
 export const devices: Device[] = appServerMockData.devices;

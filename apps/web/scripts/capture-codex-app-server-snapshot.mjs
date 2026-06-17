@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
@@ -7,6 +8,7 @@ const projectCwd = "/Users/Vint/Repos/01_Project_Personal/050_codex_remote";
 const outDir = path.resolve("apps/web/src/fixtures/app-server");
 const listOut = path.join(outDir, "050_codex_remote.thread-list.json");
 const readOut = path.join(outDir, "050_codex_remote.thread-read.json");
+const sidebarStateOut = path.join(outDir, "050_codex_remote.sidebar-state.json");
 const requestTimeoutMs = 30_000;
 
 let nextId = 1;
@@ -180,9 +182,9 @@ async function listAllThreads() {
   do {
     const result = await request("thread/list", {
       archived: false,
-      cwd: projectCwd,
       cursor,
       limit: 100,
+      modelProviders: [],
       sortKey: "updated_at",
       sortDirection: "desc",
     });
@@ -214,6 +216,22 @@ function sanitizeLog(value) {
     .replace(/(api[_-]?key["'\s:=]+)(["']?)[^"'\s]+/gi, "$1$2REDACTED");
 }
 
+async function readSidebarStateFixture() {
+  const globalStatePath = path.join(os.homedir(), ".codex", ".codex-global-state.json");
+  const raw = JSON.parse(await readFile(globalStatePath, "utf8"));
+  return {
+    projectOrder: raw["project-order"] ?? [],
+    savedWorkspaceRoots: raw["electron-saved-workspace-roots"] ?? [],
+    activeWorkspaceRoots: raw["active-workspace-roots"] ?? [],
+    pinnedProjectIds: raw["pinned-project-ids"] ?? [],
+    collapsedGroups: raw["electron-persisted-atom-state"]?.["sidebar-collapsed-groups"] ?? {},
+    labels: raw["electron-workspace-root-labels"] ?? {},
+    projectlessThreadIds: raw["projectless-thread-ids"] ?? [],
+    threadWorkspaceRootHints: raw["thread-workspace-root-hints"] ?? {},
+    threadProjectlessOutputDirectories: raw["thread-projectless-output-directories"] ?? {},
+  };
+}
+
 async function main() {
   await mkdir(outDir, { recursive: true });
 
@@ -235,6 +253,7 @@ async function main() {
     .map((thread) => thread.id)
     .filter((id) => typeof id === "string");
   const reads = await readThreads(threadIds);
+  const sidebarState = await readSidebarStateFixture();
   const readCount = Object.keys(reads).length;
   if (threadIds.length !== readCount) {
     throw new Error(`thread/read count mismatch: listed=${threadIds.length}, read=${readCount}`);
@@ -249,6 +268,10 @@ async function main() {
     readOut,
     `${JSON.stringify({ projectCwd, capturedAt, threads: reads }, null, 2)}\n`,
   );
+  await writeFile(
+    sidebarStateOut,
+    `${JSON.stringify(sidebarState, null, 2)}\n`,
+  );
 
   console.log(
     JSON.stringify(
@@ -256,6 +279,7 @@ async function main() {
         pages: listPages.length,
         listed: threadIds.length,
         read: readCount,
+        projects: sidebarState.projectOrder.length,
       },
       null,
       2,

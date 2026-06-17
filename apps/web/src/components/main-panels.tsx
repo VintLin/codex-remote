@@ -8,6 +8,7 @@ import { ActionMenu } from "./action-menu";
 import { CodexAssistantThread } from "./codex-assistant-thread";
 import { DetailWorkspace } from "./detail-workspace";
 import { Icon, iconForDevice } from "./icons";
+import { RightDetailPane } from "./right-detail-pane";
 import { statusToClass } from "./sidebar";
 
 interface ConversationMainProps {
@@ -177,19 +178,17 @@ export function DevicesPage({
           {!isMobile && isSidebarCollapsed ? (
             <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
           ) : null}
-          <div className="workspace-title">
+          <div className="workspace-title devices-title">
             <h1>设备</h1>
-            <span>管理当前 Control Plane 可见的设备</span>
+            <button aria-label="新增设备" className="icon-button devices-add-button" type="button">
+              <Icon name="plus" />
+            </button>
           </div>
         </div>
-        <div className="toolbar">
+        <div className="toolbar devices-toolbar">
           {!isMobile && isDetailCollapsed ? (
             <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
-          <button className="button primary" type="button">
-            <Icon name="plus" />
-            新增设备
-          </button>
         </div>
       </header>
 
@@ -210,20 +209,21 @@ export function DevicesPage({
                   <Icon name={iconForDevice(device)} />
                 </span>
                 <span className="device-card-copy">
-                  <span className="device-card-title">{device.name}</span>
+                  <span className="device-card-title">
+                    <span>{device.name}</span>
+                    <Badge status={device.status} />
+                  </span>
                   <span className="device-card-meta">
                     {device.ip} - 最后上线 {device.lastOnlineAt}
                   </span>
                 </span>
-                <Badge status={device.status} />
               </button>
               <div className="device-card-actions">
-                <button className="button secondary" type="button">
-                  编辑
+                <button aria-label="编辑设备" className="icon-button device-action-button" type="button">
+                  <Icon name="pencil" />
                 </button>
-                <button className="button secondary danger" type="button">
+                <button aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" type="button">
                   <Icon name="delete" />
-                  删除
                 </button>
               </div>
             </article>
@@ -250,20 +250,17 @@ export function DeviceDetailPane({
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
 
   return (
-    <aside aria-label="Device detail" className={`review-pane device-detail-pane${isMobile ? " mobile-pane" : ""}`}>
-      <header className="review-header">
-        <div className="review-title">
-          {isMobile && onBack ? <HeaderBackButton label="返回设备列表" onClick={onBack} /> : null}
-          <span className="nav-glyph">
-            <Icon name={iconForDevice(selectedDevice)} />
-          </span>
-          <span>设备详情</span>
-        </div>
-        {!isMobile && !isCollapsed ? (
-          <SidebarToggleButton direction="right" label="收起右侧边栏" onClick={onCollapse} />
-        ) : null}
-      </header>
-      <div className="review-scroll">
+    <RightDetailPane
+      ariaLabel="Device detail"
+      backLabel="返回设备列表"
+      className="device-detail-pane"
+      isCollapsed={isCollapsed}
+      isMobile={isMobile}
+      onBack={onBack}
+      onCollapse={onCollapse}
+      title="设备详情"
+      titleIcon={iconForDevice(selectedDevice)}
+    >
         <section className="linked-task">
           <h2>{selectedDevice.name}</h2>
           <p>状态：{statusText[selectedDevice.status]}</p>
@@ -276,8 +273,7 @@ export function DeviceDetailPane({
           <p>模型：{selectedDevice.model}</p>
           <p>真实编辑、删除和新增设备逻辑后续接入 Control Plane API。</p>
         </section>
-      </div>
-    </aside>
+    </RightDetailPane>
   );
 }
 
@@ -306,19 +302,18 @@ export function AutomationsPage({
           {!isMobile && isSidebarCollapsed ? (
             <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
           ) : null}
-          <div className="workspace-title">
+          <div className="workspace-title automations-title">
             <h1>自动化</h1>
-            <span>后续用于展示当前设备上的自动化任务</span>
           </div>
         </div>
-        <div className="toolbar">
+        <div className="toolbar automations-toolbar">
           {!isMobile && isDetailCollapsed ? (
             <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
       <div className="content-scroll">
-        <section className="empty-state">
+        <section className="empty-state automation-empty-state">
           <h2>暂无自动化 mock</h2>
           <p>此处只保留入口和空状态样式，避免提前定义不稳定的数据结构。</p>
         </section>
@@ -339,20 +334,17 @@ export function AutomationDetailPane({
   onCollapse: () => void;
 }) {
   return (
-    <aside aria-label="Automation detail" className={`review-pane device-detail-pane${isMobile ? " mobile-pane" : ""}`}>
-      <header className="review-header">
-        <div className="review-title">
-          {isMobile && onBack ? <HeaderBackButton label="返回自动化列表" onClick={onBack} /> : null}
-          <span className="nav-glyph">
-            <Icon name="reload" />
-          </span>
-          <span>自动化详情</span>
-        </div>
-        {!isMobile && !isCollapsed ? (
-          <SidebarToggleButton direction="right" label="收起右侧边栏" onClick={onCollapse} />
-        ) : null}
-      </header>
-    </aside>
+    <RightDetailPane
+      ariaLabel="Automation detail"
+      backLabel="返回自动化列表"
+      className="device-detail-pane"
+      isCollapsed={isCollapsed}
+      isMobile={isMobile}
+      onBack={onBack}
+      onCollapse={onCollapse}
+      title="自动化详情"
+      titleIcon="reload"
+    />
   );
 }
 
@@ -364,7 +356,9 @@ export function SearchDialog({ onClose, open }: SearchDialogProps) {
   return (
     <div className="search-overlay" data-close-search onClick={(event) => event.target === event.currentTarget && onClose()} role="presentation">
       <section aria-label="搜索对话" aria-modal="true" className="search-dialog" data-search-dialog role="dialog">
-        <input aria-label="搜索对话" autoFocus className="search-input" placeholder="搜索对话" />
+        <div className="search-input-shell">
+          <input aria-label="搜索对话" autoFocus className="search-input" placeholder="搜索对话" />
+        </div>
         <div className="search-section-title">近期对话</div>
         <div className="search-results">
           {searchRecents.map((item, index) => (
@@ -382,7 +376,16 @@ export function SearchDialog({ onClose, open }: SearchDialogProps) {
 }
 
 function Badge(props: { status: DeviceConnectionStatus | Conversation["status"] | TaskStatus }) {
-  return <span className={`badge ${statusToClass(props.status)}`}>{statusText[props.status]}</span>;
+  const statusClassName = statusToClass(props.status);
+  const isDeviceStatus = props.status === "Connected" || props.status === "Not connected";
+  if (isDeviceStatus) {
+    return (
+      <span aria-label={statusText[props.status]} className={`badge badge-device-status ${statusClassName}`}>
+        <span aria-hidden="true" className={`status-dot ${statusClassName}`} />
+      </span>
+    );
+  }
+  return <span className={`badge ${statusClassName}`}>{statusText[props.status]}</span>;
 }
 
 function SidebarToggleButton(props: {

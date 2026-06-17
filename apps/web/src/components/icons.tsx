@@ -30,8 +30,11 @@ export type IconName =
   | "right"
   | "search"
   | "setting-o"
+  | "shield-alert"
+  | "shield-check"
   | "shrink"
   | "square-terminal"
+  | "hand"
   | "windows"
   | "x";
 

@@ -1,5 +1,10 @@
 import type { BoardTask, Conversation, ConversationStatus, Device, SidebarProject } from "./mockData.ts";
-import type { RawCodexThread, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
+import type {
+  RawCodexThread,
+  RawSidebarProjectStateFixture,
+  RawThreadListFixture,
+  RawThreadReadFixture,
+} from "./appServerSnapshotTypes.ts";
 import { deriveAssistantTimeline, type AssistantTimeline } from "./assistantTimeline.ts";
 
 export interface AssistantThreadSnapshot {
@@ -34,6 +39,7 @@ export interface AppServerMockData {
 export interface CreateAppServerMockDataInput {
   list: RawThreadListFixture;
   reads: RawThreadReadFixture;
+  sidebarState?: RawSidebarProjectStateFixture;
 }
 
 const DEVICE_ID = "macbook";
@@ -44,25 +50,28 @@ const DEVICE_MODEL = "GPT-5.4";
 const DEFAULT_SANDBOX = "workspace-write";
 const DEFAULT_APPROVAL = "never";
 
-export function createAppServerMockData({ list, reads }: CreateAppServerMockDataInput): AppServerMockData {
-  const projectName = getProjectName(list.projectCwd);
-  const projectId = getProjectId(projectName);
+export function createAppServerMockData({ list, reads, sidebarState }: CreateAppServerMockDataInput): AppServerMockData {
   const listedThreads = collectListedThreads(list);
+  const visibleThreads = listedThreads.filter((thread) => !isArchivedThread(getReadableThread(getThreadId(thread), reads) ?? thread));
+  const projects = createSidebarProjects({ list, reads, sidebarState, threads: visibleThreads });
+  const projectByPath = new Map(projects.map((project) => [project.path, project]));
+  const primaryProject = projects.find((project) => project.path === list.projectCwd) ?? projects[0] ?? createFallbackProject(list.projectCwd);
   const conversations = listedThreads.map((thread) =>
     createConversation({
       thread,
+      defaultProject: primaryProject,
+      projectByPath,
       reads,
-      projectId,
-      projectName,
+      sidebarState,
     }),
-  );
+  ).filter((conversation): conversation is Conversation => conversation !== null);
   const assistantThreads = conversations.map((conversation) => {
     const thread = getReadableThread(conversation.id, reads) ?? findListedThread(conversation.id, listedThreads);
     return {
       id: conversation.id,
       title: conversation.title,
       deviceId: conversation.deviceId,
-      projectId: conversation.projectId ?? projectId,
+      projectId: conversation.projectId ?? primaryProject.id,
       projectName: conversation.projectName,
       status: conversation.status,
       updatedAt: conversation.updatedAt,
@@ -80,23 +89,12 @@ export function createAppServerMockData({ list, reads }: CreateAppServerMockData
         name: DEVICE_NAME,
         status: "Connected",
         ip: DEVICE_IP,
-        lastOnlineAt: formatRelativeTime(list.capturedAt, latestUpdatedAt(listedThreads)),
-        currentProject: projectName,
+        lastOnlineAt: formatRelativeTime(list.capturedAt, latestUpdatedAt(visibleThreads)),
+        currentProject: primaryProject.name,
         model: DEVICE_MODEL,
       },
     ],
-    sidebarProjects: [
-      {
-        id: projectId,
-        name: projectName,
-        deviceId: DEVICE_ID,
-        path: list.projectCwd,
-        branch: "codex/snapshot-data-show",
-        hasChanges: true,
-        pinned: true,
-        expanded: true,
-      },
-    ],
+    sidebarProjects: projects,
     conversations,
     assistantThreads,
     searchRecents: conversations.map((conversation, index) => ({
@@ -105,17 +103,17 @@ export function createAppServerMockData({ list, reads }: CreateAppServerMockData
       ...(index === 0 ? { active: true } : {}),
       ...(conversation.status === "waiting" ? { marker: true } : {}),
     })),
-    tasks: createTasks(projectName, conversations),
+    tasks: createTasks(projects, conversations),
   };
 }
 
 export function getThreadTitle(thread: Pick<RawCodexThread, "id" | "name" | "preview">): string {
-  const name = getNonEmptyString(thread.name);
+  const name = getTitleCandidate(thread.name);
   if (name) {
     return name;
   }
 
-  const preview = firstLine(thread.preview);
+  const preview = getTitleCandidate(thread.preview);
   if (preview) {
     return preview;
   }
@@ -124,27 +122,35 @@ export function getThreadTitle(thread: Pick<RawCodexThread, "id" | "name" | "pre
 }
 
 function createConversation({
+  defaultProject,
+  projectByPath,
   thread,
   reads,
-  projectId,
-  projectName,
+  sidebarState,
 }: {
+  defaultProject: SidebarProject;
+  projectByPath: Map<string, SidebarProject>;
   thread: RawCodexThread;
   reads: RawThreadReadFixture;
-  projectId: string;
-  projectName: string;
-}): Conversation {
+  sidebarState: RawSidebarProjectStateFixture | undefined;
+}): Conversation | null {
   const threadId = getThreadId(thread);
   const readableThread = getReadableThread(threadId, reads);
   const sourceThread = readableThread ?? thread;
+  if (isArchivedThread(sourceThread)) {
+    return null;
+  }
+  const isProjectless = isProjectlessThread(threadId, sidebarState);
+  const projectPath = getThreadProjectPath(sourceThread) ?? defaultProject.path;
+  const project = projectByPath.get(projectPath) ?? defaultProject;
   const timeline = deriveAssistantTimeline(sourceThread);
 
   return {
     id: threadId,
     title: getThreadTitle(sourceThread),
     deviceId: DEVICE_ID,
-    projectId,
-    projectName,
+    ...(isProjectless ? {} : { projectId: project.id }),
+    projectName: isProjectless ? "对话" : project.name,
     status: normalizeConversationStatus(sourceThread.status as unknown),
     updatedAt: formatRelativeTime(reads.capturedAt, sourceThread.updatedAt),
     summary: summarizeThread(sourceThread, timeline),
@@ -155,6 +161,83 @@ function createConversation({
 
 function collectListedThreads(list: RawThreadListFixture): RawCodexThread[] {
   return list.pages.flatMap((page) => page.data ?? page.threads ?? page.items ?? []).filter(hasThreadId);
+}
+
+function createSidebarProjects({
+  list,
+  reads,
+  sidebarState,
+  threads,
+}: {
+  list: RawThreadListFixture;
+  reads: RawThreadReadFixture;
+  sidebarState: RawSidebarProjectStateFixture | undefined;
+  threads: RawCodexThread[];
+}): SidebarProject[] {
+  const threadByProjectPath = new Map<string, RawCodexThread>();
+
+  for (const listedThread of threads) {
+    const threadId = getThreadId(listedThread);
+    if (isProjectlessThread(threadId, sidebarState)) {
+      continue;
+    }
+    const sourceThread = getReadableThread(threadId, reads) ?? listedThread;
+    const projectPath = getThreadProjectPath(sourceThread);
+    if (!projectPath || threadByProjectPath.has(projectPath)) {
+      continue;
+    }
+    threadByProjectPath.set(projectPath, sourceThread);
+  }
+
+  const projectsByPath = new Map<string, SidebarProject>();
+  const orderedProjectPaths = getOrderedProjectPaths({
+    list,
+    sidebarState,
+    threadProjectPaths: [...threadByProjectPath.keys()],
+  });
+
+  for (const projectPath of orderedProjectPaths) {
+    const sourceThread = threadByProjectPath.get(projectPath);
+    const isCurrentProject = projectPath === list.projectCwd;
+    const isCollapsed = sidebarState?.collapsedGroups[projectPath] === true;
+
+    projectsByPath.set(projectPath, {
+      id: getProjectId(projectPath),
+      name: getProjectName(projectPath, sidebarState?.labels[projectPath]),
+      deviceId: DEVICE_ID,
+      path: projectPath,
+      branch: getThreadBranch(sourceThread) ?? "main",
+      hasChanges: false,
+      pinned: sidebarState?.pinnedProjectIds.includes(projectPath) === true,
+      expanded: isCurrentProject ? true : !isCollapsed,
+    });
+  }
+
+  if (projectsByPath.size === 0) {
+    return [createFallbackProject(list.projectCwd)];
+  }
+
+  return [...projectsByPath.values()];
+}
+
+function getOrderedProjectPaths({
+  list,
+  sidebarState,
+  threadProjectPaths,
+}: {
+  list: RawThreadListFixture;
+  sidebarState: RawSidebarProjectStateFixture | undefined;
+  threadProjectPaths: string[];
+}): string[] {
+  const paths = [
+    ...(sidebarState?.projectOrder ?? []),
+    ...(sidebarState?.savedWorkspaceRoots ?? []),
+    ...(sidebarState?.activeWorkspaceRoots ?? []),
+    ...threadProjectPaths,
+    list.projectCwd,
+  ];
+
+  return paths.filter((value, index, values) => getNonEmptyString(value) !== undefined && values.indexOf(value) === index);
 }
 
 function findListedThread(threadId: string, threads: RawCodexThread[]): RawCodexThread | undefined {
@@ -239,23 +322,26 @@ function getLatestTimelineText(timeline: AssistantTimeline): string | undefined 
   return undefined;
 }
 
-function createTasks(projectName: string, conversations: Conversation[]): BoardTask[] {
-  if (conversations.length === 0) {
-    return [];
-  }
+function createTasks(projects: SidebarProject[], conversations: Conversation[]): BoardTask[] {
+  return projects
+    .map<BoardTask | null>((project) => {
+      const projectConversations = conversations.filter((conversation) => conversation.projectId === project.id);
+      if (projectConversations.length === 0) {
+        return null;
+      }
 
-  const hasActiveConversation = conversations.some(
-    (conversation) => conversation.status === "running" || conversation.status === "waiting",
-  );
+      const hasActiveConversation = projectConversations.some(
+        (conversation) => conversation.status === "running" || conversation.status === "waiting",
+      );
 
-  return [
-    {
-      id: `${getProjectId(projectName)}-task`,
-      title: `${projectName} app-server snapshot`,
-      status: hasActiveConversation ? "in_progress" : "done",
-      linkedConversationIds: conversations.map((conversation) => conversation.id),
-    },
-  ];
+      return {
+        id: `${project.id}-task`,
+        title: `${project.name} app-server snapshot`,
+        status: hasActiveConversation ? "in_progress" : "done",
+        linkedConversationIds: projectConversations.map((conversation) => conversation.id),
+      };
+    })
+    .filter((task): task is BoardTask => task !== null);
 }
 
 function latestUpdatedAt(threads: RawCodexThread[]): number | undefined {
@@ -296,17 +382,93 @@ function formatRelativeTime(capturedAt: string, unixSeconds: number | undefined)
   return `${elapsedDays} 天前`;
 }
 
-function getProjectName(projectCwd: string): string {
+function getProjectName(projectCwd: string, label?: string): string {
+  const normalizedLabel = getNonEmptyString(label);
+  if (normalizedLabel) {
+    return normalizedLabel;
+  }
+
   const segments = projectCwd.split("/").filter(Boolean);
   return segments.at(-1) ?? "unknown-project";
 }
 
-function getProjectId(projectName: string): string {
-  const slug = projectName
+function getProjectId(projectPath: string): string {
+  const slug = projectPath
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return `project-${slug || "app-server"}`;
+  return `project-${slug || "app-server"}-${hashProjectPath(projectPath)}`;
+}
+
+function hashProjectPath(projectPath: string): string {
+  let hash = 2166136261;
+
+  for (let index = 0; index < projectPath.length; index += 1) {
+    hash ^= projectPath.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function getThreadProjectPath(thread: RawCodexThread): string | undefined {
+  return getNonEmptyString(thread.cwd);
+}
+
+function isProjectlessThread(threadId: string, sidebarState: RawSidebarProjectStateFixture | undefined): boolean {
+  return sidebarState?.projectlessThreadIds?.includes(threadId) === true;
+}
+
+function getThreadBranch(thread: RawCodexThread | undefined): string | undefined {
+  if (!isRecord(thread)) {
+    return undefined;
+  }
+  const gitInfo = thread["gitInfo"];
+  if (!isRecord(gitInfo)) {
+    return undefined;
+  }
+  return getNonEmptyString(typeof gitInfo.branch === "string" ? gitInfo.branch : undefined);
+}
+
+function isArchivedThread(thread: RawCodexThread): boolean {
+  if (!isRecord(thread)) {
+    return false;
+  }
+
+  return thread["archived"] === true || thread["isArchived"] === true;
+}
+
+function createFallbackProject(projectCwd: string): SidebarProject {
+  return {
+    id: getProjectId(projectCwd),
+    name: getProjectName(projectCwd),
+    deviceId: DEVICE_ID,
+    path: projectCwd,
+    branch: "main",
+    hasChanges: false,
+    pinned: true,
+    expanded: true,
+  };
+}
+
+function getTitleCandidate(value: string | null | undefined): string | undefined {
+  const text = getNonEmptyString(value);
+  if (!text) {
+    return undefined;
+  }
+
+  return firstLine(renderMarkdownTextForTitle(text));
+}
+
+function renderMarkdownTextForTitle(value: string): string {
+  return value
+    .replace(/^\s*(?:\[\$[^\]]+\]\([^)]+\)\s*)+/u, "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1")
+    .replace(/[^\S\r\n]+/g, " ")
+    .trim();
 }
 
 function firstLine(value: string | null | undefined): string | undefined {

@@ -9,6 +9,7 @@ const appComponent = readFileSync(join(process.cwd(), "src/components/codex-remo
 const shellComponent = readFileSync(join(process.cwd(), "src/components/resizable-workspace-shell.tsx"), "utf8");
 const mainPanelsComponent = readFileSync(join(process.cwd(), "src/components/main-panels.tsx"), "utf8");
 const detailWorkspaceComponent = readFileSync(join(process.cwd(), "src/components/detail-workspace.tsx"), "utf8");
+const rightDetailPaneComponent = readFileSync(join(process.cwd(), "src/components/right-detail-pane.tsx"), "utf8");
 const styles = readFileSync(join(process.cwd(), "../../packages/ui/src/styles.css"), "utf8");
 
 test("when workspace panels are configured, should expose the confirmed resize constraints", () => {
@@ -49,11 +50,12 @@ test("when the device list is used on mobile, should advance from the list page 
   assert.match(appComponent, /if \(isMobileViewport\) \{\s*setMobilePane\("detail"\);/s);
 });
 
-test("when the main workspace meets the sidebar, should keep rounded left corners on the content pane", () => {
+test("when the main workspace meets adjacent panes, should keep the left sidebar corner radius while using straight right detail edges", () => {
   assert.match(
     styles,
     /\.workspace-panel-main\s*\{[^}]*border-top:\s*var\(--cr-pane-stroke-top\);[^}]*border-bottom:\s*var\(--cr-pane-stroke-bottom\);[^}]*border-left:\s*var\(--cr-pane-stroke-left\);[^}]*border-top-left-radius:\s*var\(--cr-radius-xl\);[^}]*border-bottom-left-radius:\s*var\(--cr-radius-xl\);[^}]*background:\s*var\(--cr-bg\);/s,
   );
+  assert.match(styles, /\.review-pane\s*\{[^}]*border-left:\s*var\(--cr-pane-stroke-left\);[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.app-shell\s*\{[^}]*background:\s*var\(--cr-sidebar\);/s);
 });
 
@@ -65,7 +67,8 @@ test("when visual primitives are standardized, should reuse shared size, icon, a
   assert.match(styles, /\.nav-glyph \.icon\s*\{[^}]*width:\s*var\(--cr-nav-icon-size\);[^}]*height:\s*var\(--cr-nav-icon-size\);/s);
   assert.match(styles, /\.icon-button\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.device-icon\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
-  assert.match(styles, /\.device-card\s*\{[^}]*border:\s*var\(--cr-stroke\);/s);
+  assert.match(styles, /\.device-grid\s*\{[^}]*border:\s*var\(--cr-stroke\);[^}]*background:\s*var\(--cr-bg\);/s);
+  assert.match(styles, /\.device-card\s*\{[^}]*border-bottom:\s*var\(--cr-stroke\);[^}]*background:\s*var\(--cr-bg\);[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.linked-task h2,[^}]*font-weight:\s*var\(--cr-weight-emphasis\);/s);
   assert.match(styles, /\.workspace-title h1\s*\{[^}]*font-weight:\s*var\(--cr-weight-emphasis\);/s);
 });
@@ -80,8 +83,52 @@ test("when the conversation header is simplified, should move collapsed sidebar 
   assert.doesNotMatch(mainPanelsComponent, /aria-label="对话概览"/);
   assert.doesNotMatch(mainPanelsComponent, /aria-label="切换布局"/);
   assert.doesNotMatch(mainPanelsComponent, /aria-label="More actions"/);
-  assert.match(styles, /\.conversation-title-menu \.action-menu-trigger\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s);
+  assert.match(
+    styles,
+    /\.conversation-title-menu \.action-menu-trigger\s*\{[^}]*width:\s*var\(--cr-title-menu-trigger-size\);[^}]*height:\s*var\(--cr-title-menu-trigger-size\);/s,
+  );
   assert.match(styles, /\.conversation-collapsed-sidebar-controls\s*\{[^}]*display:\s*flex;[^}]*gap:\s*4px;/s);
+});
+
+test("when the devices header is simplified, should keep the add action beside the title and reserve the right edge for sidebar expansion", () => {
+  assert.match(mainPanelsComponent, /className="workspace-title devices-title"/);
+  assert.match(mainPanelsComponent, /aria-label="新增设备"/);
+  assert.match(mainPanelsComponent, /className="icon-button devices-add-button"/);
+  assert.match(mainPanelsComponent, /className="toolbar devices-toolbar"/);
+  assert.doesNotMatch(mainPanelsComponent, /管理当前 Control Plane 可见的设备/);
+  assert.doesNotMatch(mainPanelsComponent, /新增设备<\/button>/);
+  assert.match(styles, /\.devices-title\s*\{[^}]*gap:\s*6px;/s);
+  assert.match(styles, /\.devices-toolbar\s*\{[^}]*flex:\s*1 1 auto;[^}]*justify-content:\s*flex-end;/s);
+});
+
+test("when device rows expose status and actions, should use a status dot plus icon-only edit and delete actions", () => {
+  assert.match(mainPanelsComponent, /className="device-card-title">\s*<span>\{device\.name\}<\/span>\s*<Badge status=\{device\.status\} \/>/s);
+  assert.match(mainPanelsComponent, /className=\{`badge badge-device-status \$\{statusClassName\}`\}/);
+  assert.match(mainPanelsComponent, /aria-label=\{statusText\[props\.status\]\}/);
+  assert.match(mainPanelsComponent, /className=\{`status-dot \$\{statusClassName\}`\}/);
+  assert.match(mainPanelsComponent, /aria-label="编辑设备" className="icon-button device-action-button"/);
+  assert.match(mainPanelsComponent, /<Icon name="pencil" \/>/);
+  assert.match(mainPanelsComponent, /aria-label="删除设备" className="icon-button device-action-button device-action-button-danger"/);
+  assert.match(mainPanelsComponent, /<Icon name="delete" \/>/);
+  assert.match(styles, /\.device-card-title\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*8px;/s);
+  assert.match(
+    styles,
+    /\.badge-device-status\s*\{[^}]*min-width:\s*var\(--cr-status-dot-device-size\);[^}]*background:\s*transparent;[^}]*flex:\s*0 0 auto;/s,
+  );
+  assert.match(styles, /\.status-dot\.online\s*\{[^}]*background:\s*var\(--cr-success-ink\);/s);
+  assert.match(styles, /\.status-dot\.offline\s*\{[^}]*background:\s*var\(--cr-danger-ink\);/s);
+  assert.match(styles, /\.device-action-button\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
+  assert.match(styles, /\.device-action-button-danger\s*\{[^}]*color:\s*var\(--cr-danger-ink\);/s);
+});
+
+test("when the automations page is aligned with the rest of the workspace, should keep the header minimal and the empty state as plain copy", () => {
+  assert.match(mainPanelsComponent, /className="workspace-title automations-title"/);
+  assert.match(mainPanelsComponent, /className="toolbar automations-toolbar"/);
+  assert.match(mainPanelsComponent, /className="empty-state automation-empty-state"/);
+  assert.doesNotMatch(mainPanelsComponent, /后续用于展示当前设备上的自动化任务/);
+  assert.match(styles, /\.empty-state\s*\{[^}]*padding:\s*8px 0 0;/s);
+  assert.match(styles, /\.empty-state h2\s*\{[^}]*font-size:\s*var\(--cr-text-body\);/s);
+  assert.match(styles, /\.empty-state p\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
 });
 
 test("when a side panel is collapsed at the drag threshold, should disable its resize handle until a header button expands it", () => {
@@ -102,7 +149,7 @@ test("when a side panel is collapsed at the drag threshold, should disable its r
   assert.match(shellComponent, /if \(requiredWidth > measurements\.shellWidth && !leftPanel\.isCollapsed\(\)\) \{/);
   assert.match(mainPanelsComponent, /label="展开左侧边栏"/);
   assert.match(mainPanelsComponent, /label="展开右侧边栏"/);
-  assert.match(detailWorkspaceComponent, /aria-label="收起右侧边栏"/);
+  assert.match(rightDetailPaneComponent, /aria-label="收起右侧边栏"/);
   assert.doesNotMatch(detailWorkspaceComponent, /aria-label="清空详情"/);
   assert.match(styles, /\.sidebar-toggle-button \.sidebar-toggle-icon\s*\{[^}]*width:\s*var\(--cr-nav-icon-size\);[^}]*height:\s*var\(--cr-nav-icon-size\);/s);
   assert.match(styles, /\.workspace-resize-handle\s*\{[^}]*background:\s*transparent;/s);
@@ -111,9 +158,12 @@ test("when a side panel is collapsed at the drag threshold, should disable its r
 });
 
 test("when the detail workspace is rendered, should inherit the sidebar background without pane borders", () => {
-  assert.match(styles, /\.detail-workspace\s*\{[^}]*border-left:\s*var\(--cr-pane-stroke-left\);[^}]*background:\s*var\(--cr-bg\);/s);
-  assert.match(styles, /\.detail-workspace \.review-header\s*\{[^}]*border-bottom:\s*0;[^}]*background:\s*var\(--cr-bg\);/s);
-  assert.match(styles, /\.detail-workspace \.review-scroll\s*\{[^}]*background:\s*var\(--cr-bg\);/s);
+  assert.match(detailWorkspaceComponent, /<RightDetailPane/);
+  assert.match(detailWorkspaceComponent, /className="detail-workspace"/);
+  assert.match(rightDetailPaneComponent, /className=\{`review-pane right-detail-pane/);
+  assert.match(styles, /\.right-detail-pane\s*\{[^}]*border-left:\s*var\(--cr-pane-stroke-left\);[^}]*background:\s*var\(--cr-bg\);/s);
+  assert.match(styles, /\.right-detail-pane \.review-header\s*\{[^}]*border-bottom:\s*0;[^}]*background:\s*var\(--cr-bg\);/s);
+  assert.match(styles, /\.right-detail-pane \.review-scroll\s*\{[^}]*background:\s*var\(--cr-bg\);/s);
   assert.match(detailWorkspaceComponent, /const workspaceTools: WorkspaceToolDefinition\[] = \[/);
   assert.match(detailWorkspaceComponent, /title: "审查"/);
   assert.match(detailWorkspaceComponent, /title: "终端"/);
@@ -125,4 +175,14 @@ test("when the detail workspace is rendered, should inherit the sidebar backgrou
   assert.doesNotMatch(detailWorkspaceComponent, /detail-tool-preview/);
   assert.doesNotMatch(detailWorkspaceComponent, /工具区/);
   assert.doesNotMatch(detailWorkspaceComponent, /当前未选中具体目标/);
+});
+
+test("when device and automation detail panes are rendered, should share the same white sidebar shell as conversation detail", () => {
+  assert.match(mainPanelsComponent, /<RightDetailPane/);
+  assert.match(mainPanelsComponent, /className="device-detail-pane"/);
+  assert.match(mainPanelsComponent, /title="设备详情"/);
+  assert.match(mainPanelsComponent, /title="自动化详情"/);
+  assert.match(styles, /\.right-detail-pane-glyph\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
+  assert.match(styles, /\.device-detail-pane \.linked-task,\s*\.device-detail-pane \.diff-panel\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
+  assert.match(styles, /\.device-detail-pane \.linked-task h2,[^}]*font-weight:\s*var\(--cr-weight-regular\);/s);
 });
