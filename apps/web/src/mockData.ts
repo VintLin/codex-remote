@@ -5,7 +5,7 @@ import { createAppServerMockData } from "./appServerMockAdapter.ts";
 import type { RawSidebarProjectStateFixture, RawThreadListFixture, RawThreadReadFixture } from "./appServerSnapshotTypes.ts";
 
 export type DeviceConnectionStatus = "Connected" | "Not connected";
-export type ConversationStatus = "running" | "waiting" | "done" | "failed";
+export type ConversationStatus = "running" | "waiting" | "done" | "failed" | "unknown";
 export type TaskStatus = "in_progress" | "waiting" | "done";
 export type DiffKind = "context" | "add" | "remove";
 

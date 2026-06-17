@@ -31,6 +31,78 @@ test("when deriving mock data, should use app-server thread ids as conversation 
   );
 });
 
+test("when app-server status is active, should derive running or waiting instead of done", () => {
+  const syntheticList: RawThreadListFixture = {
+    projectCwd: "/workspace/demo",
+    capturedAt: "2026-06-17T00:00:00.000Z",
+    pages: [
+      {
+        data: [
+          {
+            id: "thread-running",
+            cwd: "/workspace/demo",
+            name: "Running thread",
+            status: { type: "active", activeFlags: [] },
+            updatedAt: 1_782_000_000,
+          } as unknown as RawCodexThread,
+          {
+            id: "thread-waiting",
+            cwd: "/workspace/demo",
+            name: "Waiting thread",
+            status: { type: "active", activeFlags: ["waitingOnApproval"] },
+            updatedAt: 1_782_000_100,
+          } as unknown as RawCodexThread,
+        ],
+      },
+    ],
+  };
+  const syntheticReads: RawThreadReadFixture = {
+    projectCwd: syntheticList.projectCwd,
+    capturedAt: syntheticList.capturedAt,
+    threads: {},
+  };
+
+  const data = createAppServerMockData({ list: syntheticList, reads: syntheticReads });
+
+  assert.deepEqual(
+    data.conversations.map((conversation) => ({ id: conversation.id, status: conversation.status })),
+    [
+      { id: "thread-running", status: "running" },
+      { id: "thread-waiting", status: "waiting" },
+    ],
+  );
+});
+
+test("when thread/read is missing for a listed thread, should expose missingRead instead of an empty loaded timeline", () => {
+  const syntheticList: RawThreadListFixture = {
+    projectCwd: "/workspace/demo",
+    capturedAt: "2026-06-17T00:00:00.000Z",
+    pages: [
+      {
+        data: [
+          {
+            id: "thread-without-read",
+            cwd: "/workspace/demo",
+            name: "Listed only",
+            status: { type: "notLoaded" },
+            updatedAt: 1_782_000_000,
+          } as unknown as RawCodexThread,
+        ],
+      },
+    ],
+  };
+  const syntheticReads: RawThreadReadFixture = {
+    projectCwd: syntheticList.projectCwd,
+    capturedAt: syntheticList.capturedAt,
+    threads: {},
+  };
+
+  const data = createAppServerMockData({ list: syntheticList, reads: syntheticReads });
+
+  assert.equal(data.assistantThreads[0]?.loadState, "missingRead");
+  assert.deepEqual(data.assistantThreads[0]?.timeline.turns, []);
+});
+
 test("when deriving mock data, should follow the original Codex App project order without forcing the current project to the front", () => {
   const data = createAppServerMockData({ list, reads, sidebarState });
 
@@ -62,6 +134,17 @@ test("when deriving search recents, should derive them from conversations", () =
     data.searchRecents.map((item) => item.title),
     data.conversations.map((conversation) => conversation.title),
   );
+});
+
+test("when deriving search recents, should include conversation ids without fixed active state", () => {
+  const data = createAppServerMockData({ list, reads, sidebarState });
+
+  assert.equal(data.searchRecents.length, data.conversations.length);
+  assert.deepEqual(
+    data.searchRecents.map((item) => item.conversationId),
+    data.conversations.map((conversation) => conversation.id),
+  );
+  assert.equal(data.searchRecents.some((item) => item.active === true), false);
 });
 
 test("when deriving projects from raw threads, should keep every unarchived cwd and filter archived entries", () => {

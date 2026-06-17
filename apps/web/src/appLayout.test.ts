@@ -43,6 +43,12 @@ test("when viewport is mobile, should switch from the desktop shell to a sidebar
   assert.match(styles, /@media \(max-width: 767px\) \{[^}]*\.mobile-shell \.sidebar,/s);
 });
 
+test("when conversations are empty, app shell should allow null selected conversation instead of non-null assertions", () => {
+  assert.match(appComponent, /useState<string \| null>/);
+  assert.doesNotMatch(appComponent, /conversations\[0\]!\.id/);
+  assert.match(appComponent, /conversation === null/);
+});
+
 test("when the device list is used on mobile, should advance from the list page into a dedicated detail page", () => {
   assert.match(mainPanelsComponent, /onOpenDetail\?: \(deviceId: string\) => void;/);
   assert.match(mainPanelsComponent, /onOpenDetail\?\.\(device\.id\);/);
@@ -99,6 +105,18 @@ test("when the devices header is simplified, should keep the add action beside t
   assert.doesNotMatch(mainPanelsComponent, /新增设备<\/button>/);
   assert.match(styles, /\.devices-title\s*\{[^}]*gap:\s*6px;/s);
   assert.match(styles, /\.devices-toolbar\s*\{[^}]*flex:\s*1 1 auto;[^}]*justify-content:\s*flex-end;/s);
+});
+
+test("when demo actions are unavailable, should render disabled controls instead of clickable no-op actions", () => {
+  const actionMenuComponent = readFileSync(join(process.cwd(), "src/components/action-menu.tsx"), "utf8");
+
+  assert.match(actionMenuComponent, /disabled\?: boolean;/);
+  assert.match(actionMenuComponent, /disabled: true/);
+  assert.match(actionMenuComponent, /aria-disabled=\{action\.disabled === true\}/);
+  assert.match(actionMenuComponent, /disabled=\{action\.disabled === true\}/);
+  assert.match(mainPanelsComponent, /aria-label="新增设备" className="icon-button devices-add-button" disabled/);
+  assert.match(mainPanelsComponent, /aria-label="编辑设备" className="icon-button device-action-button" disabled/);
+  assert.match(mainPanelsComponent, /aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" disabled/);
 });
 
 test("when device rows expose status and actions, should use a status dot plus icon-only edit and delete actions", () => {

@@ -32,6 +32,7 @@ export interface RawThreadReadFixture {
 
 export interface RawThreadReadResult {
   thread?: RawCodexThread;
+  error?: unknown;
 }
 
 export interface RawCodexThread {
@@ -43,7 +44,7 @@ export interface RawCodexThread {
   modelProvider?: string;
   createdAt?: number;
   updatedAt?: number;
-  status?: string;
+  status?: string | { type?: string; activeFlags?: string[] };
   cwd?: string;
   name?: string | null;
   turns?: RawCodexTurn[];

@@ -13,7 +13,7 @@ import { statusToClass } from "./sidebar";
 
 interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
-  conversation: Conversation;
+  conversation: Conversation | null;
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -40,7 +40,9 @@ interface DevicesPageProps {
 
 interface SearchDialogProps {
   onClose: () => void;
+  onSelectConversation: (conversationId: string) => void;
   open: boolean;
+  selectedConversationId: string | null;
 }
 
 const statusText = {
@@ -50,6 +52,7 @@ const statusText = {
   failed: "Failed",
   in_progress: "In progress",
   running: "Running",
+  unknown: "Unknown",
   waiting: "Waiting",
 } satisfies Record<DeviceConnectionStatus | Conversation["status"] | TaskStatus, string>;
 
@@ -67,6 +70,8 @@ export function ConversationMain({
   onSelectAdjacentConversation,
   previousConversationId,
 }: ConversationMainProps) {
+  const conversationTitle = conversation === null ? "对话" : conversation.title;
+
   return (
     <main className="main-pane">
       <header className="topbar">
@@ -106,7 +111,7 @@ export function ConversationMain({
             </div>
           ) : null}
           <div className="workspace-title conversation-title">
-            <h1>{conversation.title}</h1>
+            <h1>{conversationTitle}</h1>
             {!isMobile ? <ActionMenu ariaLabel="打开对话操作菜单" className="conversation-title-menu" group="conversation" /> : null}
           </div>
         </div>
@@ -180,7 +185,7 @@ export function DevicesPage({
           ) : null}
           <div className="workspace-title devices-title">
             <h1>设备</h1>
-            <button aria-label="新增设备" className="icon-button devices-add-button" type="button">
+            <button aria-label="新增设备" className="icon-button devices-add-button" disabled type="button">
               <Icon name="plus" />
             </button>
           </div>
@@ -219,10 +224,10 @@ export function DevicesPage({
                 </span>
               </button>
               <div className="device-card-actions">
-                <button aria-label="编辑设备" className="icon-button device-action-button" type="button">
+                <button aria-label="编辑设备" className="icon-button device-action-button" disabled type="button">
                   <Icon name="pencil" />
                 </button>
-                <button aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" type="button">
+                <button aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" disabled type="button">
                   <Icon name="delete" />
                 </button>
               </div>
@@ -348,7 +353,7 @@ export function AutomationDetailPane({
   );
 }
 
-export function SearchDialog({ onClose, open }: SearchDialogProps) {
+export function SearchDialog({ onClose, onSelectConversation, open, selectedConversationId }: SearchDialogProps) {
   if (!open) {
     return null;
   }
@@ -362,7 +367,15 @@ export function SearchDialog({ onClose, open }: SearchDialogProps) {
         <div className="search-section-title">近期对话</div>
         <div className="search-results">
           {searchRecents.map((item, index) => (
-            <button className={`search-result${item.active ? " is-active" : ""}`} key={`${item.title}-${item.project}`} type="button">
+            <button
+              className={`search-result${item.conversationId === selectedConversationId ? " is-active" : ""}`}
+              key={item.conversationId}
+              onClick={() => {
+                onSelectConversation(item.conversationId);
+                onClose();
+              }}
+              type="button"
+            >
               <span className="search-marker">{item.marker ? "●" : ""}</span>
               <span className="search-title">{item.title}</span>
               <span className="search-project">{item.project}</span>

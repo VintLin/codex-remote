@@ -60,6 +60,57 @@ test("when file changes contain a diff, should generate a workspace diff DetailT
   );
 });
 
+test("when tool item has output result and error, should preserve diagnostics in detail target", () => {
+  const timeline = deriveAssistantTimeline({
+    id: "thread-diagnostics",
+    turns: [
+      {
+        id: "turn-diagnostics",
+        status: "failed",
+        items: [
+          {
+            type: "mcpToolCall",
+            id: "tool-diagnostics",
+            arguments: { cmd: "pnpm test" },
+            status: "failed",
+            output: "stdout line",
+            result: { passed: false },
+            error: { message: "test failed" },
+          },
+        ],
+      },
+    ],
+  } as RawCodexThread);
+  const node = timeline.turns[0]?.nodes[0];
+
+  assertToolCall(node);
+  assert.equal(node.detailTarget.type, "tool");
+  assert.match(node.detailTarget.detail, /pnpm test/);
+  assert.match(node.detailTarget.detail, /stdout line/);
+  assert.match(node.detailTarget.detail, /"passed": false/);
+  assert.match(node.detailTarget.detail, /test failed/);
+});
+
+test("when item is context compaction without text, should render semantic compaction text", () => {
+  const timeline = deriveAssistantTimeline({
+    id: "thread-compaction",
+    turns: [
+      {
+        id: "turn-compaction",
+        items: [{ id: "compact-a", type: "contextCompaction" }],
+      },
+    ],
+  });
+
+  assert.deepEqual(timeline.turns[0]?.nodes[0], {
+    type: "contextCompaction",
+    id: "compact-a",
+    turnId: "turn-compaction",
+    sourceItemIds: ["compact-a"],
+    text: "上下文已压缩",
+  });
+});
+
 test("when raw turn includes timing, should pass timing fields into timeline turn", () => {
   const timeline = deriveAssistantTimeline(createSyntheticThread());
   const turn = timeline.turns[0];

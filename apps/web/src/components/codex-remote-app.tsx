@@ -28,7 +28,7 @@ type MobileWorkspacePane = "detail" | "main" | "sidebar";
 export function CodexRemoteApp() {
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]!.id);
-  const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]!.id);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(() => conversations[0]?.id ?? null);
   const [expandedProjectIds, setExpandedProjectIds] = useState(
     () => new Set(sidebarProjects.filter((project) => project.expanded).map((project) => project.id)),
   );
@@ -48,14 +48,18 @@ export function CodexRemoteApp() {
   const conversation =
     conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
     conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
-    conversations[0]!;
-  const assistantThread = assistantThreads.find((thread) => thread.id === conversation.id) ?? null;
+    conversations[0] ??
+    null;
+  const assistantThread = conversation ? assistantThreads.find((thread) => thread.id === conversation.id) ?? null : null;
   const sidebarModel = useMemo(
     () => createSidebarModel({ conversations, expandedProjectIds, projects: sidebarProjects }),
     [expandedProjectIds],
   );
   const conversationNavigator = useMemo(
-    () => resolveConversationNavigator(sidebarModel, selectedConversationId),
+    () =>
+      selectedConversationId
+        ? resolveConversationNavigator(sidebarModel, selectedConversationId)
+        : { nextConversationId: null, previousConversationId: null },
     [selectedConversationId, sidebarModel],
   );
 
@@ -86,7 +90,7 @@ export function CodexRemoteApp() {
 
   useEffect(() => {
     setSelectedDetailTarget(null);
-  }, [assistantThread?.id, conversation.id]);
+  }, [assistantThread?.id, conversation?.id]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -212,6 +216,42 @@ export function CodexRemoteApp() {
       };
     }
 
+    if (conversation === null) {
+      return {
+        detail: (
+          <ConversationDetailPane
+            conversationTitle="对话"
+            isCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            onBack={() => setMobilePane("main")}
+            onCollapse={() => setIsDetailCollapsed(true)}
+            target={selectedDetailTarget}
+          />
+        ),
+        main: (
+          <ConversationMain
+            assistantThread={null}
+            conversation={null}
+            isDetailCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            isSidebarCollapsed={isSidebarCollapsed}
+            nextConversationId={conversationNavigator.nextConversationId}
+            onBack={() => setMobilePane("sidebar")}
+            onExpandDetail={() => setIsDetailCollapsed(false)}
+            onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onOpenDetail={(target) => {
+              setSelectedDetailTarget(target);
+              if (isMobileViewport) {
+                setMobilePane("detail");
+              }
+            }}
+            onSelectAdjacentConversation={selectConversation}
+            previousConversationId={conversationNavigator.previousConversationId}
+          />
+        ),
+      };
+    }
+
     return {
       detail: (
         <ConversationDetailPane
@@ -263,7 +303,7 @@ export function CodexRemoteApp() {
       onToggleProject={toggleProject}
       pressedItem={pressedItem}
       sectionState={sectionState}
-      selectedConversationId={selectedConversationId}
+      selectedConversationId={selectedConversationId ?? ""}
       sidebarScrollRef={sidebarScrollRef}
       onToggleSection={toggleSection}
     />
@@ -288,7 +328,12 @@ export function CodexRemoteApp() {
           sidebar={sidebarContent}
         />
       )}
-      <SearchDialog onClose={() => setIsSearchOpen(false)} open={isSearchOpen} />
+      <SearchDialog
+        onClose={() => setIsSearchOpen(false)}
+        onSelectConversation={selectConversation}
+        open={isSearchOpen}
+        selectedConversationId={selectedConversationId}
+      />
     </>
   );
 }

@@ -17,10 +17,14 @@ export interface AssistantThreadSnapshot {
   updatedAt: string;
   forkedFromId: string | null;
   parentThreadId: string | null;
+  loadState: AssistantThreadLoadState;
   timeline: AssistantTimeline;
 }
 
+export type AssistantThreadLoadState = "empty" | "loaded" | "missingRead" | "readError";
+
 export interface SearchRecent {
+  conversationId: string;
   title: string;
   project: string;
   active?: boolean;
@@ -77,6 +81,7 @@ export function createAppServerMockData({ list, reads, sidebarState }: CreateApp
       updatedAt: conversation.updatedAt,
       forkedFromId: thread?.forkedFromId ?? null,
       parentThreadId: thread?.parentThreadId ?? null,
+      loadState: getThreadReadState(conversation.id, reads),
       timeline: deriveAssistantTimeline(thread ?? { id: conversation.id, turns: [] }),
     };
   });
@@ -97,10 +102,10 @@ export function createAppServerMockData({ list, reads, sidebarState }: CreateApp
     sidebarProjects: projects,
     conversations,
     assistantThreads,
-    searchRecents: conversations.map((conversation, index) => ({
+    searchRecents: conversations.map((conversation) => ({
+      conversationId: conversation.id,
       title: conversation.title,
       project: conversation.projectName,
-      ...(index === 0 ? { active: true } : {}),
       ...(conversation.status === "waiting" ? { marker: true } : {}),
     })),
     tasks: createTasks(projects, conversations),
@@ -265,9 +270,24 @@ function hasThreadId(thread: RawCodexThread): boolean {
 }
 
 function normalizeConversationStatus(status: unknown): ConversationStatus {
+  const activeFlags = getStatusActiveFlags(status);
   const statusType = normalizeStatusText(extractStatusType(status));
 
-  if (statusType.includes("running") || statusType.includes("inprogress") || statusType.includes("processing")) {
+  if (
+    activeFlags.some((flag) => {
+      const normalizedFlag = normalizeStatusText(flag);
+      return normalizedFlag.includes("waiting") || normalizedFlag.includes("approval") || normalizedFlag.includes("input");
+    })
+  ) {
+    return "waiting";
+  }
+
+  if (
+    statusType.includes("active") ||
+    statusType.includes("running") ||
+    statusType.includes("inprogress") ||
+    statusType.includes("processing")
+  ) {
     return "running";
   }
 
@@ -279,7 +299,11 @@ function normalizeConversationStatus(status: unknown): ConversationStatus {
     return "failed";
   }
 
-  return "done";
+  if (statusType.includes("complete") || statusType.includes("done") || statusType.includes("idle") || statusType.includes("notloaded")) {
+    return "done";
+  }
+
+  return "unknown";
 }
 
 function extractStatusType(status: unknown): string {
@@ -297,6 +321,19 @@ function extractStatusType(status: unknown): string {
   return "";
 }
 
+function getStatusActiveFlags(status: unknown): string[] {
+  if (!isRecord(status)) {
+    return [];
+  }
+
+  const activeFlags = status["activeFlags"];
+  if (!Array.isArray(activeFlags)) {
+    return [];
+  }
+
+  return activeFlags.filter((flag): flag is string => typeof flag === "string");
+}
+
 function normalizeStatusText(value: string): string {
   return value.toLowerCase().replace(/[^a-z]/g, "");
 }
@@ -304,6 +341,23 @@ function normalizeStatusText(value: string): string {
 function summarizeThread(thread: RawCodexThread, timeline: AssistantTimeline): string {
   const sourceText = getLatestTimelineText(timeline) ?? firstLine(thread.preview) ?? getThreadTitle(thread);
   return truncate(sourceText.replace(/\s+/g, " ").trim(), 96);
+}
+
+function getThreadReadState(threadId: string, reads: RawThreadReadFixture): AssistantThreadLoadState {
+  const result = reads.threads[threadId];
+  if (!result) {
+    return "missingRead";
+  }
+
+  if (typeof result.error !== "undefined") {
+    return "readError";
+  }
+
+  if ((result.thread?.turns ?? []).length === 0) {
+    return "empty";
+  }
+
+  return "loaded";
 }
 
 function getLatestTimelineText(timeline: AssistantTimeline): string | undefined {

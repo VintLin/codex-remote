@@ -164,7 +164,7 @@ function createTimelineTurn(turn: RawCodexTurn, turnIndex: number): AssistantTim
         id: itemId,
         turnId,
         sourceItemIds: [itemId],
-        text: getItemText(item),
+        text: getItemText(item, { fallback: "上下文已压缩" }),
       });
       continue;
     }
@@ -311,13 +311,36 @@ function createDetailTarget(item: RawCodexItem, kind: ToolCallKind): DetailTarge
     };
   }
 
-  const detail = getCommandText(item) || getItemText(item);
+  const detail = createToolDetail(item);
   return {
     type: "tool",
     title: getCommandText(item) || getNonEmptyString(item.tool) || getNonEmptyString(item.name) || "Tool call",
     detail,
     presentation: detail.length > 160 ? "workspace" : "inline",
   };
+}
+
+function createToolDetail(item: RawCodexItem): string {
+  const parts = [
+    getCommandText(item) || getItemText(item),
+    formatDiagnosticBlock("output", item.output),
+    formatDiagnosticBlock("result", item.result),
+    formatDiagnosticBlock("error", item.error),
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+  return parts.join("\n\n");
+}
+
+function formatDiagnosticBlock(label: string, value: unknown): string | null {
+  if (typeof value === "undefined" || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return `${label}:\n${value}`;
+  }
+
+  return `${label}:\n${JSON.stringify(value, null, 2)}`;
 }
 
 function createFileChangeDetailTarget(changes: RawCodexFileChange[]): DetailTarget {
@@ -385,7 +408,7 @@ function normalizeToolStatus(status: string | undefined): ToolCallStatus {
   return "unknown";
 }
 
-function getItemText(item: RawCodexItem): string {
+function getItemText(item: RawCodexItem, options: { fallback?: string } = {}): string {
   const directText = getNonEmptyString(item.text);
   if (directText) {
     return directText;
@@ -405,7 +428,7 @@ function getItemText(item: RawCodexItem): string {
     return title;
   }
 
-  return `Unsupported Codex item: ${getNonEmptyString(item.type) ?? "unknown"}`;
+  return options.fallback ?? `Unsupported Codex item: ${getNonEmptyString(item.type) ?? "unknown"}`;
 }
 
 function getContentText(content: unknown): string | null {
