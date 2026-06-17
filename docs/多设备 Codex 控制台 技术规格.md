@@ -23,27 +23,60 @@ Control Plane 只负责设备接入、状态聚合、任务看板、路由和审
 
 ## 3. 架构
 
+长期目标拓扑：
+
 ```mermaid
 flowchart LR
-  Web["Web UI"]
-  CP["Control Plane Server"]
+  Browser["Web UI<br/>desktop / tablet / phone browser"]
+  IOS["future iOS App"]
+  CP["Control Plane Server<br/>routing / registry / audit"]
   DB[("Control Plane DB")]
-  W1["Device Worker: MacBook"]
-  W2["Device Worker: Windows"]
-  AS1["localhost / socket Codex app-server"]
-  AS2["localhost / socket Codex app-server"]
-  FS1["local projects / git / terminal"]
-  FS2["local projects / git / terminal"]
+  Mac["Device A<br/>Worker + Codex"]
+  Win["Device B<br/>Worker + Codex"]
+  Phone["Device C<br/>browser only"]
+  AS1["Device A localhost / socket<br/>Codex app-server"]
+  AS2["Device B localhost / socket<br/>Codex app-server"]
+  FS1["Device A projects / git / terminal"]
+  FS2["Device B projects / git / terminal"]
 
-  Web --> CP
+  Browser --> CP
+  IOS --> CP
+  Phone --> CP
   CP --> DB
-  CP <--> W1
-  CP <--> W2
-  W1 <--> AS1
-  W2 <--> AS2
-  W1 <--> FS1
-  W2 <--> FS2
+  CP <--> Mac
+  CP <--> Win
+  Mac <--> AS1
+  Win <--> AS2
+  Mac <--> FS1
+  Win <--> FS2
 ```
+
+说明：
+
+- 只有安装 Worker 的设备能桥接本机 Codex app-server、本机文件系统、git 和 terminal。
+- 只打开网页或 iOS App 的设备是纯客户端，只连接 Control Plane，不直接连接 Worker 或 Codex app-server，不保存 OpenAI / Codex secrets。
+- 多个纯客户端可以操作同一台 Worker 设备上的 Codex，但所有操作必须经过 Control Plane 的鉴权、路由、能力判断和审计。
+- Codex app-server 永远只在设备本机 loopback 或 socket 上暴露，不作为 LAN / 公网服务。
+
+Phase 1/2 允许为了 demo 和协议验证使用本地过渡拓扑：
+
+```mermaid
+flowchart LR
+  Web["local Web UI"]
+  Adapter["Worker API adapter<br/>Control Plane-shaped contract"]
+  Worker["local Device Worker"]
+  AS["127.0.0.1 / socket<br/>Codex app-server"]
+
+  Web --> Adapter
+  Adapter --> Worker
+  Worker --> AS
+```
+
+过渡拓扑约束：
+
+- Web 仍然消费 `packages/api-contract` 的 Control Plane-shaped contract，不直接依赖 app-server 原始协议。
+- Worker 本地 HTTP API 必须有 token、Origin allowlist 和 project allowlist；`localhost` 不是鉴权边界。
+- 过渡拓扑只替代 Control Plane 的路由和持久化，不改变 Worker 对 app-server 的 adapter 边界。
 
 ## 4. 事实源
 
@@ -86,12 +119,19 @@ flowchart LR
 - Worker 是唯一可被 Control Plane 调用的桥接层。
 - Worker 到 Control Plane 的连接必须有 device token。
 - 公网部署优先通过 Worker 反向连接或 future relay，避免要求用户开放设备入站端口。
+- Phase 1/2 的本地 Worker HTTP API 即使绑定 `127.0.0.1`，也必须要求 `Authorization: Bearer <local-worker-token>`。
+- Phase 1/2 的本地 Worker HTTP API 只接受显式 allowlist 中的浏览器 Origin，默认只允许 `http://127.0.0.1:5173` 和 `http://localhost:5173`。
+- Worker 不把 app-server `/healthz` / `/readyz` 原样代理给浏览器；这些只作为 Worker 内部诊断信号。
+- app-server WebSocket transport 是实验性能力，MVP 可以使用 loopback WebSocket，但必须保留 `stdio` / Unix socket 替换路径；如果出现非 loopback app-server listener，必须配置上游 `--ws-auth` 并 fail closed。
 
 ### 5.3 权限
 
 - Worker 只能访问 project allowlist 中的目录。
 - 高风险操作必须进入 audit log。
 - MVP 可以先不做多人权限，但数据结构预留 actor 字段。
+- Worker 在转发 `cwd`、sandbox roots、approval paths、shell/process/file 操作前必须做路径规范化和 allowlist 校验。
+- Approval 是显式用户决策通道，不是错误状态；Worker 不在正常模式下自动接受 approval。
+- 本地审计事件至少覆盖 start/follow-up/steer/interrupt、approval respond、allowlist reject、auth reject，内容必须脱敏。
 
 ## 6. Turborepo 项目结构
 
@@ -216,15 +256,30 @@ type CodexConversation = {
   projectId: string
   codexThreadId: string
   title: string
-  status: "idle" | "running" | "waiting_approval" | "stopped" | "failed" | "done"
+  runtimeStatus:
+    | "not_loaded"
+    | "idle"
+    | "running"
+    | "waiting_approval"
+    | "waiting_input"
+    | "unknown"
+  latestTurnStatus?: "completed" | "interrupted" | "failed" | "unknown"
   model?: string
   modelProvider?: string
-  sandboxMode?: string
-  approvalMode?: string
+  sandboxPolicyLabel?: string
+  approvalPolicy?: string
   lastMessageSummary?: string
   updatedAt: string
 }
 ```
+
+状态约束：
+
+- `runtimeStatus` 描述当前是否有活跃 turn 或等待用户决策。
+- `latestTurnStatus` 描述最近一个 turn 的终态；`completed` 不等于 conversation 正在运行，也不等于 future turns 不可继续。
+- 上游 `thread.status` 的 `notLoaded`、`idle`、`active`、`systemError` 必须显式投影；未知值投影为 `unknown`，不能静默当作完成。
+- `waiting_input` 只能来自 `item/tool/requestUserInput` 这类 server request，不从模糊 active flag 猜测。
+- UI 可以组合显示“idle + latest completed”，但契约层不把运行态和最近结果压成单个 `status`。
 
 ### BoardProject
 
@@ -290,9 +345,11 @@ type WorkerLocalConfig = {
   deviceId: string
   deviceName: string
   projectAllowlist: string[]
+  allowedOrigins?: string[]
   appServer: {
-    transport: "websocket" | "unix-socket"
-    url: string
+    transport: "loopbackWebSocket" | "stdio" | "unixSocket"
+    endpoint?: string
+    wsAuthRequired?: boolean
   }
 }
 ```
@@ -384,6 +441,8 @@ Worker CLI MVP：
 
 ## 10. Worker 能力
 
+本节中的 `worker.*` 是契约操作名，不限定实际传输必须是 RPC。Phase 1/2 本地 Worker 可以映射为 REST/SSE 路由；最终 Control Plane 也可以继续使用 HTTP routes，只要 payload 由 `packages/api-contract` 定义。
+
 ### P0 Worker API
 
 - `worker.health`
@@ -394,6 +453,7 @@ Worker CLI MVP：
 - `worker.conversation.read`
 - `worker.conversation.start`
 - `worker.conversation.followUp`
+- `worker.conversation.steer`
 - `worker.conversation.interrupt`
 - `worker.approval.respond`
 - `worker.events.subscribe`
@@ -417,20 +477,42 @@ Worker CLI MVP：
 
 第一段可执行代码应是 Worker probe，而不是完整 UI。
 
-探针必须验证：
+Worker probe 分两层。
+
+Read-only probe 可在安装并配置 Codex 的本机或 CI-like 环境运行，不消耗模型额度：
 
 1. 当前设备能启动或连接 `codex app-server`。
 2. 能完成 `initialize` / `initialized`。
 3. 能列出模型。
-4. 能列出历史 thread，含 `cwd` filter。
+4. 能列出历史 thread，含 `cwd` filter、显式 `sourceKinds`、`archived` 过滤。
 5. 能读取指定 thread，含 `includeTurns=true`。
-6. 能 resume 既有 thread。
-7. 能新建 thread 并启动 turn。
-8. 能接收 streaming notifications。
-9. 能发送 `turn/steer`。
-10. 能 `turn/interrupt`。
-11. 能捕获 server request / approval request。
-12. 能在失败时输出可诊断 JSON summary。
+6. 能通过 `thread/turns/list` 读取历史 turn，含 `itemsView: "full"`、`sortDirection`、`nextCursor` / `backwardsCursor` 处理。
+7. 能在失败时输出可诊断 JSON summary。
+
+Full probe 必须显式 opt-in，因为它会启动 turn、可能消耗模型额度或触发 approval：
+
+1. 能 resume 既有 thread。
+2. 能新建 thread 并启动 turn。
+3. 能接收 streaming notifications。
+4. 能发送 `turn/steer`，并传递上游要求的 `expectedTurnId`。
+5. 能 `turn/interrupt`。
+6. 能捕获 server request / approval request。
+7. 能回传 approval decision，并观察 `serverRequest/resolved`。
+8. 能在失败时输出可诊断 JSON summary。
+
+Probe JSON 必须可被 CI 或人工脚本消费，至少包含：
+
+- `schemaVersion`
+- `mode: "readOnly" | "full"`
+- `ok`
+- `checks[].name`
+- `checks[].ok`
+- `checks[].durationMs`
+- `checks[].failureType?: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable"`
+- `checks[].errorKind?`
+- `checks[].diagnosticId?`
+
+CI 默认运行 lint/typecheck/test/build 和可用时的 read-only probe。Full probe 只在显式环境变量或手动命令启用时运行；跳过必须输出 skip reason，不能伪装成通过。
 
 ## 12. Web MVP
 

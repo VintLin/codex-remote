@@ -4,7 +4,9 @@
 
 本项目是一个自托管多设备 Codex Web 控制台。
 
-第一版目标是在一个 Web 页面中管理多台设备上的 Codex：查看设备状态、项目列表、对话列表、输出流，发送 follow-up，中止任务，并把不同设备上的 Codex conversations 手动关联到任务看板。
+当前目标是在一个 Web 页面中管理多台设备上的 Codex：查看设备状态、项目列表、对话列表、输出流，发送 follow-up，中止任务，并把不同设备上的 Codex conversations 手动关联到任务看板。
+
+短期实现允许先通过本机 Worker adapter 验证 app-server 协议和展示链路；长期目标仍是 Control Plane 统一路由多设备。
 
 核心边界：
 
@@ -20,7 +22,8 @@
 - 包管理器：`pnpm`
 - Monorepo：Turborepo
 - 主要语言：TypeScript
-- 第一版运行形态：Web UI + Control Plane Server + Device Worker
+- 当前实现形态：Web UI + 本机 Worker adapter + Device Worker
+- 最终拓扑：Web UI + Control Plane Server + Device Worker
 - 后续移动端：iOS App 复用 Control Plane API contract，不直接复用 Web UI runtime
 
 本地网站启停约定：
@@ -123,17 +126,21 @@ packages:
 - E2E：Web UI 控制两台 Worker 的 MVP flow。
 - Type：`tsc --noEmit` 或包级 typecheck。
 
-Worker probe 是第一阶段必须有的验证入口。它至少覆盖：
+Worker probe 是第一阶段必须有的验证入口。它分 read-only 与 full 两层，至少覆盖：
 
 - `initialize`
 - `model/list`
-- `thread/list`
+- `thread/list`（显式 `sourceKinds`、`archived`、`cwd`）
 - `thread/read`
+- `thread/turns/list(itemsView: "full")`
 - `thread/resume`
+- `thread/start`
 - `turn/start`
 - streaming notifications
-- `turn/steer`
+- `turn/steer(expectedTurnId)`
 - `turn/interrupt`
+- approval request / response
+- Worker token auth、Origin allowlist、project allowlist
 
 ## Frontend Rules
 
@@ -141,7 +148,7 @@ Worker probe 是第一阶段必须有的验证入口。它至少覆盖：
 
 - 默认三栏布局：设备 / 任务导航，列表 / 看板，conversation 操作区。
 - 控件优先服务高频操作：打开对话、发送 follow-up、中止、关联 task。
-- 状态必须清晰展示：online/offline、running、waiting approval、failed、done。
+- 状态必须清晰展示：online/offline、running、waiting approval、waiting input、interrupted、failed、done。
 - 不做大 hero、不做营销型首屏。
 - 不做过度装饰。
 
@@ -176,7 +183,7 @@ Worker probe 是第一阶段必须有的验证入口。它至少覆盖：
 
 ## Change Strategy
 
-- 先读 `docs/specs/多设备 Codex 控制台 技术规格 v0.2.md` 和相关计划，再改代码。
+- 先读 `docs/specs/多设备 Codex 控制台 PRD.md`、`docs/specs/多设备 Codex 控制台 技术规格.md`、`docs/superpowers/specs/2026-06-17-codex-app-main-chain-design.md` 和相关计划，再改代码。
 - 复杂功能先更新 `docs/plans/`，再实现。
 - 不主动回滚用户已有改动。
 - 遇到异常 Git 状态，先报告观察结果和建议。

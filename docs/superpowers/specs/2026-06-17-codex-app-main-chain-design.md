@@ -11,8 +11,8 @@ The product goal is that Codex Remote operations feel close to Codex App operati
 ## Confirmed Decisions
 
 - First slice: Worker probe and connection layer.
-- app-server transport: `ws://127.0.0.1:<port>`.
-- Worker may start app-server with `codex app-server --listen ws://127.0.0.1:<port>`, but the Worker-facing HTTP API and app-server WebSocket transport must both be protected as described in the Security Requirements section.
+- app-server transport: prefer `stdio` or Unix socket when available; loopback WebSocket is the product spike path only.
+- Worker may start app-server with `codex app-server --listen ws://127.0.0.1:<port>` for the spike, but the Worker-facing HTTP API and app-server transport must both be protected as described in the Security Requirements section.
 - Scope: single-device end-to-end first, with multi-device fields and event envelopes reserved.
 - Runtime shape: Web uses a Control Plane-shaped contract; implementation may initially route to a local Worker adapter instead of a full Control Plane server.
 - Approach: contract-driven, with Worker probe validating the real app-server behavior before broad UI work.
@@ -232,7 +232,7 @@ This avoids depending on app-server's default `sourceKinds`, which currently def
 
 ### Thread Start, Resume, and Turn Start Params
 
-`StartConversationInput` and `FollowUpInput` must reserve fields that app-server accepts on thread and turn operations:
+`StartConversationInput` and `FollowUpInput` must reserve fields that app-server accepts on thread and turn operations. `thread/start` and `thread/resume` use `sandbox`, while `turn/start` uses `sandboxPolicy`; the contract must not collapse them into one misleading field:
 
 ```ts
 export interface CodexRuntimeOptions {
@@ -240,11 +240,15 @@ export interface CodexRuntimeOptions {
   model?: string;
   modelProvider?: string;
   approvalPolicy?: string;
+  sandbox?: unknown;
   sandboxPolicy?: unknown;
   personality?: string | null;
   effort?: string;
   summary?: string;
   collaborationMode?: string;
+  outputSchema?: unknown;
+  serviceName?: string;
+  dynamicTools?: unknown;
 }
 
 export interface StartConversationInput extends CodexRuntimeOptions {
@@ -270,12 +274,12 @@ Worker enforces project allowlist before forwarding `cwd` or sandbox roots.
 export interface SteerTurnInput {
   deviceId: string;
   conversationId: string;
-  turnId: string;
+  expectedTurnId: string;
   input: ConversationInputItem[];
 }
 ```
 
-Worker maps it to `turn/steer` with `expectedTurnId`.
+Worker maps it to `turn/steer` with `expectedTurnId`. `turnId` may remain a display alias in the UI layer, but the wire-facing input should keep the upstream name.
 
 ### Approval Response
 
@@ -296,6 +300,23 @@ export interface RespondApprovalInput {
 
 File-change approvals use the subset accepted by upstream. Command approval decisions include `acceptWithExecpolicyAmendment`.
 
+`ApprovalRequest` should carry enough projection state to distinguish command execution, file change, tool user-input, and network approval prompts. At minimum it needs:
+
+- `requestId`
+- `threadId`
+- `turnId`
+- `itemId`
+- `kind`
+- `availableDecisions`
+- `reason?`
+- `command?`
+- `cwd?`
+- `grantRoot?`
+- `networkApprovalContext?`
+- `additionalPermissions?`
+
+The contract should treat `approvalId` as the local UI identifier and preserve the upstream request id separately.
+
 ### History Loading
 
 `thread/read(includeTurns=true)` is acceptable for initial selected-thread reads, but long conversations need `thread/turns/list`.
@@ -304,6 +325,7 @@ Rules:
 
 - `thread/read(includeTurns=true)` loads the selected thread snapshot.
 - `thread/turns/list(itemsView: "full")` is required for paginated long history and "load older" UI.
+- `thread/turns/list` should also preserve `sortDirection`, `nextCursor`, and `backwardsCursor` in the contract so snapshot/live merging can move both directions deterministically.
 - `thread/turns/items/list` is not used because upstream currently reserves it and may return unsupported.
 
 ## First Implementation Slice
@@ -403,19 +425,22 @@ Completion evidence:
 The stable contract should not expose raw app-server status directly.
 
 ```ts
-export type ConversationStatus =
+export type ConversationRuntimeStatus =
   | "not_loaded"
   | "idle"
   | "running"
   | "waiting_approval"
   | "waiting_input"
-  | "interrupted"
-  | "failed"
-  | "done"
   | "unknown";
 
 export type TurnStatus =
   | "in_progress"
+  | "completed"
+  | "interrupted"
+  | "failed"
+  | "unknown";
+
+export type LatestTurnStatus =
   | "completed"
   | "interrupted"
   | "failed";
@@ -438,27 +463,32 @@ export type ApprovalRequestStatus =
 
 Projection rules:
 
-- `thread/status/changed` is the primary live source for conversation status.
-- `turn/started` to `turn/completed` implies active conversation state.
-- Approval requests move the conversation to `waiting_approval` until `serverRequest/resolved` or a terminal turn event.
+- `thread/status/changed` is the primary live source for conversation runtime status.
+- `turn/started` to `turn/completed` implies active runtime state.
+- Approval requests move the runtime status to `waiting_approval` until `serverRequest/resolved` or a terminal turn event.
 - `item/completed` is the authoritative final item state.
 - Delta events append content only; they do not define terminal status.
-- Unknown status must remain `unknown`, never silently become `done`.
+- Unknown status must remain `unknown`, never silently become `completed`.
+- `LatestTurnStatus` describes the newest terminal turn result; it is not the same field as `ConversationRuntimeStatus`.
 
 ### Conversation Status Mapping
 
-| Upstream signal | Codex Remote status |
+| Upstream signal | Codex Remote runtime status | Latest turn status |
 | --- | --- |
-| thread status `{ type: "notLoaded" }` | `not_loaded` |
-| thread status `{ type: "active", activeFlags: [] }` | `running` while a turn is active; `idle` only after a terminal turn event |
-| `activeFlags` contains `waitingOnApproval` | `waiting_approval` |
-| `activeFlags` contains an input/request-user-input signal | `waiting_input` |
-| `turn/completed` with `status: "completed"` | `done` for that turn; conversation becomes `idle` if no active turn remains |
-| `turn/completed` with `status: "interrupted"` | `interrupted` |
-| `turn/completed` with `status: "failed"` or error event | `failed` |
-| unknown thread or turn status | `unknown` |
+| thread status `{ type: "notLoaded" }` | `not_loaded` | unchanged |
+| thread status `{ type: "idle" }` | `idle` | unchanged |
+| thread status `{ type: "active", activeFlags: [] }` | `running` while a turn is active; `idle` only after a terminal turn event | unchanged |
+| thread status `{ type: "systemError" }` | `unknown` or surfaced diagnostic state | unchanged |
+| `activeFlags` contains `waitingOnApproval` | `waiting_approval` | unchanged |
+| `item/tool/requestUserInput` pending | `waiting_input` | unchanged |
+| `turn/completed` with `status: "completed"` | `idle` if no active turn remains | `completed` |
+| `turn/completed` with `status: "interrupted"` | `idle` if no active turn remains | `interrupted` |
+| `turn/completed` with `status: "failed"` or error event | `idle` if no active turn remains, plus error detail | `failed` |
+| unknown thread or turn status | `unknown` | `unknown` when tied to a turn |
 
-`done` describes the latest turn terminal result. `idle` describes that the loaded conversation currently has no in-flight turn. UI may display both latest turn result and current runtime state when needed.
+`completed` describes the latest turn terminal result. `idle` describes that the loaded conversation currently has no in-flight turn. UI should display both latest turn result and current runtime state when needed.
+
+`ApprovalRequestStatus.resolved` means the server request has been answered or cleared, not that the turn itself has succeeded.
 
 ## Event Contract
 
@@ -480,6 +510,7 @@ Initial event names:
 - `item.completed`
 - `approval.requested`
 - `serverRequest.resolved`
+- `tool.userInput.requested`
 - `connection.status.changed`
 - `diagnostic.error`
 
@@ -495,6 +526,13 @@ Delta events should include:
 - raw upstream method name
 
 The Worker sequence is required because upstream delta notifications are append operations, not naturally idempotent resource replacements.
+
+Snapshot/live merge rules:
+
+- Worker snapshots carry `readStartedAt`, `readCompletedAt`, and per-thread `snapshotRevision`.
+- Live notifications with a higher Worker sequence always win over older snapshot content.
+- Deltas are append-only for streamed fields but replace the accumulated item view for `item.completed`.
+- Reconnects restart sequence numbering per app-server connection, so `connectionId` must scope de-duplication.
 
 ### Upstream Event Projection
 
@@ -519,7 +557,7 @@ The Worker sequence is required because upstream delta notifications are append 
 | `item/completed` | `item.completed` |
 | `item/commandExecution/requestApproval` | `approval.requested` |
 | `item/fileChange/requestApproval` | `approval.requested` |
-| `item/tool/requestUserInput` | `approval.requested` or `tool.userInput.requested` when modeled separately |
+| `item/tool/requestUserInput` | `tool.userInput.requested` |
 | `serverRequest/resolved` | `serverRequest.resolved` |
 
 ## Error Model
@@ -558,6 +596,8 @@ Each error response includes:
 - `codexErrorInfo` when upstream provides it
 - `httpStatusCode` when upstream provides it
 - sanitized `details`
+
+If `kind` is `approval_required`, the contract is wrong; approval must surface as `waiting_approval` plus `approval.requested` / `tool.userInput.requested`, not as a worker error.
 
 UI behavior:
 
@@ -633,6 +673,20 @@ Full probe, explicit opt-in because it can consume model quota and trigger appro
 
 The technical specification's 12 Worker probe capabilities are the full probe acceptance target. Read-only probe is an earlier safety gate, not a substitute for full acceptance.
 
+The probe diagnostic schema must distinguish pass, fail, skip, and opt-in gating:
+
+```ts
+export interface ProbeCheckResult {
+  name: string;
+  ok: boolean;
+  durationMs: number;
+  failureType?: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable";
+  errorKind?: WorkerErrorKind;
+  diagnosticId?: string;
+  skippedReason?: string;
+}
+```
+
 ### Diagnostic JSON Schema
 
 Probe output must be machine-readable:
@@ -656,6 +710,7 @@ export interface WorkerProbeSummary {
     name: string;
     ok: boolean;
     durationMs: number;
+    failureType?: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable";
     retryable?: boolean;
     errorKind?: WorkerErrorKind;
     diagnosticId?: string;
@@ -663,7 +718,7 @@ export interface WorkerProbeSummary {
 }
 ```
 
-CI should run unit tests and the read-only probe only when Codex is installed and configured in the runner. Full probe is a manual or explicitly enabled integration check.
+CI should run unit tests and the read-only probe only when Codex is installed and configured in the runner. Full probe is a manual or explicitly enabled integration check. A missing Codex installation or disabled environment must emit a skipped result, not a green pass.
 
 ### Web Contract Tests
 
@@ -717,6 +772,8 @@ export interface WorkerCapabilities {
   supportedSourceKinds: string[];
 }
 ```
+
+The capability model should be treated as additive and discoverable. UI must not assume `canFollowUp` implies `canSteerTurn`, and it must not assume `appServerTransport` is the same as the local Worker HTTP transport.
 
 UI actions must check capabilities and render disabled or unavailable states instead of silently no-oping.
 
