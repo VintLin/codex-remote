@@ -48,6 +48,7 @@ apps/*/out/
 *.launch
 .settings/
 .codegraph/
+.impeccable/live/
 
 # ============================================
 # OS generated files
