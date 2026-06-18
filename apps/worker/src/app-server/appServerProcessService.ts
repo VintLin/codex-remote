@@ -9,7 +9,9 @@ export interface AppServerProcessHandle {
   startedByWorker: true;
 }
 
-function createAppServerProcessError(kind: "app_server_spawn_failed"): Error {
+function createAppServerProcessError(
+  kind: "app_server_request_timeout" | "app_server_spawn_failed",
+): Error {
   return new Error(kind);
 }
 
@@ -63,26 +65,38 @@ export function toReadyzUrl(appServerUrl: string): string {
 
 export async function waitForReadyz(readyzUrl: string, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  let lastError: unknown = null;
 
-  while (Date.now() < deadline) {
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw createAppServerProcessError("app_server_request_timeout");
+    }
+
+    const controller = new AbortController();
+    const attemptTimeoutMs = Math.min(remainingMs, 250);
+    const attemptTimeout = setTimeout(() => {
+      controller.abort();
+    }, attemptTimeoutMs);
+
     try {
-      const response = await fetch(readyzUrl);
+      const response = await fetch(readyzUrl, {
+        signal: controller.signal,
+      });
       if (response.ok) {
         return;
       }
-
-      lastError = new Error(`readyz returned ${response.status}`);
-    } catch (error) {
-      lastError = error;
+    } catch {
+      if (Date.now() >= deadline) {
+        throw createAppServerProcessError("app_server_request_timeout");
+      }
+    } finally {
+      clearTimeout(attemptTimeout);
     }
 
     await new Promise((resolve) => {
       setTimeout(resolve, 100);
     });
   }
-
-  throw lastError instanceof Error ? lastError : new Error("app-server /readyz timed out");
 }
 
 export function startLoopbackAppServer(port: number): AppServerProcessHandle {
