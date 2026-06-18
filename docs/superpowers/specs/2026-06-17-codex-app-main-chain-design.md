@@ -68,7 +68,8 @@ Rules:
 
 - Worker binds to loopback only.
 - Worker accepts browser requests only from configured development origins, initially `http://127.0.0.1:5173` and `http://localhost:5173`.
-- Worker rejects unexpected `Origin` headers for state-changing routes and event streams.
+- Worker rejects unexpected `Origin` headers for every browser-originated Worker HTTP route, including read-only `GET` routes and event streams.
+- CLI and probe requests without an `Origin` header may use token authentication without CORS handling.
 - Worker must not proxy app-server `/healthz` semantics directly to the browser. App-server `/readyz` and `/healthz` are Worker-internal diagnostics.
 
 ### app-server Transport Policy
@@ -89,7 +90,8 @@ Worker must enforce project access before sending `cwd`, file, shell, or thread 
 Rules:
 
 - The first Worker probe can use a single configured allowed project root.
-- `thread/list` with `cwd`, `thread/start`, `thread/resume`, `turn/start`, `turn/steer`, and approval responses must be checked against the allowlist when they include or imply a project path.
+- `thread/list` with `cwd`, `thread/read`, `thread/turns/list`, `thread/start`, `thread/resume`, `turn/start`, `turn/steer`, and approval responses must be checked against the allowlist when they include or imply a project path.
+- Any operation that reads by `conversationId` or `threadId` must first prove the thread belongs to an allowed project root. Unknown, projectless, or unbound thread ids are rejected before calling app-server.
 - Paths in approval requests, sandbox roots, file changes, and command cwd must be normalized before comparison.
 - Operations outside the allowlist are rejected by Worker before app-server is called.
 
@@ -245,37 +247,17 @@ This avoids depending on app-server's default `sourceKinds`, which currently def
 
 ### Thread Start, Resume, and Turn Start Params
 
-`StartConversationInput` and `FollowUpInput` must reserve fields that app-server accepts on thread and turn operations. `thread/start` and `thread/resume` use `sandbox`, while `turn/start` uses `sandboxPolicy`; the contract must not collapse them into one misleading field:
+`StartConversationInput` and `FollowUpInput` must reserve fields that app-server accepts on thread and turn operations. `thread/start` and `thread/resume` use `sandbox`, while `turn/start` uses `sandboxPolicy`; the OpenAPI contract must not collapse them into one misleading field.
 
-```ts
-export interface CodexRuntimeOptions {
-  cwd: string;
-  model?: string;
-  modelProvider?: string;
-  approvalPolicy?: string;
-  sandbox?: unknown;
-  sandboxPolicy?: unknown;
-  personality?: string | null;
-  effort?: string;
-  summary?: string;
-  collaborationMode?: string;
-  outputSchema?: unknown;
-  serviceName?: string;
-  dynamicTools?: unknown;
-}
+The OpenAPI schema must include equivalent fields:
 
-export interface StartConversationInput extends CodexRuntimeOptions {
-  deviceId: string;
-  projectId: string;
-  input: ConversationInputItem[];
-}
+| Schema | Required fields | Optional fields |
+| --- | --- | --- |
+| `CodexRuntimeOptions` | `cwd` | `model`, `modelProvider`, `approvalPolicy`, `sandbox`, `sandboxPolicy`, `personality`, `effort`, `summary`, `collaborationMode`, `outputSchema`, `serviceName`, `dynamicTools` |
+| `StartConversationInput` | `deviceId`, `projectId`, `input` | all `CodexRuntimeOptions` optional fields |
+| `FollowUpInput` | `deviceId`, `conversationId`, `input` | all `CodexRuntimeOptions` fields |
 
-export interface FollowUpInput extends Partial<CodexRuntimeOptions> {
-  deviceId: string;
-  conversationId: string;
-  input: ConversationInputItem[];
-}
-```
+Do not hand-write these interfaces in `src/`. Public TypeScript types must be generated from `packages/api-contract/openapi.yaml` and re-exported as `components["schemas"]` aliases.
 
 Worker enforces project allowlist before forwarding `cwd` or sandbox roots.
 
@@ -283,14 +265,7 @@ Worker enforces project allowlist before forwarding `cwd` or sandbox roots.
 
 `turn/steer` is not the normal follow-up path. It is a separate operation for adding input to an active turn.
 
-```ts
-export interface SteerTurnInput {
-  deviceId: string;
-  conversationId: string;
-  expectedTurnId: string;
-  input: ConversationInputItem[];
-}
-```
+The OpenAPI `SteerTurnInput` schema must include `deviceId`, `conversationId`, `expectedTurnId`, and `input`.
 
 Worker maps it to `turn/steer` with `expectedTurnId`. `turnId` may remain a display alias in the UI layer, but the wire-facing input should keep the upstream name.
 
@@ -298,18 +273,7 @@ Worker maps it to `turn/steer` with `expectedTurnId`. `turnId` may remain a disp
 
 Approval requires request-response state, not just a displayed event.
 
-```ts
-export interface RespondApprovalInput {
-  deviceId: string;
-  approvalId: string;
-  decision:
-    | { type: "accept" }
-    | { type: "acceptForSession" }
-    | { type: "decline" }
-    | { type: "cancel" }
-    | { type: "acceptWithExecpolicyAmendment"; execpolicyAmendment: string[] };
-}
-```
+The OpenAPI `RespondApprovalInput` schema must include `deviceId`, `approvalId`, and a decision union with `accept`, `acceptForSession`, `decline`, `cancel`, and `acceptWithExecpolicyAmendment`.
 
 File-change approvals use the subset accepted by upstream. Command approval decisions include `acceptWithExecpolicyAmendment`.
 
@@ -369,13 +333,27 @@ Deliver:
 - Export those generated types from `packages/api-contract/src/index.ts`.
 - Keep send/approval/steer/interrupt inputs out of this first contract patch unless required by a read-only probe result.
 
+Minimum field floor:
+
+| Schema | Required fields for this slice |
+| --- | --- |
+| `WorkerHealth` | `deviceId`, `status`, `checkedAt`, `codexVersion`, `appServer` |
+| `WorkerCapabilities` | `deviceId`, `canReadProjects`, `canReadConversations`, `canReadTimeline`, `canRunReadOnlyProbe`, `appServerTransport`, `supportedSourceKinds` |
+| `ConversationTimeline` | `deviceId`, `conversationId`, `readStartedAt`, `readCompletedAt`, `snapshotRevision`, `runtimeStatus`, `latestTurnStatus`, `turns` |
+| `ConversationTimelinePage` | `deviceId`, `conversationId`, `itemsView`, `sortDirection`, `nextCursor`, `backwardsCursor`, `turns` |
+| `ConversationEvent` | `eventId`, `deviceId`, `timestamp`, `upstreamMethod`, `connectionId`, `sequence`, `conversationId` |
+| `WorkerProbeSummary` | `schemaVersion`, `startedAt`, `completedAt`, `ok`, `mode`, `deviceId`, `codexVersion`, `appServer`, `checks` |
+| `ProbeCheckResult` | `name`, `ok`, `durationMs` |
+
+Optional detail fields can be refined in the implementation plan, but identity, pagination, status, connection sequence, and diagnostic fields must come from this OpenAPI schema.
+
 Completion evidence:
 
 - A schema rename still forces regeneration or TypeScript failures.
 - `pnpm --filter @codex-remote/api-contract test` passes.
 - Boundary tests still prevent Web from importing `@codex-remote/codex-protocol`.
 
-### Phase 1: Read-Only Worker Probe Skeleton
+### Phase 1a: Worker CLI Read-Only Probe
 
 Deliver:
 
@@ -385,17 +363,38 @@ Deliver:
 - WebSocket JSON-RPC client.
 - `initialize` and `initialized`.
 - `model/list`.
-- `thread/list` with explicit `sourceKinds`.
+- `thread/list` with `cwd`, explicit `sourceKinds`, explicit `archived`, and cursor pagination.
 - `thread/read(includeTurns=true)`.
-- `thread/turns/list(itemsView: "full")`.
+- `thread/turns/list(itemsView: "full")` with `sortDirection`, `nextCursor`, and `backwardsCursor` handling.
 - Worker HTTP token authentication and Origin checks.
 - project allowlist enforcement for app-server-backed operations.
 - Diagnostic JSON summary using `WorkerProbeSummary`.
+
+Completion evidence:
+
+- A local read-only probe command can start or connect to app-server and report each step as pass/fail.
+- Failures include operation name, retryability, and sanitized details.
+- The read-only probe passes without model usage.
+
+### Phase 1b: Local Worker HTTP Read API
+
+Deliver:
+
 - Worker local API:
   - `GET /health`
   - `GET /projects`
   - `GET /conversations?projectId=...`
   - `GET /conversations/:conversationId`
+
+Completion evidence:
+
+- All browser-originated routes enforce token authentication and Origin allowlist.
+- All conversation reads prove project allowlist membership before calling app-server.
+
+### Phase 1c: Web Read Source
+
+Deliver:
+
 - Web data source abstraction:
   - fixture source
   - Worker source
@@ -403,9 +402,6 @@ Deliver:
 
 Completion evidence:
 
-- A local read-only probe command can start or connect to app-server and report each step as pass/fail.
-- Failures include operation name, retryability, and sanitized details.
-- The read-only probe passes without model usage.
 - Existing fixture UI remains available.
 - Worker source renders real app-server data through the same view model boundary.
 - The full probe remains opt-in and is deferred to the send/stream phase.
@@ -691,9 +687,9 @@ Read-only probe, safe for local and CI-like environments with Codex installed:
 - WebSocket connect.
 - initialize and initialized.
 - model/list.
-- thread/list with explicit `sourceKinds`.
+- thread/list with `cwd`, explicit `sourceKinds`, explicit `archived`, and cursor pagination.
 - thread/read.
-- thread/turns/list with `itemsView: "full"`.
+- thread/turns/list with `itemsView: "full"`, `sortDirection`, `nextCursor`, and `backwardsCursor`.
 - diagnostic JSON output.
 
 Full probe, explicit opt-in because it can consume model quota and trigger approvals:
@@ -708,50 +704,33 @@ Full probe, explicit opt-in because it can consume model quota and trigger appro
 
 The technical specification's 12 Worker probe capabilities are the full probe acceptance target. Read-only probe is an earlier safety gate, not a substitute for full acceptance.
 
-The probe diagnostic schema must distinguish pass, fail, skip, and opt-in gating:
+The OpenAPI `ProbeCheckResult` schema must distinguish pass, fail, skip, and opt-in gating:
 
-```ts
-export interface ProbeCheckResult {
-  name: string;
-  ok: boolean;
-  durationMs: number;
-  failureType?: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable";
-  errorKind?: WorkerErrorKind;
-  diagnosticId?: string;
-  skippedReason?: string;
-}
-```
+| Field | Required | Notes |
+| --- | --- | --- |
+| `name` | yes | Stable check name. |
+| `ok` | yes | Whether the check passed. |
+| `durationMs` | yes | Check duration in milliseconds. |
+| `failureType` | no | One of `skipped`, `precondition_missing`, `env_not_configured`, `assertion_failed`, `opt_in_required`, `approval_unavailable`. |
+| `errorKind` | no | `WorkerErrorKind` when a Worker-classified error exists. |
+| `diagnosticId` | no | Redacted diagnostic correlation id. |
+| `skippedReason` | no | User-safe reason when skipped. |
 
 ### Diagnostic JSON Schema
 
-Probe output must be machine-readable:
+Probe output must be machine-readable through the OpenAPI `WorkerProbeSummary` schema:
 
-```ts
-export interface WorkerProbeSummary {
-  schemaVersion: 1;
-  startedAt: string;
-  completedAt: string;
-  ok: boolean;
-  mode: "readOnly" | "full";
-  deviceId: string;
-  codexVersion: string | null;
-  appServer: {
-    transport: "loopbackWebSocket" | "stdio" | "unixSocket";
-    url?: string;
-    startedByWorker: boolean;
-    readyz: boolean;
-  };
-  checks: Array<{
-    name: string;
-    ok: boolean;
-    durationMs: number;
-    failureType?: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable";
-    retryable?: boolean;
-    errorKind?: WorkerErrorKind;
-    diagnosticId?: string;
-  }>;
-}
-```
+| Field | Required | Notes |
+| --- | --- | --- |
+| `schemaVersion` | yes | Initial value is `1`. |
+| `startedAt` | yes | ISO timestamp. |
+| `completedAt` | yes | ISO timestamp. |
+| `ok` | yes | Overall probe result. |
+| `mode` | yes | `readOnly` or `full`. |
+| `deviceId` | yes | Local Worker device id. |
+| `codexVersion` | yes | String or null when unavailable. |
+| `appServer` | yes | Includes `transport`, optional `url`, `startedByWorker`, and `readyz`. |
+| `checks` | yes | Array of `ProbeCheckResult`. |
 
 CI should run unit tests and the read-only probe only when Codex is installed and configured in the runner. Full probe is a manual or explicitly enabled integration check. A missing Codex installation or disabled environment must emit a skipped result, not a green pass.
 
@@ -788,25 +767,23 @@ Migration rules:
 - Event envelopes must not assume a single device connection.
 - Control Plane introduction should replace routing and persistence, not app-server projection logic.
 
-`WorkerCapabilities` should advertise supported operations and protocol features:
+`WorkerCapabilities` should advertise supported operations and protocol features through OpenAPI fields:
 
-```ts
-export interface WorkerCapabilities {
-  canStartConversation: boolean;
-  canFollowUp: boolean;
-  canSteerTurn: boolean;
-  canInterruptTurn: boolean;
-  canRespondToApprovals: boolean;
-  canListArchivedThreads: boolean;
-  canRenameThread: boolean;
-  canArchiveThread: boolean;
-  canReadDiffUpdates: boolean;
-  canReadPlanUpdates: boolean;
-  appServerTransport: "loopbackWebSocket" | "stdio" | "unixSocket";
-  experimentalApiEnabled: boolean;
-  supportedSourceKinds: string[];
-}
-```
+| Field | Notes |
+| --- | --- |
+| `canStartConversation` | Whether `thread/start` plus `turn/start` is enabled. |
+| `canFollowUp` | Whether existing-thread follow-up is enabled. |
+| `canSteerTurn` | Whether active-turn steering is enabled. |
+| `canInterruptTurn` | Whether active-turn interrupt is enabled. |
+| `canRespondToApprovals` | Whether approval decisions are enabled. |
+| `canListArchivedThreads` | Whether archived thread listing is enabled. |
+| `canRenameThread` | Whether rename is enabled. |
+| `canArchiveThread` | Whether archive/unarchive is enabled. |
+| `canReadDiffUpdates` | Whether diff events are projected. |
+| `canReadPlanUpdates` | Whether plan events are projected. |
+| `appServerTransport` | `loopbackWebSocket`, `stdio`, or `unixSocket`. |
+| `experimentalApiEnabled` | Whether experimental app-server transport is active. |
+| `supportedSourceKinds` | Explicit app-server source kinds supported by Worker. |
 
 The capability model should be treated as additive and discoverable. UI must not assume `canFollowUp` implies `canSteerTurn`, and it must not assume `appServerTransport` is the same as the local Worker HTTP transport.
 
