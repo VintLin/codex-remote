@@ -1,11 +1,51 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import test from "node:test";
 
 const packageRoot = new URL("../", import.meta.url);
 const openApiPath = new URL("openapi.yaml", packageRoot);
 const generatedPath = new URL("generated/openapi.ts", import.meta.url);
-const publicExportsPath = new URL("index.ts", import.meta.url);
+const sourceRootPath = new URL(".", import.meta.url).pathname;
+const generatedRootPath = new URL("generated/", import.meta.url).pathname;
+const schemaTypeNames = [
+  "DeviceConnectionStatus",
+  "ConversationStatus",
+  "TaskStatus",
+  "DiffKind",
+  "Device",
+  "RemoteProject",
+  "CodexConversation",
+  "BoardTask",
+  "DiffLine",
+  "ConversationInputItem",
+  "FollowUpInput",
+  "CommandAccepted",
+  "ErrorEnvelope",
+  "SidebarProject",
+  "Conversation",
+] as const;
+const schemaTypeNamePattern = schemaTypeNames.join("|");
+
+function collectTypeScriptSourceFiles(directoryPath: string): string[] {
+  const entries = readdirSync(directoryPath, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = join(directoryPath, entry.name);
+    if (entryPath.startsWith(generatedRootPath)) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      files.push(...collectTypeScriptSourceFiles(entryPath));
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
 
 test("when api contract schemas are maintained, openapi.yaml should be the source file", () => {
   const source = readFileSync(openApiPath, "utf8");
@@ -21,17 +61,36 @@ test("when generated types are consumed, the generated openapi file should exist
   assert.equal(existsSync(generatedPath), true);
 });
 
-test("when public api types are exported, index should not redeclare schema fields", () => {
-  const source = readFileSync(publicExportsPath, "utf8");
-  const forbiddenDefinitions = source
-    .split("\n")
-    .filter((line) =>
-      /^(export\s+)?interface\s+(Device|RemoteProject|CodexConversation|BoardTask|DiffLine)\b/.test(line.trim()) ||
-      /^(export\s+)?type\s+(Device|RemoteProject|CodexConversation|BoardTask|DiffLine)\s*=\s*\{/.test(
-        line.trim(),
-      ),
-    );
+test("when public api types are exported, source files should not redeclare schema fields", () => {
+  const sourceFiles = collectTypeScriptSourceFiles(sourceRootPath);
+  const forbiddenDefinitions = sourceFiles.flatMap((sourceFilePath) => {
+    const source = readFileSync(sourceFilePath, "utf8");
+    const sourceLines = source.split("\n");
+
+    return sourceLines.flatMap((line, index) => {
+      const trimmedLine = line.trim();
+      const definesInterface = new RegExp(`^(export\\s+)?interface\\s+(${schemaTypeNamePattern})\\b`).test(
+        trimmedLine,
+      );
+      const typeAliasMatch = new RegExp(`^(export\\s+)?type\\s+(${schemaTypeNamePattern})\\s*=`).exec(trimmedLine);
+      const definesGeneratedAlias = /components\["schemas"\]\["[A-Za-z]+"\]/.test(trimmedLine);
+      const definesCompatibilityAlias =
+        trimmedLine === "export type SidebarProject = RemoteProject;" ||
+        trimmedLine === "export type Conversation = CodexConversation;";
+      const definesLocalTypeAlias = Boolean(typeAliasMatch) && !definesGeneratedAlias && !definesCompatibilityAlias;
+
+      if (!definesInterface && !definesLocalTypeAlias) {
+        return [];
+      }
+
+      const relativePath = relative(sourceRootPath, sourceFilePath);
+      return `${relativePath}:${index + 1}: ${trimmedLine}`;
+    });
+  });
 
   assert.deepEqual(forbiddenDefinitions, []);
-  assert.match(source, /from "\.\/generated\/openapi"/);
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+  assert.match(publicExportSource, /from "\.\/generated\/openapi"/);
+  assert.match(publicExportSource, /type SidebarProject = RemoteProject/);
+  assert.match(publicExportSource, /type Conversation = CodexConversation/);
 });
