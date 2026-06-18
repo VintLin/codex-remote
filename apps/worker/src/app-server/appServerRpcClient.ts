@@ -86,10 +86,9 @@ export class AppServerRpcClient {
     this.nextId += 1;
 
     const request = { id, method, params } as Extract<ClientRequest, { method: M }>;
-    this.socket.send(JSON.stringify(request));
-
     return await new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
+      this.socket.send(JSON.stringify(request));
     });
   }
 

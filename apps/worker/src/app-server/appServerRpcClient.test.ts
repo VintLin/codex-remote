@@ -60,6 +60,13 @@ class FakeSocket {
   }
 }
 
+class SyncResponseSocket extends FakeSocket {
+  override send(data: string): void {
+    super.send(data);
+    this.receive(JSON.stringify({ id: 1, result: { data: ["sync"], nextCursor: null } }));
+  }
+}
+
 test("when sending a request, should resolve matching response id", async () => {
   const socket = new FakeSocket();
   const client = new AppServerRpcClient(socket);
@@ -69,6 +76,24 @@ test("when sending a request, should resolve matching response id", async () => 
   socket.receive(JSON.stringify({ id: 1, result: { data: [], nextCursor: null } }));
 
   assert.deepEqual(await response, { data: [], nextCursor: null });
+});
+
+test("when socket responds synchronously during send, should still resolve the request", async () => {
+  const socket = new SyncResponseSocket();
+  const client = new AppServerRpcClient(socket);
+  const unresolved = Symbol("unresolved");
+  const response = client.request("model/list", {});
+
+  const result = await Promise.race([
+    response,
+    new Promise((resolve) => {
+      setImmediate(() => {
+        resolve(unresolved);
+      });
+    }),
+  ]);
+
+  assert.deepEqual(result, { data: ["sync"], nextCursor: null });
 });
 
 test("when response contains an upstream error, should reject with safe error kind", async () => {
@@ -112,15 +137,17 @@ test("when websocket connection opens, should return a client", async () => {
     }
   }
 
-  globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
+  try {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
 
-  const clientPromise = connectAppServerRpcClient("ws://127.0.0.1:4317");
-  socket.emitOpen();
-  const client = await clientPromise;
+    const clientPromise = connectAppServerRpcClient("ws://127.0.0.1:4317");
+    socket.emitOpen();
+    const client = await clientPromise;
 
-  assert.ok(client instanceof AppServerRpcClient);
-
-  globalThis.WebSocket = originalWebSocket;
+    assert.ok(client instanceof AppServerRpcClient);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
 });
 
 test("when websocket connection fails, should reject with safe error kind", async () => {
@@ -134,12 +161,14 @@ test("when websocket connection fails, should reject with safe error kind", asyn
     }
   }
 
-  globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
+  try {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
 
-  const clientPromise = connectAppServerRpcClient("ws://127.0.0.1:4318");
-  socket.emitError();
+    const clientPromise = connectAppServerRpcClient("ws://127.0.0.1:4318");
+    socket.emitError();
 
-  await assert.rejects(clientPromise, /app_server_connection_error/);
-
-  globalThis.WebSocket = originalWebSocket;
+    await assert.rejects(clientPromise, /app_server_connection_error/);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
 });
