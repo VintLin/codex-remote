@@ -1,3 +1,4 @@
+import { realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
 export function isBearerTokenAuthorized(header: string | undefined, expectedToken: string): boolean {
@@ -34,4 +35,26 @@ export function canReadThreadPath(threadCwd: string | null, allowedRoot: string)
   }
 
   return isPathInsideRoot(threadCwd, allowedRoot);
+}
+
+async function canonicalizeExistingPath(path: string): Promise<string> {
+  const normalizedPath = resolve(path);
+
+  try {
+    return await realpath(normalizedPath);
+  } catch {
+    return normalizedPath;
+  }
+}
+
+export async function isPathInsideRootRealpath(path: string, root: string): Promise<boolean> {
+  if (!root.trim()) {
+    return false;
+  }
+
+  const canonicalRoot = await canonicalizeExistingPath(root);
+  const canonicalPath = await canonicalizeExistingPath(path);
+  const pathFromRoot = relative(canonicalRoot, canonicalPath);
+
+  return pathFromRoot === "" || (!pathFromRoot.startsWith("..") && !pathFromRoot.startsWith("/") && !isAbsolute(pathFromRoot));
 }

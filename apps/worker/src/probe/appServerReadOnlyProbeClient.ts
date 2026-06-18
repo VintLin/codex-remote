@@ -1,7 +1,7 @@
 import type { v2 } from "@codex-remote/codex-protocol";
 
 import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
-import { isPathInsideRoot } from "../security/workerSecurity.ts";
+import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
 import { PreconditionMissingError, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
 
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
@@ -61,9 +61,14 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
       })) as v2.ThreadListResponse;
 
       lastResponse = response;
-      const firstAllowedThread = response.data.find((thread) => isPathInsideRoot(thread.cwd, this.allowedProjectRoot));
-      if (firstAllowedThread) {
-        this.firstAllowedThreadId = firstAllowedThread.id;
+      for (const thread of response.data) {
+        if (await isPathInsideRootRealpath(thread.cwd, this.allowedProjectRoot)) {
+          this.firstAllowedThreadId = thread.id;
+          break;
+        }
+      }
+
+      if (this.firstAllowedThreadId) {
         break;
       }
 
@@ -86,7 +91,7 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
       includeTurns: true,
     })) as v2.ThreadReadResponse;
 
-    if (!isPathInsideRoot(response.thread.cwd, this.allowedProjectRoot)) {
+    if (!(await isPathInsideRootRealpath(response.thread.cwd, this.allowedProjectRoot))) {
       throw new Error("thread/read returned a thread outside the allowed project root");
     }
 

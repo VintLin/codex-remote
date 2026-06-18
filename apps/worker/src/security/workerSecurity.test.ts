@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { canReadThreadPath, isBearerTokenAuthorized, isOriginAllowed, isPathInsideRoot } from "./workerSecurity.ts";
+import {
+  canReadThreadPath,
+  isBearerTokenAuthorized,
+  isOriginAllowed,
+  isPathInsideRoot,
+  isPathInsideRootRealpath,
+} from "./workerSecurity.ts";
 
 test("when checking bearer token, should require exact bearer header", () => {
   assert.equal(isBearerTokenAuthorized("Bearer dev-token", "dev-token"), true);
@@ -22,4 +31,20 @@ test("when checking project allowlist, should reject sibling and unknown thread 
   assert.equal(isPathInsideRoot("/repo/project-other", "/repo/project"), false);
   assert.equal(isPathInsideRoot("/repo/project", ""), false);
   assert.equal(canReadThreadPath(null, "/repo/project"), false);
+});
+
+test("when checking canonical project allowlist, should reject a symlink escape", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-security-"));
+  const allowedRoot = join(fixtureRoot, "allowed");
+  const outsideRoot = join(fixtureRoot, "outside");
+  const insideDir = join(allowedRoot, "inside");
+  const escapeLink = join(insideDir, "escape-link");
+  const escapedFile = join(escapeLink, "secret.txt");
+
+  mkdirSync(insideDir, { recursive: true });
+  mkdirSync(outsideRoot, { recursive: true });
+  writeFileSync(join(outsideRoot, "secret.txt"), "secret");
+  symlinkSync(outsideRoot, escapeLink);
+
+  assert.equal(await isPathInsideRootRealpath(escapedFile, allowedRoot), false);
 });

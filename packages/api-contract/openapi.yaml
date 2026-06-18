@@ -139,6 +139,7 @@ components:
     TurnStatus:
       type: string
       enum:
+        - in_progress
         - completed
         - interrupted
         - failed

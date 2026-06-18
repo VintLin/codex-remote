@@ -3,9 +3,14 @@ import { createServer } from "node:net";
 
 export interface AppServerProcessHandle {
   child: ChildProcessWithoutNullStreams;
+  spawned: Promise<void>;
   url: string;
   readyzUrl: string;
   startedByWorker: true;
+}
+
+function createAppServerProcessError(kind: "app_server_spawn_failed"): Error {
+  return new Error(kind);
 }
 
 export function assertLoopbackWebSocketUrl(value: string): string {
@@ -85,9 +90,18 @@ export function startLoopbackAppServer(port: number): AppServerProcessHandle {
   const child = spawn("codex", ["app-server", "--listen", url], {
     stdio: ["ignore", "pipe", "pipe"],
   }) as unknown as ChildProcessWithoutNullStreams;
+  const spawned = new Promise<void>((resolve, reject) => {
+    child.once("spawn", () => {
+      resolve();
+    });
+    child.once("error", () => {
+      reject(createAppServerProcessError("app_server_spawn_failed"));
+    });
+  });
 
   return {
     child,
+    spawned,
     url,
     readyzUrl: toReadyzUrl(url),
     startedByWorker: true,

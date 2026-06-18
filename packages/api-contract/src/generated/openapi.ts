@@ -89,7 +89,7 @@ export interface components {
         /** @enum {string} */
         LatestTurnStatus: "completed" | "interrupted" | "failed" | "unknown";
         /** @enum {string} */
-        TurnStatus: "completed" | "interrupted" | "failed" | "unknown";
+        TurnStatus: "in_progress" | "completed" | "interrupted" | "failed" | "unknown";
         /** @enum {string} */
         TimelineItemsView: "summary" | "full";
         /** @enum {string} */

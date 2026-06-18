@@ -13,10 +13,12 @@ import {
 class FakeSocket {
   public readonly sent: string[] = [];
   private readonly handlers: {
+    close: Array<() => void>;
     error: Array<() => void>;
     message: Array<(event: { data: unknown }) => void>;
     open: Array<() => void>;
   } = {
+    close: [],
     message: [],
     open: [],
     error: [],
@@ -29,7 +31,7 @@ class FakeSocket {
   close(): void {}
 
   addEventListener(
-    event: "message" | "open" | "error",
+    event: "message" | "open" | "error" | "close",
     handler: ((event: { data: unknown }) => void) | (() => void),
     _options?: AddEventListenerOptions,
   ): void {
@@ -49,6 +51,12 @@ class FakeSocket {
 
   emitError(): void {
     for (const handler of this.handlers.error) {
+      handler();
+    }
+  }
+
+  emitClose(): void {
+    for (const handler of this.handlers.close) {
       handler();
     }
   }
@@ -118,6 +126,38 @@ test("when response contains an upstream error, should reject with safe error ki
   );
 
   await assert.rejects(response, /app_server_protocol_error/);
+});
+
+test("when request stays pending past timeout, should reject with safe timeout kind", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket, { requestTimeoutMs: 10 });
+
+  const response = client.request("model/list", {});
+
+  await assert.rejects(response, /app_server_request_timeout/);
+  assert.equal((client as unknown as { pending: Map<number, unknown> }).pending.size, 0);
+});
+
+test("when socket closes after open, should reject pending requests with a safe local error", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket, { requestTimeoutMs: 1_000 });
+  const response = client.request("model/list", {});
+
+  socket.emitClose();
+
+  await assert.rejects(response, /app_server_connection_error/);
+  assert.equal((client as unknown as { pending: Map<number, unknown> }).pending.size, 0);
+});
+
+test("when socket errors after open, should reject pending requests with a safe local error", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket, { requestTimeoutMs: 1_000 });
+  const response = client.request("model/list", {});
+
+  socket.emitError();
+
+  await assert.rejects(response, /app_server_connection_error/);
+  assert.equal((client as unknown as { pending: Map<number, unknown> }).pending.size, 0);
 });
 
 test("when request send throws, should reject with safe error kind and clear pending entry", async () => {
@@ -196,6 +236,26 @@ test("when websocket connection fails, should reject with safe error kind", asyn
     socket.emitError();
 
     await assert.rejects(clientPromise, /app_server_connection_error/);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test("when websocket connection never opens, should time out with a safe local error", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const socket = new FakeSocket();
+
+  class TestWebSocket extends FakeSocket {
+    constructor() {
+      super();
+      return socket;
+    }
+  }
+
+  try {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
+
+    await assert.rejects(connectAppServerRpcClient("ws://127.0.0.1:4319", { connectTimeoutMs: 10 }), /app_server_connection_timeout/);
   } finally {
     globalThis.WebSocket = originalWebSocket;
   }

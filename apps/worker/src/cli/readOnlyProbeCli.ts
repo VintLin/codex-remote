@@ -11,6 +11,42 @@ import { connectAppServerRpcClient } from "../app-server/appServerRpcClient.ts";
 import { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient.ts";
 import { createReadOnlyProbeFailureSummary, runReadOnlyProbe } from "../probe/readOnlyProbe.ts";
 
+function classifyProbeCliFailure(error: unknown): {
+  checkName: string;
+  errorKind: string;
+  failureType: "assertion_failed" | "env_not_configured";
+} {
+  if (error instanceof Error && error.message === "app_server_url_not_loopback") {
+    return {
+      checkName: "app-server.url",
+      failureType: "env_not_configured",
+      errorKind: "app_server_url_not_loopback",
+    };
+  }
+
+  if (
+    error instanceof Error &&
+    [
+      "app_server_connection_error",
+      "app_server_connection_timeout",
+      "app_server_request_timeout",
+      "app_server_spawn_failed",
+    ].includes(error.message)
+  ) {
+    return {
+      checkName: "app-server.connect",
+      failureType: "assertion_failed",
+      errorKind: error.message,
+    };
+  }
+
+  return {
+    checkName: "app-server.connect",
+    failureType: "assertion_failed",
+    errorKind: "app_server_connect_failed",
+  };
+}
+
 async function main(): Promise<number> {
   const allowedProjectRoot = process.env.CODEX_REMOTE_ALLOWED_PROJECT_ROOT ?? process.cwd();
   const configuredUrl = process.env.CODEX_APP_SERVER_URL;
@@ -32,6 +68,7 @@ async function main(): Promise<number> {
 
     if (!configuredUrl) {
       appServer = startLoopbackAppServer(Number(new URL(appServerUrl).port));
+      await appServer.spawned;
       await waitForReadyz(appServer.readyzUrl);
     }
 
@@ -46,19 +83,11 @@ async function main(): Promise<number> {
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return summary.ok ? 0 : 1;
   } catch (error) {
+    const failure = classifyProbeCliFailure(error);
     const summary = createReadOnlyProbeFailureSummary({
-      checkName:
-        error instanceof Error && error.message === "app_server_url_not_loopback"
-          ? "app-server.url"
-          : "app-server.connect",
-      failureType:
-        error instanceof Error && error.message === "app_server_url_not_loopback"
-          ? "env_not_configured"
-          : "assertion_failed",
-      errorKind:
-        error instanceof Error && error.message === "app_server_url_not_loopback"
-          ? "app_server_url_not_loopback"
-          : "app_server_connect_failed",
+      checkName: failure.checkName,
+      failureType: failure.failureType,
+      errorKind: failure.errorKind,
       startedByWorker: Boolean(appServer),
     });
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

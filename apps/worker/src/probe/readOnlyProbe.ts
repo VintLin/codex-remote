@@ -35,8 +35,16 @@ function safeErrorKind(error: unknown): string {
   if (error instanceof PreconditionMissingError) {
     return "precondition_missing";
   }
-  if (error instanceof Error && error.message === "app_server_protocol_error") {
-    return "app_server_protocol_error";
+  if (
+    error instanceof Error &&
+    [
+      "app_server_connection_error",
+      "app_server_connection_timeout",
+      "app_server_protocol_error",
+      "app_server_request_timeout",
+    ].includes(error.message)
+  ) {
+    return error.message;
   }
 
   return "probe_check_failed";
