@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "pnpm check:generated && tsc --noEmit --pretty false",
+    "build": "pnpm check:generated && tsc --noEmit --pretty false && mkdir -p dist && touch dist/.build",
     "typecheck": "pnpm check:generated && tsc --noEmit --pretty false",
     "generate": "openapi-typescript openapi.yaml -o src/generated/openapi.ts",
     "check:generated": "node scripts/check-generated.mjs",

@@ -161,7 +161,7 @@ docs/
 apps/web -> packages/api-contract, packages/ui, packages/shared
 apps/control-plane -> packages/api-contract, packages/db, packages/shared
 apps/worker -> packages/api-contract, packages/codex-protocol, packages/shared
-packages/ui -> packages/api-contract, packages/shared
+packages/ui -> packages/shared
 packages/api-contract -> packages/shared
 packages/db -> packages/shared
 ```
@@ -170,6 +170,7 @@ packages/db -> packages/shared
 
 - `apps/web` 不依赖 `packages/codex-protocol`。
 - `apps/control-plane` 不依赖 `packages/codex-protocol`。
+- `packages/ui` 不依赖 `packages/api-contract`；产品语义映射留在 apps 内。
 - `packages/codex-protocol` 不依赖 Web / Control Plane / DB / UI。
 
 ## 7. 推荐根配置草案

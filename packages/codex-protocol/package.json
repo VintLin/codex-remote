@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit --pretty false",
+    "build": "tsc --noEmit --pretty false && mkdir -p dist && touch dist/.build",
     "typecheck": "tsc --noEmit --pretty false",
     "test": "node --test",
     "lint": "tsc --noEmit --pretty false"
