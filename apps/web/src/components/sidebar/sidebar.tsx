@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@codex-remote/ui";
 
-import type { Conversation, Device } from "@codex-remote/api-contract";
+import type { CodexConversation, Device } from "@codex-remote/api-contract";
 import type {
   ConversationNavigatorState,
   SidebarProjectGroup,
@@ -368,7 +368,7 @@ function ProjectRow(props: {
 }
 
 function ConversationRow(props: {
-  conversation: Conversation;
+  conversation: CodexConversation;
   nested?: boolean;
   onSelectConversation: (conversationId: string) => void;
   pressedItem: SidebarPressedItem;

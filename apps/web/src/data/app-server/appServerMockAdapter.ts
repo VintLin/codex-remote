@@ -1,4 +1,4 @@
-import type { BoardTask, Conversation, ConversationStatus, Device, SidebarProject } from "@codex-remote/api-contract";
+import type { BoardTask, CodexConversation, ConversationStatus, Device, RemoteProject } from "@codex-remote/api-contract";
 import type {
   RawCodexThread,
   RawSidebarProjectStateFixture,
@@ -33,8 +33,8 @@ export interface SearchRecent {
 
 export interface AppServerMockData {
   devices: Device[];
-  sidebarProjects: SidebarProject[];
-  conversations: Conversation[];
+  sidebarProjects: RemoteProject[];
+  conversations: CodexConversation[];
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
   tasks: BoardTask[];
@@ -68,7 +68,7 @@ export function createAppServerMockData({ list, reads, sidebarState }: CreateApp
       reads,
       sidebarState,
     }),
-  ).filter((conversation): conversation is Conversation => conversation !== null);
+  ).filter((conversation): conversation is CodexConversation => conversation !== null);
   const assistantThreads = conversations.map((conversation) => {
     const thread = getReadableThread(conversation.id, reads) ?? findListedThread(conversation.id, listedThreads);
     return {
@@ -133,12 +133,12 @@ function createConversation({
   reads,
   sidebarState,
 }: {
-  defaultProject: SidebarProject;
-  projectByPath: Map<string, SidebarProject>;
+  defaultProject: RemoteProject;
+  projectByPath: Map<string, RemoteProject>;
   thread: RawCodexThread;
   reads: RawThreadReadFixture;
   sidebarState: RawSidebarProjectStateFixture | undefined;
-}): Conversation | null {
+}): CodexConversation | null {
   const threadId = getThreadId(thread);
   const readableThread = getReadableThread(threadId, reads);
   const sourceThread = readableThread ?? thread;
@@ -178,7 +178,7 @@ function createSidebarProjects({
   reads: RawThreadReadFixture;
   sidebarState: RawSidebarProjectStateFixture | undefined;
   threads: RawCodexThread[];
-}): SidebarProject[] {
+}): RemoteProject[] {
   const threadByProjectPath = new Map<string, RawCodexThread>();
 
   for (const listedThread of threads) {
@@ -194,7 +194,7 @@ function createSidebarProjects({
     threadByProjectPath.set(projectPath, sourceThread);
   }
 
-  const projectsByPath = new Map<string, SidebarProject>();
+  const projectsByPath = new Map<string, RemoteProject>();
   const orderedProjectPaths = getOrderedProjectPaths({
     list,
     sidebarState,
@@ -376,7 +376,7 @@ function getLatestTimelineText(timeline: AssistantTimeline): string | undefined 
   return undefined;
 }
 
-function createTasks(projects: SidebarProject[], conversations: Conversation[]): BoardTask[] {
+function createTasks(projects: RemoteProject[], conversations: CodexConversation[]): BoardTask[] {
   return projects
     .map<BoardTask | null>((project) => {
       const projectConversations = conversations.filter((conversation) => conversation.projectId === project.id);
@@ -492,7 +492,7 @@ function isArchivedThread(thread: RawCodexThread): boolean {
   return thread["archived"] === true || thread["isArchived"] === true;
 }
 
-function createFallbackProject(projectCwd: string): SidebarProject {
+function createFallbackProject(projectCwd: string): RemoteProject {
   return {
     id: getProjectId(projectCwd),
     name: getProjectName(projectCwd),

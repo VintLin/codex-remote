@@ -14,6 +14,3 @@ export type ConversationInputItem = components["schemas"]["ConversationInputItem
 export type FollowUpInput = components["schemas"]["FollowUpInput"];
 export type CommandAccepted = components["schemas"]["CommandAccepted"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
-
-export type SidebarProject = RemoteProject;
-export type Conversation = CodexConversation;

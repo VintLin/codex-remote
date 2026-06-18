@@ -22,8 +22,6 @@ const schemaTypeNames = [
   "FollowUpInput",
   "CommandAccepted",
   "ErrorEnvelope",
-  "SidebarProject",
-  "Conversation",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 
@@ -74,10 +72,7 @@ test("when public api types are exported, source files should not redeclare sche
       );
       const typeAliasMatch = new RegExp(`^(export\\s+)?type\\s+(${schemaTypeNamePattern})\\s*=`).exec(trimmedLine);
       const definesGeneratedAlias = /components\["schemas"\]\["[A-Za-z]+"\]/.test(trimmedLine);
-      const definesCompatibilityAlias =
-        trimmedLine === "export type SidebarProject = RemoteProject;" ||
-        trimmedLine === "export type Conversation = CodexConversation;";
-      const definesLocalTypeAlias = Boolean(typeAliasMatch) && !definesGeneratedAlias && !definesCompatibilityAlias;
+      const definesLocalTypeAlias = Boolean(typeAliasMatch) && !definesGeneratedAlias;
 
       if (!definesInterface && !definesLocalTypeAlias) {
         return [];
@@ -91,6 +86,4 @@ test("when public api types are exported, source files should not redeclare sche
   assert.deepEqual(forbiddenDefinitions, []);
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
   assert.match(publicExportSource, /from "\.\/generated\/openapi"/);
-  assert.match(publicExportSource, /type SidebarProject = RemoteProject/);
-  assert.match(publicExportSource, /type Conversation = CodexConversation/);
 });

@@ -7,9 +7,9 @@ import {
   resolveConversationNavigator,
   toggleSidebarSection,
 } from "./sidebarModel.ts";
-import type { Conversation, SidebarProject } from "@codex-remote/api-contract";
+import type { CodexConversation, RemoteProject } from "@codex-remote/api-contract";
 
-const fixtureProjects: SidebarProject[] = [
+const fixtureProjects: RemoteProject[] = [
   {
     id: "project-a",
     name: "Pinned A",
@@ -39,7 +39,7 @@ const fixtureProjects: SidebarProject[] = [
   },
 ];
 
-const fixtureConversations: Conversation[] = [
+const fixtureConversations: CodexConversation[] = [
   {
     id: "conversation-a",
     title: "Project conversation A",

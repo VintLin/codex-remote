@@ -2,7 +2,7 @@ import listFixture from "./fixtures/demo.thread-list.json" with { type: "json" }
 import readFixture from "./fixtures/demo.thread-read.json" with { type: "json" };
 import sidebarStateFixture from "./fixtures/demo.sidebar-state.json" with { type: "json" };
 import { createAppServerMockData } from "./appServerMockAdapter.ts";
-import type { BoardTask, Device, DiffLine, SidebarProject, Conversation } from "@codex-remote/api-contract";
+import type { BoardTask, CodexConversation, Device, DiffLine, RemoteProject } from "@codex-remote/api-contract";
 import type { RawSidebarProjectStateFixture, RawThreadListFixture, RawThreadReadFixture } from "./rawAppServerSnapshotTypes.ts";
 
 const appServerMockData = createAppServerMockData({
@@ -12,8 +12,8 @@ const appServerMockData = createAppServerMockData({
 });
 
 export const devices: Device[] = appServerMockData.devices;
-export const sidebarProjects: SidebarProject[] = appServerMockData.sidebarProjects;
-export const conversations: Conversation[] = appServerMockData.conversations;
+export const sidebarProjects: RemoteProject[] = appServerMockData.sidebarProjects;
+export const conversations: CodexConversation[] = appServerMockData.conversations;
 export const searchRecents = appServerMockData.searchRecents;
 export const tasks: BoardTask[] = appServerMockData.tasks;
 export const assistantThreads = appServerMockData.assistantThreads;

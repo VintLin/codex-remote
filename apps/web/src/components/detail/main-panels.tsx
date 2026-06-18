@@ -3,7 +3,7 @@
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
 import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import type { AssistantThreadSnapshot } from "../../data/app-server/appServerMockAdapter";
-import type { Conversation, Device, DeviceConnectionStatus, TaskStatus } from "@codex-remote/api-contract";
+import type { CodexConversation, Device, DeviceConnectionStatus, TaskStatus } from "@codex-remote/api-contract";
 import { devices, searchRecents } from "../../data/app-server/mockData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
@@ -13,7 +13,7 @@ import { iconForDevice } from "../shared/icons";
 
 interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
-  conversation: Conversation | null;
+  conversation: CodexConversation | null;
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -377,7 +377,7 @@ export function SearchDialog({ onClose, onSelectConversation, open, selectedConv
   );
 }
 
-function StatusBadge(props: { status: DeviceConnectionStatus | Conversation["status"] | TaskStatus }) {
+function StatusBadge(props: { status: DeviceConnectionStatus | CodexConversation["status"] | TaskStatus }) {
   const statusClassName = getStatusClassName(props.status);
   const isDeviceStatus = props.status === "Connected" || props.status === "Not connected";
   if (isDeviceStatus) {

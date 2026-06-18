@@ -1,14 +1,14 @@
-import type { Conversation, SidebarProject } from "@codex-remote/api-contract";
+import type { CodexConversation, RemoteProject } from "@codex-remote/api-contract";
 
-export interface SidebarProjectGroup extends SidebarProject {
-  conversations: Conversation[];
+export interface SidebarProjectGroup extends RemoteProject {
+  conversations: CodexConversation[];
   expanded: boolean;
 }
 
 export interface SidebarModel {
   pinnedProjects: SidebarProjectGroup[];
   projects: SidebarProjectGroup[];
-  freeConversations: Conversation[];
+  freeConversations: CodexConversation[];
 }
 
 export interface ConversationNavigatorState {
@@ -21,9 +21,9 @@ export type SidebarSectionId = "pinned" | "projects" | "conversations";
 export type SidebarSectionState = Record<SidebarSectionId, boolean>;
 
 export interface CreateSidebarModelParams {
-  conversations: Conversation[];
+  conversations: CodexConversation[];
   expandedProjectIds: ReadonlySet<string>;
-  projects: SidebarProject[];
+  projects: RemoteProject[];
 }
 
 export function createDefaultSidebarSectionState(): SidebarSectionState {

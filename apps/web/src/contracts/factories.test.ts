@@ -29,6 +29,10 @@ test("when scanning web source files, should keep business entities out of local
   const source = readFileSync(mockDataSource[0]!, "utf8");
   const definitionLines = source
     .split("\n")
-    .filter((line) => /^(export\s+)?interface\s+(Device|SidebarProject|Conversation|BoardTask)\s*\{/.test(line.trim()));
+    .filter((line) =>
+      /^(export\s+)?(interface|type)\s+(Device|RemoteProject|CodexConversation|BoardTask|DiffLine)\b/.test(
+        line.trim(),
+      ),
+    );
   assert.deepEqual(definitionLines, []);
 });
