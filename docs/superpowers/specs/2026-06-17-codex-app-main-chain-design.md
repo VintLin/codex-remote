@@ -10,12 +10,13 @@ The product goal is that Codex Remote operations feel close to Codex App operati
 
 ## Confirmed Decisions
 
-- First slice: Worker probe and connection layer.
+- First slice: main-chain API contract slice, then read-only Worker probe skeleton.
 - app-server transport: prefer `stdio` or Unix socket when available; loopback WebSocket is the product spike path only.
 - Worker may start app-server with `codex app-server --listen ws://127.0.0.1:<port>` for the spike, but the Worker-facing HTTP API and app-server transport must both be protected as described in the Security Requirements section.
 - Scope: single-device end-to-end first, with multi-device fields and event envelopes reserved.
 - Runtime shape: Web uses a Control Plane-shaped contract; implementation may initially route to a local Worker adapter instead of a full Control Plane server.
 - Approach: contract-driven, with Worker probe validating the real app-server behavior before broad UI work.
+- Current baseline: `packages/api-contract` and `packages/codex-protocol` already exist; the next step extends the API contract for the read-only main chain before creating `apps/worker`.
 
 ## Architecture Boundary
 
@@ -44,7 +45,7 @@ Rules:
 
 ## Security Requirements
 
-The first implementation is single-device, but it still exposes actions that can start Codex turns and may lead to shell, file, or process work through app-server. Localhost is not an authorization boundary. Worker security is therefore part of Phase 1, not a later product hardening task.
+The first implementation is single-device, but it still exposes actions that can start Codex turns and may lead to shell, file, or process work through app-server. Localhost is not an authorization boundary. Worker security is therefore part of the first Worker probe phase, not a later product hardening task.
 
 ### Worker HTTP API Authentication
 
@@ -79,7 +80,7 @@ Rules:
 - app-server listener is always `127.0.0.1`; never `0.0.0.0`, LAN, or public.
 - Worker must support a transport abstraction so `stdio` or Unix socket can replace WebSocket if loopback WebSocket proves unstable.
 - If Worker ever starts app-server on a non-loopback listener, it must configure app-server `--ws-auth` and fail closed when auth cannot be configured.
-- The first Phase 1 implementation should prefer loopback WebSocket plus Worker API token, and record the fallback path to `stdio`/Unix socket in probe diagnostics.
+- The first Worker probe implementation should prefer loopback WebSocket plus Worker API token, and record the fallback path to `stdio`/Unix socket in probe diagnostics.
 
 ### Project Allowlist
 
@@ -87,7 +88,7 @@ Worker must enforce project access before sending `cwd`, file, shell, or thread 
 
 Rules:
 
-- Phase 1 can use a single configured allowed project root.
+- The first Worker probe can use a single configured allowed project root.
 - `thread/list` with `cwd`, `thread/start`, `thread/resume`, `turn/start`, `turn/steer`, and approval responses must be checked against the allowlist when they include or imply a project path.
 - Paths in approval requests, sandbox roots, file changes, and command cwd must be normalized before comparison.
 - Operations outside the allowlist are rejected by Worker before app-server is called.
@@ -123,7 +124,7 @@ Diagnostic summaries may include operation names, timings, status codes, error k
 
 ### `packages/codex-protocol`
 
-Stores the generated app-server protocol artifacts and generation metadata.
+Stores the generated app-server protocol artifacts and generation metadata. This package already exists and is a foundation for the Worker slice, not part of the next implementation step.
 
 Responsibilities:
 
@@ -134,9 +135,9 @@ Responsibilities:
 
 ### `packages/api-contract`
 
-Defines Codex Remote's stable contract.
+Defines Codex Remote's stable contract. The current package already has the OpenAPI generation flow and the early list/follow-up entities; the next contract slice extends that same schema instead of adding hand-written types.
 
-Initial domain types:
+Target domain types:
 
 - `Device`
 - `RemoteProject`
@@ -153,6 +154,18 @@ Initial domain types:
 - `InterruptTurnInput`
 
 Every event includes `deviceId`. Conversation events include `projectId`, `conversationId`, and `turnId` when available.
+
+The next contract slice should only add the read-only Worker probe surface:
+
+- `WorkerHealth`
+- `WorkerCapabilities`
+- `ConversationTimeline`
+- `ConversationTimelinePage`
+- `ConversationEvent`
+- `WorkerProbeSummary`
+- `ProbeCheckResult`
+
+Send, approval response, steer, and interrupt inputs remain specified below but should wait for the send/stream implementation phase.
 
 ### `apps/worker`
 
@@ -330,12 +343,43 @@ Rules:
 
 ## First Implementation Slice
 
-### Phase 1: Protocol, Security, and Worker Probe
+### Completed Foundation
+
+Already delivered:
+
+- `packages/api-contract` OpenAPI source of truth, generated TypeScript, generated-output check, and package exports.
+- `packages/codex-protocol` generated app-server artifacts, JSON schema, and generation metadata.
+- Web imports stable API contract types and does not import app-server protocol types.
+- Boundary tests prevent Web, Control Plane, UI, and API contract packages from crossing the current dependency rules.
+
+These items should not be rebuilt in the Worker slice.
+
+### Phase 0: Main-Chain API Contract Slice
 
 Deliver:
 
-- `packages/codex-protocol` with generated protocol artifacts and version metadata.
-- `apps/worker` skeleton.
+- Extend `packages/api-contract/openapi.yaml` with only the read-only main-chain schemas:
+  - `WorkerHealth`
+  - `WorkerCapabilities`
+  - `ConversationTimeline`
+  - `ConversationTimelinePage`
+  - `ConversationEvent`
+  - `WorkerProbeSummary`
+  - `ProbeCheckResult`
+- Export those generated types from `packages/api-contract/src/index.ts`.
+- Keep send/approval/steer/interrupt inputs out of this first contract patch unless required by a read-only probe result.
+
+Completion evidence:
+
+- A schema rename still forces regeneration or TypeScript failures.
+- `pnpm --filter @codex-remote/api-contract test` passes.
+- Boundary tests still prevent Web from importing `@codex-remote/codex-protocol`.
+
+### Phase 1: Read-Only Worker Probe Skeleton
+
+Deliver:
+
+- `apps/worker` package skeleton.
 - app-server startup on `ws://127.0.0.1:<port>`.
 - `/readyz` probe.
 - WebSocket JSON-RPC client.
@@ -346,20 +390,7 @@ Deliver:
 - `thread/turns/list(itemsView: "full")`.
 - Worker HTTP token authentication and Origin checks.
 - project allowlist enforcement for app-server-backed operations.
-- Diagnostic JSON summary.
-
-Completion evidence:
-
-- A local probe command can start or connect to app-server and report each step as pass/fail.
-- Failures include operation name, retryability, and sanitized details.
-- The read-only probe passes without model usage.
-- The full probe is opt-in and covers the technical specification's Worker probe matrix.
-
-### Phase 2: API Contract and Read-Only Web Data
-
-Deliver:
-
-- `packages/api-contract` stable domain types.
+- Diagnostic JSON summary using `WorkerProbeSummary`.
 - Worker local API:
   - `GET /health`
   - `GET /projects`
@@ -372,10 +403,14 @@ Deliver:
 
 Completion evidence:
 
+- A local read-only probe command can start or connect to app-server and report each step as pass/fail.
+- Failures include operation name, retryability, and sanitized details.
+- The read-only probe passes without model usage.
 - Existing fixture UI remains available.
 - Worker source renders real app-server data through the same view model boundary.
+- The full probe remains opt-in and is deferred to the send/stream phase.
 
-### Phase 3: Send, Stream, Interrupt
+### Phase 2: Send, Stream, Interrupt
 
 Deliver:
 
@@ -404,7 +439,7 @@ Completion evidence:
 - Web can respond to command and file-change approvals.
 - Web can interrupt an active turn.
 
-### Phase 4: Codex App Parity Shell
+### Phase 3: Codex App Parity Shell
 
 Deliver a limited shell for Codex-like operations without implementing every backend action:
 
@@ -738,7 +773,7 @@ Cover:
 The local Worker API is a development adapter for the future Control Plane path. The implementation must keep the transport replaceable:
 
 ```text
-Phase 1/2 local runtime:
+Local Worker runtime:
   Web -> local Worker API -> local app-server
 
 Future multi-device runtime:
