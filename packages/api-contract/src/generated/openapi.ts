@@ -80,6 +80,105 @@ export interface components {
         TaskStatus: "in_progress" | "waiting" | "done";
         /** @enum {string} */
         DiffKind: "context" | "add" | "remove";
+        /** @enum {string} */
+        AppServerTransport: "loopbackWebSocket" | "stdio" | "unixSocket";
+        /** @enum {string} */
+        WorkerConnectionStatus: "connected" | "disconnected" | "degraded" | "unknown";
+        /** @enum {string} */
+        ConversationRuntimeStatus: "not_loaded" | "idle" | "running" | "waiting_approval" | "waiting_input" | "unknown";
+        /** @enum {string} */
+        LatestTurnStatus: "completed" | "interrupted" | "failed" | "unknown";
+        /** @enum {string} */
+        TurnStatus: "completed" | "interrupted" | "failed" | "unknown";
+        /** @enum {string} */
+        TimelineItemsView: "summary" | "full";
+        /** @enum {string} */
+        TimelineSortDirection: "asc" | "desc";
+        /** @enum {string} */
+        ProbeFailureType: "skipped" | "precondition_missing" | "env_not_configured" | "assertion_failed" | "opt_in_required" | "approval_unavailable";
+        /** @enum {string} */
+        ProbeMode: "readOnly" | "full";
+        WorkerHealth: {
+            deviceId: string;
+            status: components["schemas"]["WorkerConnectionStatus"];
+            checkedAt: string;
+            codexVersion: string | null;
+            appServer: {
+                transport: components["schemas"]["AppServerTransport"];
+                readyz: boolean;
+            };
+        };
+        WorkerCapabilities: {
+            deviceId: string;
+            canReadProjects: boolean;
+            canReadConversations: boolean;
+            canReadTimeline: boolean;
+            canRunReadOnlyProbe: boolean;
+            appServerTransport: components["schemas"]["AppServerTransport"];
+            supportedSourceKinds: string[];
+        };
+        ConversationTimelineTurn: {
+            id: string;
+            status: components["schemas"]["TurnStatus"];
+            startedAt: number | null;
+            completedAt: number | null;
+            durationMs: number | null;
+        };
+        ConversationTimeline: {
+            deviceId: string;
+            conversationId: string;
+            projectId?: string;
+            readStartedAt: string;
+            readCompletedAt: string;
+            snapshotRevision: string;
+            runtimeStatus: components["schemas"]["ConversationRuntimeStatus"];
+            latestTurnStatus: components["schemas"]["LatestTurnStatus"];
+            turns: components["schemas"]["ConversationTimelineTurn"][];
+        };
+        ConversationTimelinePage: {
+            deviceId: string;
+            conversationId: string;
+            itemsView: components["schemas"]["TimelineItemsView"];
+            sortDirection: components["schemas"]["TimelineSortDirection"];
+            nextCursor: string | null;
+            backwardsCursor: string | null;
+            turns: components["schemas"]["ConversationTimelineTurn"][];
+        };
+        ConversationEvent: {
+            eventId: string;
+            deviceId: string;
+            timestamp: string;
+            upstreamMethod: string;
+            connectionId: string;
+            sequence: number;
+            conversationId: string;
+            projectId?: string;
+            turnId?: string;
+        };
+        ProbeCheckResult: {
+            name: string;
+            ok: boolean;
+            durationMs: number;
+            failureType?: components["schemas"]["ProbeFailureType"];
+            errorKind?: string;
+            diagnosticId?: string;
+            skippedReason?: string;
+        };
+        WorkerProbeSummary: {
+            schemaVersion: number;
+            startedAt: string;
+            completedAt: string;
+            ok: boolean;
+            mode: components["schemas"]["ProbeMode"];
+            deviceId: string;
+            codexVersion: string | null;
+            appServer: {
+                transport: components["schemas"]["AppServerTransport"];
+                startedByWorker: boolean;
+                readyz: boolean;
+            };
+            checks: components["schemas"]["ProbeCheckResult"][];
+        };
         Device: {
             id: string;
             icon: string;

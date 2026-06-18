@@ -107,6 +107,316 @@ components:
         - context
         - add
         - remove
+    AppServerTransport:
+      type: string
+      enum:
+        - loopbackWebSocket
+        - stdio
+        - unixSocket
+    WorkerConnectionStatus:
+      type: string
+      enum:
+        - connected
+        - disconnected
+        - degraded
+        - unknown
+    ConversationRuntimeStatus:
+      type: string
+      enum:
+        - not_loaded
+        - idle
+        - running
+        - waiting_approval
+        - waiting_input
+        - unknown
+    LatestTurnStatus:
+      type: string
+      enum:
+        - completed
+        - interrupted
+        - failed
+        - unknown
+    TurnStatus:
+      type: string
+      enum:
+        - completed
+        - interrupted
+        - failed
+        - unknown
+    TimelineItemsView:
+      type: string
+      enum:
+        - summary
+        - full
+    TimelineSortDirection:
+      type: string
+      enum:
+        - asc
+        - desc
+    ProbeFailureType:
+      type: string
+      enum:
+        - skipped
+        - precondition_missing
+        - env_not_configured
+        - assertion_failed
+        - opt_in_required
+        - approval_unavailable
+    ProbeMode:
+      type: string
+      enum:
+        - readOnly
+        - full
+    WorkerHealth:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - status
+        - checkedAt
+        - codexVersion
+        - appServer
+      properties:
+        deviceId:
+          type: string
+        status:
+          $ref: "#/components/schemas/WorkerConnectionStatus"
+        checkedAt:
+          type: string
+        codexVersion:
+          type:
+            - string
+            - "null"
+        appServer:
+          type: object
+          additionalProperties: false
+          required:
+            - transport
+            - readyz
+          properties:
+            transport:
+              $ref: "#/components/schemas/AppServerTransport"
+            readyz:
+              type: boolean
+    WorkerCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - canReadProjects
+        - canReadConversations
+        - canReadTimeline
+        - canRunReadOnlyProbe
+        - appServerTransport
+        - supportedSourceKinds
+      properties:
+        deviceId:
+          type: string
+        canReadProjects:
+          type: boolean
+        canReadConversations:
+          type: boolean
+        canReadTimeline:
+          type: boolean
+        canRunReadOnlyProbe:
+          type: boolean
+        appServerTransport:
+          $ref: "#/components/schemas/AppServerTransport"
+        supportedSourceKinds:
+          type: array
+          items:
+            type: string
+    ConversationTimelineTurn:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - startedAt
+        - completedAt
+        - durationMs
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/TurnStatus"
+        startedAt:
+          type:
+            - number
+            - "null"
+        completedAt:
+          type:
+            - number
+            - "null"
+        durationMs:
+          type:
+            - number
+            - "null"
+    ConversationTimeline:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - conversationId
+        - readStartedAt
+        - readCompletedAt
+        - snapshotRevision
+        - runtimeStatus
+        - latestTurnStatus
+        - turns
+      properties:
+        deviceId:
+          type: string
+        conversationId:
+          type: string
+        projectId:
+          type: string
+        readStartedAt:
+          type: string
+        readCompletedAt:
+          type: string
+        snapshotRevision:
+          type: string
+        runtimeStatus:
+          $ref: "#/components/schemas/ConversationRuntimeStatus"
+        latestTurnStatus:
+          $ref: "#/components/schemas/LatestTurnStatus"
+        turns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationTimelineTurn"
+    ConversationTimelinePage:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - conversationId
+        - itemsView
+        - sortDirection
+        - nextCursor
+        - backwardsCursor
+        - turns
+      properties:
+        deviceId:
+          type: string
+        conversationId:
+          type: string
+        itemsView:
+          $ref: "#/components/schemas/TimelineItemsView"
+        sortDirection:
+          $ref: "#/components/schemas/TimelineSortDirection"
+        nextCursor:
+          type:
+            - string
+            - "null"
+        backwardsCursor:
+          type:
+            - string
+            - "null"
+        turns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationTimelineTurn"
+    ConversationEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - deviceId
+        - timestamp
+        - upstreamMethod
+        - connectionId
+        - sequence
+        - conversationId
+      properties:
+        eventId:
+          type: string
+        deviceId:
+          type: string
+        timestamp:
+          type: string
+        upstreamMethod:
+          type: string
+        connectionId:
+          type: string
+        sequence:
+          type: number
+        conversationId:
+          type: string
+        projectId:
+          type: string
+        turnId:
+          type: string
+    ProbeCheckResult:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - ok
+        - durationMs
+      properties:
+        name:
+          type: string
+        ok:
+          type: boolean
+        durationMs:
+          type: number
+        failureType:
+          $ref: "#/components/schemas/ProbeFailureType"
+        errorKind:
+          type: string
+        diagnosticId:
+          type: string
+        skippedReason:
+          type: string
+    WorkerProbeSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - schemaVersion
+        - startedAt
+        - completedAt
+        - ok
+        - mode
+        - deviceId
+        - codexVersion
+        - appServer
+        - checks
+      properties:
+        schemaVersion:
+          type: number
+        startedAt:
+          type: string
+        completedAt:
+          type: string
+        ok:
+          type: boolean
+        mode:
+          $ref: "#/components/schemas/ProbeMode"
+        deviceId:
+          type: string
+        codexVersion:
+          type:
+            - string
+            - "null"
+        appServer:
+          type: object
+          additionalProperties: false
+          required:
+            - transport
+            - startedByWorker
+            - readyz
+          properties:
+            transport:
+              $ref: "#/components/schemas/AppServerTransport"
+            startedByWorker:
+              type: boolean
+            readyz:
+              type: boolean
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProbeCheckResult"
     Device:
       type: object
       additionalProperties: false
