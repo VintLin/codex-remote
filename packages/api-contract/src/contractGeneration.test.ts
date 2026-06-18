@@ -22,6 +22,23 @@ const schemaTypeNames = [
   "FollowUpInput",
   "CommandAccepted",
   "ErrorEnvelope",
+  "AppServerTransport",
+  "WorkerConnectionStatus",
+  "WorkerHealth",
+  "WorkerCapabilities",
+  "ConversationRuntimeStatus",
+  "LatestTurnStatus",
+  "TurnStatus",
+  "TimelineItemsView",
+  "TimelineSortDirection",
+  "ConversationTimelineTurn",
+  "ConversationTimeline",
+  "ConversationTimelinePage",
+  "ConversationEvent",
+  "ProbeFailureType",
+  "ProbeCheckResult",
+  "ProbeMode",
+  "WorkerProbeSummary",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 
@@ -86,4 +103,39 @@ test("when public api types are exported, source files should not redeclare sche
   assert.deepEqual(forbiddenDefinitions, []);
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
   assert.match(publicExportSource, /from "\.\/generated\/openapi"/);
+});
+
+test("when read-only main-chain schemas are maintained, openapi should define the field floor", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of [
+    "WorkerHealth:",
+    "WorkerCapabilities:",
+    "ConversationTimeline:",
+    "ConversationTimelinePage:",
+    "ConversationEvent:",
+    "WorkerProbeSummary:",
+    "ProbeCheckResult:",
+  ]) {
+    assert.match(source, new RegExp(`^    ${schemaName}`, "m"));
+  }
+
+  for (const fieldName of [
+    "deviceId:",
+    "conversationId:",
+    "readStartedAt:",
+    "readCompletedAt:",
+    "snapshotRevision:",
+    "runtimeStatus:",
+    "latestTurnStatus:",
+    "nextCursor:",
+    "backwardsCursor:",
+    "eventId:",
+    "upstreamMethod:",
+    "connectionId:",
+    "sequence:",
+    "checks:",
+  ]) {
+    assert.match(source, new RegExp(`^        ${fieldName}`, "m"));
+  }
 });
