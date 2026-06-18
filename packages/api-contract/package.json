@@ -7,12 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit --pretty false",
-    "typecheck": "tsc --noEmit --pretty false",
-    "test": "node --test",
-    "lint": "tsc --noEmit --pretty false"
+    "build": "pnpm check:generated && tsc --noEmit --pretty false",
+    "typecheck": "pnpm check:generated && tsc --noEmit --pretty false",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/openapi.ts",
+    "check:generated": "node scripts/check-generated.mjs",
+    "test": "pnpm check:generated && node --test",
+    "lint": "pnpm check:generated && tsc --noEmit --pretty false"
   },
   "devDependencies": {
+    "openapi-typescript": "^7.10.1",
     "typescript": "^5.8.3"
   }
 }

@@ -1,0 +1,290 @@
+openapi: 3.1.0
+info:
+  title: Codex Remote API Contract
+  version: 0.1.0
+  description: Control Plane-shaped contract shared by Web, Worker, Control Plane, and future iOS clients.
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+paths:
+  /devices:
+    get:
+      operationId: listDevices
+      responses:
+        "200":
+          description: Devices visible to the current actor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+  /projects:
+    get:
+      operationId: listRemoteProjects
+      parameters:
+        - name: deviceId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Remote projects visible to the current actor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemoteProject"
+  /conversations:
+    get:
+      operationId: listCodexConversations
+      parameters:
+        - name: deviceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Codex conversations visible to the current actor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CodexConversation"
+  /conversations/{conversationId}/follow-up:
+    post:
+      operationId: followUpConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpInput"
+      responses:
+        "202":
+          description: Follow-up accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+components:
+  schemas:
+    DeviceConnectionStatus:
+      type: string
+      enum:
+        - Connected
+        - Not connected
+    ConversationStatus:
+      type: string
+      enum:
+        - running
+        - waiting
+        - done
+        - failed
+        - unknown
+    TaskStatus:
+      type: string
+      enum:
+        - in_progress
+        - waiting
+        - done
+    DiffKind:
+      type: string
+      enum:
+        - context
+        - add
+        - remove
+    Device:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - icon
+        - name
+        - status
+        - ip
+        - lastOnlineAt
+        - currentProject
+        - model
+      properties:
+        id:
+          type: string
+        icon:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/DeviceConnectionStatus"
+        ip:
+          type: string
+        lastOnlineAt:
+          type: string
+        currentProject:
+          type: string
+        model:
+          type: string
+    RemoteProject:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - deviceId
+        - path
+        - branch
+        - hasChanges
+        - pinned
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        deviceId:
+          type: string
+        path:
+          type: string
+        branch:
+          type: string
+        hasChanges:
+          type: boolean
+        pinned:
+          type: boolean
+        expanded:
+          type: boolean
+    CodexConversation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - deviceId
+        - projectName
+        - status
+        - updatedAt
+        - summary
+        - sandbox
+        - approval
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        projectName:
+          type: string
+        status:
+          $ref: "#/components/schemas/ConversationStatus"
+        updatedAt:
+          type: string
+        summary:
+          type: string
+        sandbox:
+          type: string
+        approval:
+          type: string
+        pinned:
+          type: boolean
+    BoardTask:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - status
+        - linkedConversationIds
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        linkedConversationIds:
+          type: array
+          items:
+            type: string
+    DiffLine:
+      type: object
+      additionalProperties: false
+      required:
+        - line
+        - kind
+        - text
+      properties:
+        line:
+          type: number
+        kind:
+          $ref: "#/components/schemas/DiffKind"
+        text:
+          type: string
+    ConversationInputItem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          enum:
+            - text
+        text:
+          type: string
+    FollowUpInput:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - input
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        input:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationInputItem"
+    CommandAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - commandId
+        - acceptedAt
+      properties:
+        commandId:
+          type: string
+        acceptedAt:
+          type: string
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        requestId:
+          type: string
