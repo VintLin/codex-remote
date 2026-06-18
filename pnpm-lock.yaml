@@ -76,6 +76,22 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  apps/worker:
+    dependencies:
+      '@codex-remote/api-contract':
+        specifier: workspace:*
+        version: link:../../packages/api-contract
+      '@codex-remote/codex-protocol':
+        specifier: workspace:*
+        version: link:../../packages/codex-protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   packages/api-contract:
     devDependencies:
       '@types/node':
