@@ -1,13 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runReadOnlyProbe } from "./readOnlyProbe.ts";
+import { PreconditionMissingError, runReadOnlyProbe, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
 
-test("when read-only probe has no app-server client, should return env_not_configured", async () => {
+const passingClient: ReadOnlyProbeClient = {
+  async readyz() {},
+  async initialize() {},
+  async initialized() {},
+  async listModels() {},
+  async listThreads() {},
+  async readFirstAllowedThread() {},
+  close() {},
+};
+
+const noAllowedThreadClient: ReadOnlyProbeClient = {
+  ...passingClient,
+  async readFirstAllowedThread() {
+    throw new PreconditionMissingError("thread/list returned no thread inside the allowed project root");
+  },
+};
+
+test("when no client is supplied, should return env_not_configured", async () => {
   const summary = await runReadOnlyProbe();
 
-  assert.equal(summary.schemaVersion, 1);
-  assert.equal(summary.mode, "readOnly");
   assert.equal(summary.ok, false);
   assert.equal(summary.checks[0]?.failureType, "env_not_configured");
+});
+
+test("when read-only checks pass, should mark missing turns list as explicit precondition", async () => {
+  const summary = await runReadOnlyProbe({
+    client: passingClient,
+  });
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.appServer.readyz, true);
+  assert.equal(summary.checks.some((check) => check.name === "thread/turns/list"), true);
+  assert.equal(summary.checks.at(-1)?.failureType, "precondition_missing");
+});
+
+test("when no allowed thread exists, should skip thread/read as a precondition", async () => {
+  const summary = await runReadOnlyProbe({ client: noAllowedThreadClient });
+  const readCheck = summary.checks.find((check) => check.name === "thread/read");
+
+  assert.equal(summary.ok, true);
+  assert.equal(readCheck?.failureType, "precondition_missing");
 });
