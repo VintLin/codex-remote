@@ -1,10 +1,12 @@
 # Web Source Directory Reorganization Implementation Plan
 
+> Superseded note (2026-06-18): the Web raw app-server fixture adapter described below has been removed by the contract source-of-truth work. Web demo data should stay API-contract-shaped; future raw app-server projection belongs in `apps/worker` through `@codex-remote/codex-protocol`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reorganize `apps/web/src` by responsibility while avoiding hardcoded machine paths and keeping existing Web behavior unchanged.
 
-**Architecture:** Keep Web as one app package, but separate pure domain projection, demo data sources, UI components, and source-contract tests. Do not introduce Worker or Control Plane implementation in this refactor.
+**Architecture:** Keep Web as one app package, but separate pure UI/domain presentation, API-shaped demo data sources, UI components, and source-contract tests. Do not introduce Worker or Control Plane implementation in this refactor.
 
 **Tech Stack:** TypeScript, Next.js, Node built-in test runner, pnpm, Turborepo.
 
@@ -24,11 +26,10 @@
 
 **Files:**
 - Move pure logic into `apps/web/src/domain/*`
-- Move demo data and fixture adapter into `apps/web/src/data/app-server/*`
-- Keep fixture JSON under `apps/web/src/data/app-server/fixtures/*`
+- Move API-shaped demo data into `apps/web/src/data/app-server/*`
 
-- [ ] Move `appLayout`, `sidebarModel`, `assistantTimeline`, and app-server snapshot types into domain folders.
-- [ ] Move `appServerMockAdapter`, `mockData`, and app-server fixture JSON into data folders.
+- [ ] Move `appLayout`, `sidebarModel`, and `assistantTimeline` into domain folders.
+- [ ] Move `mockData` into data folders without Web-owned raw app-server fixture JSON.
 - [ ] Update imports without changing behavior.
 
 ### Task 3: Move Component Files by UI Responsibility

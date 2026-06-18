@@ -9,7 +9,7 @@ export interface AssistantThreadSnapshot {
   id: string;
   title: string;
   deviceId: string;
-  projectId: string;
+  projectId?: string;
   projectName: string;
   status: ConversationStatus;
   updatedAt: string;

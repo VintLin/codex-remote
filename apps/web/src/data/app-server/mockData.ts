@@ -1,5 +1,8 @@
 import type { BoardTask, CodexConversation, Device, DiffLine, RemoteProject } from "@codex-remote/api-contract";
-import { classifyLinkTarget, type AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline";
+import {
+  classifyLinkTarget,
+  type AssistantThreadSnapshot,
+} from "../../domain/assistant/assistantTimeline.ts";
 
 export interface SearchRecent {
   conversationId: string;
@@ -93,7 +96,7 @@ export const searchRecents: SearchRecent[] = conversations.map((conversation) =>
 export const tasks: BoardTask[] = [
   {
     id: "task-worker-probe",
-    title: "codex-remote app-server snapshot",
+    title: "codex-remote worker probe",
     status: "in_progress",
     linkedConversationIds: ["demo-thread-running", "demo-thread-review"],
   },
@@ -106,19 +109,11 @@ export const tasks: BoardTask[] = [
 ];
 
 export const assistantThreads: AssistantThreadSnapshot[] = [
-  {
-    id: "demo-thread-running",
-    title: "Worker probe spike",
-    deviceId: "macbook",
-    projectId: "project-codex-remote",
-    projectName: "codex-remote",
-    status: "running",
-    updatedAt: "10 分钟前",
+  createAssistantThread("demo-thread-running", {
     forkedFromId: null,
     parentThreadId: null,
     loadState: "loaded",
     timeline: {
-      threadId: "demo-thread-running",
       turns: [
         {
           id: "turn-running-1",
@@ -133,7 +128,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
               turnId: "turn-running-1",
               sourceItemIds: ["user-running-1"],
               role: "user",
-              text: "Create a read-only Worker probe for app-server.",
+              text: "Create a read-only Worker probe.",
               links: [],
             },
             {
@@ -142,7 +137,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
               turnId: "turn-running-1",
               sourceItemIds: ["agent-running-1"],
               role: "assistant",
-              text: "I will verify initialize, model/list, thread/list, and thread/read first.",
+              text: "I will verify the first read-only calls before adding write actions.",
               links: [],
             },
             {
@@ -166,20 +161,12 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
         },
       ],
     },
-  },
-  {
-    id: "demo-thread-review",
-    title: "Status model review",
-    deviceId: "macbook",
-    projectId: "project-codex-remote",
-    projectName: "codex-remote",
-    status: "done",
-    updatedAt: "2 小时前",
+  }),
+  createAssistantThread("demo-thread-review", {
     forkedFromId: null,
     parentThreadId: null,
     loadState: "loaded",
     timeline: {
-      threadId: "demo-thread-review",
       turns: [
         {
           id: "turn-review-1",
@@ -239,20 +226,12 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
         },
       ],
     },
-  },
-  {
-    id: "demo-thread-projectless",
-    title: "Loose planning note",
-    deviceId: "macbook",
-    projectId: "project-codex-remote",
-    projectName: "对话",
-    status: "done",
-    updatedAt: "3 小时前",
+  }),
+  createAssistantThread("demo-thread-projectless", {
     forkedFromId: null,
     parentThreadId: null,
     loadState: "empty",
     timeline: {
-      threadId: "demo-thread-projectless",
       turns: [
         {
           id: "turn-projectless-1",
@@ -274,7 +253,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
         },
       ],
     },
-  },
+  }),
 ];
 
 export const diffLines: DiffLine[] = [
@@ -284,3 +263,32 @@ export const diffLines: DiffLine[] = [
   { line: 20, kind: "add", text: "  lastHeartbeatAt: string;" },
   { line: 21, kind: "context", text: "  workerVersion: string;" },
 ];
+
+function createAssistantThread(
+  conversationId: string,
+  details: Pick<AssistantThreadSnapshot, "forkedFromId" | "loadState" | "parentThreadId"> & {
+    timeline: { turns: AssistantThreadSnapshot["timeline"]["turns"] };
+  },
+): AssistantThreadSnapshot {
+  const conversation = conversations.find((item) => item.id === conversationId);
+  if (!conversation) {
+    throw new Error(`Missing demo conversation for assistant thread: ${conversationId}`);
+  }
+
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    deviceId: conversation.deviceId,
+    ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+    projectName: conversation.projectName,
+    status: conversation.status,
+    updatedAt: conversation.updatedAt,
+    forkedFromId: details.forkedFromId,
+    parentThreadId: details.parentThreadId,
+    loadState: details.loadState,
+    timeline: {
+      threadId: conversation.id,
+      turns: details.timeline.turns,
+    },
+  };
+}
