@@ -28,6 +28,8 @@ interface SocketLike {
   addEventListener(event: "error", handler: () => void, options?: AddEventListenerOptions): void;
 }
 
+type ReadOnlyAppServerMethod = "initialize" | "model/list" | "thread/list" | "thread/read";
+
 function createRpcClientError(
   kind:
     | "app_server_connection_error"
@@ -78,7 +80,7 @@ export class AppServerRpcClient {
     });
   }
 
-  async request<M extends ClientRequest["method"]>(
+  async request<M extends ReadOnlyAppServerMethod>(
     method: M,
     params: Extract<ClientRequest, { method: M }>["params"],
   ): Promise<unknown> {
@@ -88,12 +90,21 @@ export class AppServerRpcClient {
     const request = { id, method, params } as Extract<ClientRequest, { method: M }>;
     return await new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.socket.send(JSON.stringify(request));
+      try {
+        this.socket.send(JSON.stringify(request));
+      } catch {
+        this.pending.delete(id);
+        reject(createRpcClientError("app_server_connection_error"));
+      }
     });
   }
 
   notify(notification: ClientNotification): void {
-    this.socket.send(JSON.stringify(notification));
+    try {
+      this.socket.send(JSON.stringify(notification));
+    } catch {
+      throw createRpcClientError("app_server_connection_error");
+    }
   }
 
   close(): void {

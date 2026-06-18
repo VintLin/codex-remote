@@ -67,6 +67,12 @@ class SyncResponseSocket extends FakeSocket {
   }
 }
 
+class ThrowingSocket extends FakeSocket {
+  override send(_data: string): void {
+    throw new Error("raw socket failure");
+  }
+}
+
 test("when sending a request, should resolve matching response id", async () => {
   const socket = new FakeSocket();
   const client = new AppServerRpcClient(socket);
@@ -112,6 +118,28 @@ test("when response contains an upstream error, should reject with safe error ki
   );
 
   await assert.rejects(response, /app_server_protocol_error/);
+});
+
+test("when request send throws, should reject with safe error kind and clear pending entry", async () => {
+  const socket = new ThrowingSocket();
+  const client = new AppServerRpcClient(socket);
+
+  const response = client.request("model/list", {});
+
+  await assert.rejects(response, /app_server_connection_error/);
+  assert.equal((client as unknown as { pending: Map<number, unknown> }).pending.size, 0);
+});
+
+test("when notify send throws, should throw a safe local error", () => {
+  const socket = new ThrowingSocket();
+  const client = new AppServerRpcClient(socket);
+
+  assert.throws(
+    () => {
+      client.notify({ method: "initialized" });
+    },
+    /app_server_connection_error/,
+  );
 });
 
 test("when url is not loopback websocket root, should reject it", () => {
