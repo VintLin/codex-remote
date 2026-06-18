@@ -1,8 +1,7 @@
 "use client";
 
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
-import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
-import type { AssistantThreadSnapshot } from "../../data/app-server/appServerMockAdapter";
+import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import type { CodexConversation, Device, DeviceConnectionStatus, TaskStatus } from "@codex-remote/api-contract";
 import { devices, searchRecents } from "../../data/app-server/mockData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";

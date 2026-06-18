@@ -30,7 +30,11 @@ test("when codex protocol is generated, metadata should record source commands",
     "codex app-server generate-ts --out packages/codex-protocol/src/generated && cp packages/codex-protocol/src/generated/index.ts packages/codex-protocol/src/generated/app-server.ts",
     "codex app-server generate-json-schema --out /tmp/codex-protocol-app-server-schema && cp /tmp/codex-protocol-app-server-schema/codex_app_server_protocol.schemas.json packages/codex-protocol/schema/app-server.schema.json",
   ]);
-  assert.deepEqual(metadata.outputs, ["src/generated/app-server.ts", "schema/app-server.schema.json"]);
+  assert.deepEqual(metadata.outputs, [
+    "src/generated/**/*.ts",
+    "src/generated/app-server.ts",
+    "schema/app-server.schema.json",
+  ]);
 });
 
 test("when protocol package is consumed, readme should document the Worker-only boundary", () => {

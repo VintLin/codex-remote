@@ -6,6 +6,7 @@
     "codex app-server generate-json-schema --out /tmp/codex-protocol-app-server-schema && cp /tmp/codex-protocol-app-server-schema/codex_app_server_protocol.schemas.json packages/codex-protocol/schema/app-server.schema.json"
   ],
   "outputs": [
+    "src/generated/**/*.ts",
     "src/generated/app-server.ts",
     "schema/app-server.schema.json"
   ]

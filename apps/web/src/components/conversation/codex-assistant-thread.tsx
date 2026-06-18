@@ -15,16 +15,16 @@ import type {
   AssistantTextNode,
   AssistantTimelineNode,
   AssistantTimelineTurn,
+  AssistantThreadSnapshot,
   DetailTarget,
   LinkReference,
 } from "../../domain/assistant/assistantTimeline";
-import type { AssistantThreadSnapshot as AppServerAssistantThreadSnapshot } from "../../data/app-server/appServerMockAdapter";
 import { CodexMarkdownText } from "./codex-markdown-text";
 import { CodexToolCallRow, CodexToolGroupRow } from "./codex-tool-call-row";
 
 interface CodexAssistantThreadProps {
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
-  thread: AppServerAssistantThreadSnapshot | null;
+  thread: AssistantThreadSnapshot | null;
 }
 
 interface RuntimeMessageSnapshot {
@@ -270,7 +270,7 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
                     <Icon name="arrow-up" />
                   </ComposerPrimitive.Send>
                 </div>
-                <span className="codex-assistant-composer-note">当前仅展示 app-server 历史快照</span>
+                <span className="codex-assistant-composer-note">当前仅展示演示历史</span>
               </div>
             </ComposerPrimitive.Root>
           </ThreadPrimitive.ViewportProvider>
@@ -334,7 +334,7 @@ function CodexAssistantContextCompaction(props: { node: AssistantContextCompacti
   );
 }
 
-function getRuntimeMessages(thread: AppServerAssistantThreadSnapshot | null): RuntimeMessageSnapshot[] {
+function getRuntimeMessages(thread: AssistantThreadSnapshot | null): RuntimeMessageSnapshot[] {
   if (!thread) {
     return [];
   }
@@ -353,7 +353,7 @@ function getRuntimeMessages(thread: AppServerAssistantThreadSnapshot | null): Ru
   );
 }
 
-function getTimelineRows(thread: AppServerAssistantThreadSnapshot | null): TimelineRow[] {
+function getTimelineRows(thread: AssistantThreadSnapshot | null): TimelineRow[] {
   if (!thread) {
     return [];
   }

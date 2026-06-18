@@ -26,8 +26,7 @@
 - `packages/codex-protocol/src/index.ts`: public re-export for Worker internals.
 - `packages/codex-protocol/src/protocolGeneration.test.ts`: verifies generated artifacts and metadata exist.
 - `apps/web/src/contracts/packageBoundary.test.ts`: scans app and package imports for dependency rule violations.
-- `apps/web/src/data/app-server/mockData.ts`: imports renamed generated API contract types after migration.
-- `apps/web/src/data/app-server/appServerMockAdapter.ts`: imports renamed generated API contract types after migration.
+- `apps/web/src/data/app-server/mockData.ts`: exports API-contract-shaped demo data without raw app-server protocol fixtures.
 - `apps/web/src/domain/sidebar/sidebarModel.ts`: imports renamed generated API contract types after migration.
 - `apps/web/src/domain/status/statusPresentation.ts`: imports renamed generated status types after migration.
 - `apps/web/src/components/sidebar/sidebar.tsx`: imports renamed generated API contract types after migration.
@@ -549,7 +548,6 @@ Expected: commit succeeds.
 
 **Files:**
 - Modify: `apps/web/src/data/app-server/mockData.ts`
-- Modify: `apps/web/src/data/app-server/appServerMockAdapter.ts`
 - Modify: `apps/web/src/domain/sidebar/sidebarModel.ts`
 - Modify: `apps/web/src/domain/sidebar/sidebarModel.test.ts`
 - Modify: `apps/web/src/domain/status/statusPresentation.ts`
@@ -620,11 +618,6 @@ Apply these changes:
 ```ts
 // apps/web/src/data/app-server/mockData.ts
 import type { BoardTask, CodexConversation, Device, DiffLine, RemoteProject } from "@codex-remote/api-contract";
-```
-
-```ts
-// apps/web/src/data/app-server/appServerMockAdapter.ts
-import type { BoardTask, CodexConversation, ConversationStatus, Device, RemoteProject } from "@codex-remote/api-contract";
 ```
 
 ```ts
@@ -1123,6 +1116,7 @@ Expected: working tree is clean and the six task commits are visible.
 - Use `apply_patch` for manual file edits.
 - Do not hand-edit `packages/api-contract/src/generated/openapi.ts` after Task 2 generation.
 - Do not hand-edit `packages/codex-protocol/src/generated/app-server.ts` or `packages/codex-protocol/schema/app-server.schema.json` after Task 4 generation.
+- Final review follow-up removed Web-side raw app-server fixture projection. Web demo data is now API-contract-shaped; future raw app-server projection belongs in `apps/worker` using `@codex-remote/codex-protocol`.
 - If `codex app-server generate-ts` output does not typecheck under the workspace `tsconfig`, add a narrow `// @ts-nocheck` header to the generated file by updating the generation command in Task 4 to:
 
 ```bash

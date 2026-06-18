@@ -73,9 +73,7 @@ It owns:
 - Component schemas for `Device`, `RemoteProject`, `CodexConversation`, `ConversationTimeline`, `ConversationEvent`, `BoardTask`, `WorkerHealth`, `WorkerCapabilities`, `ApprovalRequest`, and command inputs.
 - Error envelope shape.
 
-Generated TypeScript lives under `packages/api-contract/src/generated/` and is not edited manually. `packages/api-contract/src/index.ts` may re-export generated types and add semantic helper types only when they do not duplicate fields.
-
-Current hand-written exports in `packages/api-contract/src/index.ts` are transitional. The next implementation should replace them with generated exports while preserving Web behavior.
+Generated TypeScript lives under `packages/api-contract/src/generated/` and is not edited manually. `packages/api-contract/src/index.ts` re-exports generated types and may add semantic helper types only when they do not duplicate fields.
 
 ## Codex Protocol Source
 
