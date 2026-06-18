@@ -20,5 +20,6 @@ test("when checking project allowlist, should reject sibling and unknown thread 
   assert.equal(isPathInsideRoot("/repo/project", "/repo/project"), true);
   assert.equal(isPathInsideRoot("/repo/project/sub", "/repo/project"), true);
   assert.equal(isPathInsideRoot("/repo/project-other", "/repo/project"), false);
+  assert.equal(isPathInsideRoot("/repo/project", ""), false);
   assert.equal(canReadThreadPath(null, "/repo/project"), false);
 });

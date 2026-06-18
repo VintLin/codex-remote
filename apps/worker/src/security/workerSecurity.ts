@@ -1,4 +1,4 @@
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 export function isBearerTokenAuthorized(header: string | undefined, expectedToken: string): boolean {
   if (!expectedToken.trim()) {
@@ -17,11 +17,15 @@ export function isOriginAllowed(origin: string | undefined, allowedOrigins: read
 }
 
 export function isPathInsideRoot(path: string, root: string): boolean {
+  if (!root.trim()) {
+    return false;
+  }
+
   const normalizedRoot = resolve(root);
   const normalizedPath = resolve(path);
   const pathFromRoot = relative(normalizedRoot, normalizedPath);
 
-  return pathFromRoot === "" || (!pathFromRoot.startsWith("..") && !pathFromRoot.startsWith("/"));
+  return pathFromRoot === "" || (!pathFromRoot.startsWith("..") && !pathFromRoot.startsWith("/") && !isAbsolute(pathFromRoot));
 }
 
 export function canReadThreadPath(threadCwd: string | null, allowedRoot: string): boolean {
