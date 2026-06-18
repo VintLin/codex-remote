@@ -48,8 +48,7 @@ Current generated app-server protocol exposes `thread/list` and `thread/read`, b
 - Create `apps/worker/package.json`: worker package scripts.
 - Create `apps/worker/tsconfig.json`: worker TypeScript config.
 - Create `apps/worker/src/index.ts`: public exports for probe modules.
-- Create `apps/worker/src/protocol/protocolSurface.ts`: read-only method surface checks against generated protocol source.
-- Create `apps/worker/src/protocol/protocolSurface.test.ts`: protocol surface tests.
+- Create `apps/worker/src/protocol/protocolSurface.test.ts`: type-level protocol surface guard through `@codex-remote/codex-protocol`.
 - Create `apps/worker/src/security/workerSecurity.ts`: token, Origin, and project allowlist checks.
 - Create `apps/worker/src/security/workerSecurity.test.ts`: security tests.
 - Create `apps/worker/src/app-server/appServerProcessService.ts`: loopback app-server process lifecycle and `/readyz`.
@@ -76,6 +75,7 @@ Add these entries to `schemaTypeNames`:
   "WorkerCapabilities",
   "ConversationRuntimeStatus",
   "LatestTurnStatus",
+  "TurnStatus",
   "TimelineItemsView",
   "TimelineSortDirection",
   "ConversationTimelineTurn",
@@ -180,6 +180,13 @@ Add these component schemas under `components.schemas`:
         - interrupted
         - failed
         - unknown
+    TurnStatus:
+      type: string
+      enum:
+        - completed
+        - interrupted
+        - failed
+        - unknown
     TimelineItemsView:
       type: string
       enum:
@@ -235,8 +242,6 @@ Add these component schemas under `components.schemas`:
               $ref: "#/components/schemas/AppServerTransport"
             readyz:
               type: boolean
-            url:
-              type: string
     WorkerCapabilities:
       type: object
       additionalProperties: false
@@ -278,7 +283,7 @@ Add these component schemas under `components.schemas`:
         id:
           type: string
         status:
-          type: string
+          $ref: "#/components/schemas/TurnStatus"
         startedAt:
           type:
             - number
@@ -448,8 +453,6 @@ Add these component schemas under `components.schemas`:
           properties:
             transport:
               $ref: "#/components/schemas/AppServerTransport"
-            url:
-              type: string
             startedByWorker:
               type: boolean
             readyz:
@@ -481,6 +484,7 @@ export type WorkerHealth = components["schemas"]["WorkerHealth"];
 export type WorkerCapabilities = components["schemas"]["WorkerCapabilities"];
 export type ConversationRuntimeStatus = components["schemas"]["ConversationRuntimeStatus"];
 export type LatestTurnStatus = components["schemas"]["LatestTurnStatus"];
+export type TurnStatus = components["schemas"]["TurnStatus"];
 export type TimelineItemsView = components["schemas"]["TimelineItemsView"];
 export type TimelineSortDirection = components["schemas"]["TimelineSortDirection"];
 export type ConversationTimelineTurn = components["schemas"]["ConversationTimelineTurn"];
@@ -565,6 +569,7 @@ Create `apps/worker/tsconfig.json`:
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"],
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"]
   }
@@ -576,7 +581,7 @@ Create `apps/worker/tsconfig.json`:
 Create `apps/worker/src/index.ts`:
 
 ```ts
-export { runReadOnlyProbe } from "./probe/readOnlyProbe";
+export { runReadOnlyProbe } from "./probe/readOnlyProbe.ts";
 ```
 
 - [ ] **Step 4: Add a minimal typed probe module**
@@ -623,7 +628,7 @@ Create `apps/worker/src/probe/readOnlyProbe.test.ts`:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runReadOnlyProbe } from "./readOnlyProbe";
+import { runReadOnlyProbe } from "./readOnlyProbe.ts";
 
 test("when read-only probe has no app-server client, should return env_not_configured", async () => {
   const summary = await runReadOnlyProbe();
@@ -659,58 +664,36 @@ git commit -m "feat: add worker package foundation"
 ## Task 4: Add Protocol Surface Guard
 
 **Files:**
-- Create: `apps/worker/src/protocol/protocolSurface.ts`
 - Test: `apps/worker/src/protocol/protocolSurface.test.ts`
 
-- [ ] **Step 1: Add protocol surface checker**
-
-Create `apps/worker/src/protocol/protocolSurface.ts`:
-
-```ts
-export const readOnlyProtocolMethods = [
-  "initialize",
-  "model/list",
-  "thread/list",
-  "thread/read",
-] as const;
-
-export const missingReadOnlyProtocolMethods = ["thread/turns/list"] as const;
-
-export function hasClientMethod(source: string, method: string): boolean {
-  return source.includes(`"method": "${method}"`);
-}
-```
-
-- [ ] **Step 2: Add tests against generated protocol source**
+- [ ] **Step 1: Add a type-level generated protocol guard**
 
 Create `apps/worker/src/protocol/protocolSurface.test.ts`:
 
 ```ts
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { hasClientMethod, missingReadOnlyProtocolMethods, readOnlyProtocolMethods } from "./protocolSurface";
+import type { ClientRequest } from "@codex-remote/codex-protocol";
 
-const clientRequestSource = readFileSync(
-  new URL("../../../../packages/codex-protocol/src/generated/ClientRequest.ts", import.meta.url),
-  "utf8",
-);
+const readOnlyProtocolMethods = [
+  "initialize",
+  "model/list",
+  "thread/list",
+  "thread/read",
+] as const satisfies readonly ClientRequest["method"][];
 
 test("when checking read-only protocol methods, generated ClientRequest should expose supported methods", () => {
-  for (const method of readOnlyProtocolMethods) {
-    assert.equal(hasClientMethod(clientRequestSource, method), true, method);
-  }
+  assert.deepEqual([...readOnlyProtocolMethods], ["initialize", "model/list", "thread/list", "thread/read"]);
 });
 
-test("when upstream omits read-only history pagination, should keep it explicit as missing", () => {
-  for (const method of missingReadOnlyProtocolMethods) {
-    assert.equal(hasClientMethod(clientRequestSource, method), false, method);
-  }
-});
+// @ts-expect-error Current generated protocol does not expose thread/turns/list.
+const missingThreadTurnsList: ClientRequest["method"] = "thread/turns/list";
+
+void missingThreadTurnsList;
 ```
 
-- [ ] **Step 3: Run worker tests**
+- [ ] **Step 2: Run worker tests**
 
 Run:
 
@@ -720,7 +703,7 @@ pnpm --filter @codex-remote/worker test
 
 Expected: pass and document that `thread/turns/list` is absent in the current generated protocol.
 
-- [ ] **Step 4: Commit protocol guard**
+- [ ] **Step 3: Commit protocol guard**
 
 Run:
 
@@ -743,6 +726,10 @@ Create `apps/worker/src/security/workerSecurity.ts`:
 import { relative, resolve } from "node:path";
 
 export function isBearerTokenAuthorized(header: string | undefined, expectedToken: string): boolean {
+  if (!expectedToken.trim()) {
+    return false;
+  }
+
   return header === `Bearer ${expectedToken}`;
 }
 
@@ -779,12 +766,13 @@ Create `apps/worker/src/security/workerSecurity.test.ts`:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canReadThreadPath, isBearerTokenAuthorized, isOriginAllowed, isPathInsideRoot } from "./workerSecurity";
+import { canReadThreadPath, isBearerTokenAuthorized, isOriginAllowed, isPathInsideRoot } from "./workerSecurity.ts";
 
 test("when checking bearer token, should require exact bearer header", () => {
   assert.equal(isBearerTokenAuthorized("Bearer dev-token", "dev-token"), true);
   assert.equal(isBearerTokenAuthorized("dev-token", "dev-token"), false);
   assert.equal(isBearerTokenAuthorized(undefined, "dev-token"), false);
+  assert.equal(isBearerTokenAuthorized("Bearer ", ""), false);
 });
 
 test("when checking browser origin, should allow configured origins and non-browser requests", () => {
@@ -842,6 +830,24 @@ export interface AppServerProcessHandle {
   startedByWorker: true;
 }
 
+export function assertLoopbackWebSocketUrl(value: string): string {
+  const url = new URL(value);
+  if (
+    url.protocol !== "ws:" ||
+    url.hostname !== "127.0.0.1" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/" ||
+    !url.port
+  ) {
+    throw new Error("app_server_url_not_loopback");
+  }
+
+  return url.toString();
+}
+
 export async function chooseLoopbackPort(): Promise<number> {
   return new Promise((resolvePromise, reject) => {
     const server = createServer();
@@ -860,8 +866,8 @@ export async function chooseLoopbackPort(): Promise<number> {
 }
 
 export function toReadyzUrl(appServerUrl: string): string {
-  const url = new URL(appServerUrl);
-  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  const url = new URL(assertLoopbackWebSocketUrl(appServerUrl));
+  url.protocol = "http:";
   url.pathname = "/readyz";
   url.search = "";
   url.hash = "";
@@ -991,7 +997,7 @@ export class AppServerRpcClient {
 
     this.pending.delete(Number(message.id));
     if ("error" in message && message.error) {
-      pending.reject(new Error(JSON.stringify(message.error)));
+      pending.reject(new Error("app_server_protocol_error"));
       return;
     }
 
@@ -1008,7 +1014,7 @@ Create `apps/worker/src/app-server/appServerRpcClient.test.ts`:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AppServerRpcClient } from "./appServerRpcClient";
+import { AppServerRpcClient } from "./appServerRpcClient.ts";
 
 class FakeSocket {
   sent: string[] = [];
@@ -1090,9 +1096,62 @@ export interface ReadOnlyProbeClient {
 
 export interface RunReadOnlyProbeOptions {
   client?: ReadOnlyProbeClient;
-  appServerUrl?: string;
   startedByWorker?: boolean;
   deviceId?: string;
+}
+
+export interface ProbeFailureSummaryOptions {
+  checkName: string;
+  failureType?: ProbeCheckResult["failureType"];
+  errorKind?: string;
+  startedByWorker?: boolean;
+  deviceId?: string;
+}
+
+export class PreconditionMissingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PreconditionMissingError";
+  }
+}
+
+function safeErrorKind(error: unknown): string {
+  if (error instanceof PreconditionMissingError) {
+    return "precondition_missing";
+  }
+  if (error instanceof Error && error.message === "app_server_protocol_error") {
+    return "app_server_protocol_error";
+  }
+
+  return "probe_check_failed";
+}
+
+export function createReadOnlyProbeFailureSummary(options: ProbeFailureSummaryOptions): WorkerProbeSummary {
+  const now = new Date().toISOString();
+
+  return {
+    schemaVersion: 1,
+    startedAt: now,
+    completedAt: now,
+    ok: false,
+    mode: "readOnly",
+    deviceId: options.deviceId ?? "local",
+    codexVersion: null,
+    appServer: {
+      transport: "loopbackWebSocket",
+      startedByWorker: options.startedByWorker ?? false,
+      readyz: false,
+    },
+    checks: [
+      {
+        name: options.checkName,
+        ok: false,
+        durationMs: 0,
+        failureType: options.failureType ?? "assertion_failed",
+        errorKind: options.errorKind ?? "probe_check_failed",
+      },
+    ],
+  };
 }
 
 async function runCheck(name: string, run: () => Promise<void>): Promise<ProbeCheckResult> {
@@ -1101,12 +1160,22 @@ async function runCheck(name: string, run: () => Promise<void>): Promise<ProbeCh
     await run();
     return { name, ok: true, durationMs: Date.now() - startedAt };
   } catch (error) {
+    if (error instanceof PreconditionMissingError) {
+      return {
+        name,
+        ok: false,
+        durationMs: Date.now() - startedAt,
+        failureType: "precondition_missing",
+        skippedReason: error.message,
+      };
+    }
+
     return {
       name,
       ok: false,
       durationMs: Date.now() - startedAt,
       failureType: "assertion_failed",
-      errorKind: error instanceof Error ? error.message : "unknown",
+      errorKind: safeErrorKind(error),
     };
   }
 }
@@ -1130,7 +1199,6 @@ export async function runReadOnlyProbe(options: RunReadOnlyProbeOptions = {}): P
         transport: "loopbackWebSocket",
         startedByWorker: options.startedByWorker ?? false,
         readyz: false,
-        ...(options.appServerUrl ? { url: options.appServerUrl } : {}),
       },
       checks: [
         {
@@ -1175,7 +1243,6 @@ export async function runReadOnlyProbe(options: RunReadOnlyProbeOptions = {}): P
       transport: "loopbackWebSocket",
       startedByWorker: options.startedByWorker ?? false,
       readyz: checks.some((check) => check.name === "readyz" && check.ok),
-      ...(options.appServerUrl ? { url: options.appServerUrl } : {}),
     },
     checks,
   };
@@ -1189,12 +1256,13 @@ Create `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`:
 ```ts
 import type { v2 } from "@codex-remote/codex-protocol";
 
-import { AppServerRpcClient } from "../app-server/appServerRpcClient";
-import { isPathInsideRoot } from "../security/workerSecurity";
-import type { ReadOnlyProbeClient } from "./readOnlyProbe";
+import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
+import { isPathInsideRoot } from "../security/workerSecurity.ts";
+import { PreconditionMissingError, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
 
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private firstAllowedThreadId: string | null = null;
+  private readonly maxPages = 3;
 
   constructor(
     private readonly rpc: AppServerRpcClient,
@@ -1232,23 +1300,38 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   }
 
   async listThreads(): Promise<unknown> {
-    const response = (await this.rpc.request("thread/list", {
-      cwd: this.allowedProjectRoot,
-      sourceKinds: ["cli", "vscode", "appServer"],
-      archived: false,
-      limit: 25,
-      sortDirection: "desc",
-    })) as v2.ThreadListResponse;
+    let cursor: string | null = null;
+    let lastResponse: v2.ThreadListResponse | null = null;
 
-    const firstAllowedThread = response.data.find((thread) => isPathInsideRoot(thread.cwd, this.allowedProjectRoot));
-    this.firstAllowedThreadId = firstAllowedThread?.id ?? null;
+    for (let page = 0; page < this.maxPages; page += 1) {
+      const response = (await this.rpc.request("thread/list", {
+        cwd: this.allowedProjectRoot,
+        sourceKinds: ["cli", "vscode", "appServer"],
+        archived: false,
+        limit: 25,
+        sortDirection: "desc",
+        cursor,
+      })) as v2.ThreadListResponse;
 
-    return response;
+      lastResponse = response;
+      const firstAllowedThread = response.data.find((thread) => isPathInsideRoot(thread.cwd, this.allowedProjectRoot));
+      if (firstAllowedThread) {
+        this.firstAllowedThreadId = firstAllowedThread.id;
+        break;
+      }
+
+      cursor = response.nextCursor;
+      if (!cursor) {
+        break;
+      }
+    }
+
+    return lastResponse;
   }
 
   async readFirstAllowedThread(): Promise<unknown> {
     if (!this.firstAllowedThreadId) {
-      throw new Error("thread/list returned no thread inside the allowed project root");
+      throw new PreconditionMissingError("thread/list returned no thread inside the allowed project root");
     }
 
     const response = (await this.rpc.request("thread/read", {
@@ -1277,7 +1360,7 @@ Replace `apps/worker/src/probe/readOnlyProbe.test.ts` with:
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runReadOnlyProbe, type ReadOnlyProbeClient } from "./readOnlyProbe";
+import { PreconditionMissingError, runReadOnlyProbe, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
 
 const passingClient: ReadOnlyProbeClient = {
   async readyz() {},
@@ -1287,6 +1370,13 @@ const passingClient: ReadOnlyProbeClient = {
   async listThreads() {},
   async readFirstAllowedThread() {},
   close() {},
+};
+
+const noAllowedThreadClient: ReadOnlyProbeClient = {
+  ...passingClient,
+  async readFirstAllowedThread() {
+    throw new PreconditionMissingError("thread/list returned no thread inside the allowed project root");
+  },
 };
 
 test("when no client is supplied, should return env_not_configured", async () => {
@@ -1299,13 +1389,20 @@ test("when no client is supplied, should return env_not_configured", async () =>
 test("when read-only checks pass, should mark missing turns list as explicit precondition", async () => {
   const summary = await runReadOnlyProbe({
     client: passingClient,
-    appServerUrl: "ws://127.0.0.1:12345",
   });
 
   assert.equal(summary.ok, true);
   assert.equal(summary.appServer.readyz, true);
   assert.equal(summary.checks.some((check) => check.name === "thread/turns/list"), true);
   assert.equal(summary.checks.at(-1)?.failureType, "precondition_missing");
+});
+
+test("when no allowed thread exists, should skip thread/read as a precondition", async () => {
+  const summary = await runReadOnlyProbe({ client: noAllowedThreadClient });
+  const readCheck = summary.checks.find((check) => check.name === "thread/read");
+
+  assert.equal(summary.ok, true);
+  assert.equal(readCheck?.failureType, "precondition_missing");
 });
 ```
 
@@ -1315,16 +1412,17 @@ Create `apps/worker/src/cli/readOnlyProbeCli.ts`:
 
 ```ts
 import {
+  assertLoopbackWebSocketUrl,
   chooseLoopbackPort,
   startLoopbackAppServer,
   stopAppServer,
   toReadyzUrl,
   waitForReadyz,
   type AppServerProcessHandle,
-} from "../app-server/appServerProcessService";
-import { connectAppServerRpcClient } from "../app-server/appServerRpcClient";
-import { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient";
-import { runReadOnlyProbe } from "../probe/readOnlyProbe";
+} from "../app-server/appServerProcessService.ts";
+import { connectAppServerRpcClient } from "../app-server/appServerRpcClient.ts";
+import { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient.ts";
+import { createReadOnlyProbeFailureSummary, runReadOnlyProbe } from "../probe/readOnlyProbe.ts";
 
 async function main(): Promise<number> {
   const allowedProjectRoot = process.env.CODEX_REMOTE_ALLOWED_PROJECT_ROOT ?? process.cwd();
@@ -1333,7 +1431,11 @@ async function main(): Promise<number> {
   let appServer: AppServerProcessHandle | null = null;
 
   try {
-    const appServerUrl = configuredUrl ?? (shouldStartAppServer ? `ws://127.0.0.1:${await chooseLoopbackPort()}` : null);
+    const appServerUrl = configuredUrl
+      ? assertLoopbackWebSocketUrl(configuredUrl)
+      : shouldStartAppServer
+        ? `ws://127.0.0.1:${await chooseLoopbackPort()}`
+        : null;
 
     if (!appServerUrl) {
       const summary = await runReadOnlyProbe();
@@ -1351,12 +1453,26 @@ async function main(): Promise<number> {
     const client = new AppServerReadOnlyProbeClient(rpc, readyzUrl, allowedProjectRoot);
     const summary = await runReadOnlyProbe({
       client,
-      appServerUrl,
       startedByWorker: Boolean(appServer),
     });
 
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return summary.ok ? 0 : 1;
+  } catch (error) {
+    const summary = createReadOnlyProbeFailureSummary({
+      checkName: error instanceof Error && error.message === "app_server_url_not_loopback"
+        ? "app-server.url"
+        : "app-server.connect",
+      failureType: error instanceof Error && error.message === "app_server_url_not_loopback"
+        ? "env_not_configured"
+        : "assertion_failed",
+      errorKind: error instanceof Error && error.message === "app_server_url_not_loopback"
+        ? "app_server_url_not_loopback"
+        : "app_server_connect_failed",
+      startedByWorker: Boolean(appServer),
+    });
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    return 1;
   } finally {
     if (appServer) {
       stopAppServer(appServer);
