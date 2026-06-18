@@ -81,6 +81,15 @@ class ThrowingSocket extends FakeSocket {
   }
 }
 
+class CloseOnTimeoutSocket extends FakeSocket {
+  public closeCalls = 0;
+
+  override close(): void {
+    this.closeCalls += 1;
+    this.emitClose();
+  }
+}
+
 test("when sending a request, should resolve matching response id", async () => {
   const socket = new FakeSocket();
   const client = new AppServerRpcClient(socket);
@@ -256,6 +265,30 @@ test("when websocket connection never opens, should time out with a safe local e
     globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
 
     await assert.rejects(connectAppServerRpcClient("ws://127.0.0.1:4319", { connectTimeoutMs: 10 }), /app_server_connection_timeout/);
+  } finally {
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test("when connect timeout closes the socket synchronously, should still report timeout", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const socket = new CloseOnTimeoutSocket();
+
+  class TestWebSocket extends FakeSocket {
+    constructor() {
+      super();
+      return socket;
+    }
+  }
+
+  try {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
+
+    await assert.rejects(
+      connectAppServerRpcClient("ws://127.0.0.1:4320", { connectTimeoutMs: 10 }),
+      /app_server_connection_timeout/,
+    );
+    assert.equal(socket.closeCalls, 1);
   } finally {
     globalThis.WebSocket = originalWebSocket;
   }

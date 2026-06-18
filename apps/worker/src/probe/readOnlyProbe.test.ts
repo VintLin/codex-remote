@@ -45,3 +45,20 @@ test("when no allowed thread exists, should skip thread/read as a precondition",
   assert.equal(summary.ok, true);
   assert.equal(readCheck?.failureType, "precondition_missing");
 });
+
+test("when a probe check hangs, should time it out with a safe error kind", async () => {
+  const summary = await runReadOnlyProbe({
+    client: {
+      ...passingClient,
+      async readyz() {
+        await new Promise(() => {});
+      },
+    },
+    checkTimeoutMs: 10,
+  });
+  const readyzCheck = summary.checks.find((check) => check.name === "readyz");
+
+  assert.equal(summary.ok, false);
+  assert.equal(readyzCheck?.failureType, "assertion_failed");
+  assert.equal(readyzCheck?.errorKind, "app_server_request_timeout");
+});

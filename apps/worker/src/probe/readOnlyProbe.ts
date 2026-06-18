@@ -14,6 +14,7 @@ export interface RunReadOnlyProbeOptions {
   client?: ReadOnlyProbeClient;
   startedByWorker?: boolean;
   deviceId?: string;
+  checkTimeoutMs?: number;
 }
 
 export interface ProbeFailureSummaryOptions {
@@ -30,6 +31,8 @@ export class PreconditionMissingError extends Error {
     this.name = "PreconditionMissingError";
   }
 }
+
+const defaultCheckTimeoutMs = 5_000;
 
 function safeErrorKind(error: unknown): string {
   if (error instanceof PreconditionMissingError) {
@@ -48,6 +51,25 @@ function safeErrorKind(error: unknown): string {
   }
 
   return "probe_check_failed";
+}
+
+async function withTimeout<T>(run: Promise<T>, timeoutMs: number): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("app_server_request_timeout"));
+    }, timeoutMs);
+
+    run.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 export function createReadOnlyProbeFailureSummary(options: ProbeFailureSummaryOptions): WorkerProbeSummary {
@@ -78,10 +100,14 @@ export function createReadOnlyProbeFailureSummary(options: ProbeFailureSummaryOp
   };
 }
 
-async function runCheck(name: string, run: () => Promise<void>): Promise<ProbeCheckResult> {
+async function runCheck(
+  name: string,
+  run: () => Promise<void>,
+  timeoutMs: number,
+): Promise<ProbeCheckResult> {
   const startedAt = Date.now();
   try {
-    await run();
+    await withTimeout(run(), timeoutMs);
     return { name, ok: true, durationMs: Date.now() - startedAt };
   } catch (error) {
     if (error instanceof PreconditionMissingError) {
@@ -107,6 +133,7 @@ async function runCheck(name: string, run: () => Promise<void>): Promise<ProbeCh
 export async function runReadOnlyProbe(options: RunReadOnlyProbeOptions = {}): Promise<WorkerProbeSummary> {
   const startedAt = new Date().toISOString();
   const checks: ProbeCheckResult[] = [];
+  const checkTimeoutMs = options.checkTimeoutMs ?? defaultCheckTimeoutMs;
 
   const { client } = options;
   if (!client) {
@@ -137,12 +164,12 @@ export async function runReadOnlyProbe(options: RunReadOnlyProbeOptions = {}): P
   }
 
   try {
-    checks.push(await runCheck("readyz", () => client.readyz()));
-    checks.push(await runCheck("initialize", () => client.initialize()));
-    checks.push(await runCheck("initialized", () => client.initialized()));
-    checks.push(await runCheck("model/list", async () => void (await client.listModels())));
-    checks.push(await runCheck("thread/list", async () => void (await client.listThreads())));
-    checks.push(await runCheck("thread/read", async () => void (await client.readFirstAllowedThread())));
+    checks.push(await runCheck("readyz", () => client.readyz(), checkTimeoutMs));
+    checks.push(await runCheck("initialize", () => client.initialize(), checkTimeoutMs));
+    checks.push(await runCheck("initialized", () => client.initialized(), checkTimeoutMs));
+    checks.push(await runCheck("model/list", async () => void (await client.listModels()), checkTimeoutMs));
+    checks.push(await runCheck("thread/list", async () => void (await client.listThreads()), checkTimeoutMs));
+    checks.push(await runCheck("thread/read", async () => void (await client.readFirstAllowedThread()), checkTimeoutMs));
     checks.push({
       name: "thread/turns/list",
       ok: false,

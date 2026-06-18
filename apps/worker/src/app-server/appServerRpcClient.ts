@@ -65,14 +65,6 @@ export async function connectAppServerRpcClient(
   const socket = new WebSocket(loopbackUrl);
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      try {
-        socket.close();
-      } catch {
-        // Ignore local close failures while timing out connection setup.
-      }
-      reject(createRpcClientError("app_server_connection_timeout"));
-    }, connectTimeoutMs);
     let settled = false;
     const settle = (callback: () => void) => {
       if (settled) {
@@ -83,6 +75,16 @@ export async function connectAppServerRpcClient(
       clearTimeout(timeout);
       callback();
     };
+    const timeout = setTimeout(() => {
+      settle(() => {
+        try {
+          socket.close();
+        } catch {
+          // Ignore local close failures while timing out connection setup.
+        }
+        reject(createRpcClientError("app_server_connection_timeout"));
+      });
+    }, connectTimeoutMs);
 
     socket.addEventListener(
       "open",

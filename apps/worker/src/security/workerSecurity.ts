@@ -43,7 +43,7 @@ async function canonicalizeExistingPath(path: string): Promise<string> {
   try {
     return await realpath(normalizedPath);
   } catch {
-    return normalizedPath;
+    throw new Error("path_not_canonicalizable");
   }
 }
 
@@ -52,8 +52,16 @@ export async function isPathInsideRootRealpath(path: string, root: string): Prom
     return false;
   }
 
-  const canonicalRoot = await canonicalizeExistingPath(root);
-  const canonicalPath = await canonicalizeExistingPath(path);
+  let canonicalRoot: string;
+  let canonicalPath: string;
+
+  try {
+    canonicalRoot = await canonicalizeExistingPath(root);
+    canonicalPath = await canonicalizeExistingPath(path);
+  } catch {
+    return false;
+  }
+
   const pathFromRoot = relative(canonicalRoot, canonicalPath);
 
   return pathFromRoot === "" || (!pathFromRoot.startsWith("..") && !pathFromRoot.startsWith("/") && !isAbsolute(pathFromRoot));

@@ -1,8 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 
 export interface AppServerProcessHandle {
-  child: ChildProcessWithoutNullStreams;
+  child: ChildProcess;
   spawned: Promise<void>;
   url: string;
   readyzUrl: string;
@@ -88,8 +88,8 @@ export async function waitForReadyz(readyzUrl: string, timeoutMs = 5_000): Promi
 export function startLoopbackAppServer(port: number): AppServerProcessHandle {
   const url = assertLoopbackWebSocketUrl(`ws://127.0.0.1:${port}`);
   const child = spawn("codex", ["app-server", "--listen", url], {
-    stdio: ["ignore", "pipe", "pipe"],
-  }) as unknown as ChildProcessWithoutNullStreams;
+    stdio: "ignore",
+  });
   const spawned = new Promise<void>((resolve, reject) => {
     child.once("spawn", () => {
       resolve();

@@ -4,23 +4,51 @@ import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
 import { PreconditionMissingError, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
 
+interface AppServerReadOnlyProbeClientOptions {
+  readyzTimeoutMs?: number;
+}
+
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private firstAllowedThreadId: string | null = null;
   private readonly maxPages = 3;
   private readonly rpc: AppServerRpcClient;
   private readonly readyzUrl: string;
   private readonly allowedProjectRoot: string;
+  private readonly readyzTimeoutMs: number;
 
-  constructor(rpc: AppServerRpcClient, readyzUrl: string, allowedProjectRoot: string) {
+  constructor(
+    rpc: AppServerRpcClient,
+    readyzUrl: string,
+    allowedProjectRoot: string,
+    options: AppServerReadOnlyProbeClientOptions = {},
+  ) {
     this.rpc = rpc;
     this.readyzUrl = readyzUrl;
     this.allowedProjectRoot = allowedProjectRoot;
+    this.readyzTimeoutMs = options.readyzTimeoutMs ?? 5_000;
   }
 
   async readyz(): Promise<void> {
-    const response = await fetch(this.readyzUrl);
-    if (!response.ok) {
-      throw new Error(`readyz returned ${response.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, this.readyzTimeoutMs);
+
+    try {
+      const response = await fetch(this.readyzUrl, {
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`readyz returned ${response.status}`);
+      }
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error("app_server_request_timeout");
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

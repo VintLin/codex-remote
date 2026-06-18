@@ -48,3 +48,19 @@ test("when checking canonical project allowlist, should reject a symlink escape"
 
   assert.equal(await isPathInsideRootRealpath(escapedFile, allowedRoot), false);
 });
+
+test("when candidate path does not exist, should fail closed", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-security-"));
+  const allowedRoot = join(fixtureRoot, "allowed");
+
+  mkdirSync(allowedRoot, { recursive: true });
+
+  assert.equal(await isPathInsideRootRealpath(join(allowedRoot, "missing.txt"), allowedRoot), false);
+});
+
+test("when allowed root cannot be canonicalized, should not treat it as inside", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-security-"));
+  const missingRoot = join(fixtureRoot, "missing-root");
+
+  assert.equal(await isPathInsideRootRealpath(missingRoot, missingRoot), false);
+});
