@@ -5,6 +5,7 @@ import type {
   RemoteProject,
   CodexConversation,
   WorkerHealth,
+  ErrorEnvelope,
 } from "@codex-remote/api-contract";
 
 import type { AssistantTimelineTurn, AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline.ts";
@@ -21,9 +22,18 @@ export interface SearchRecent {
   marker?: boolean;
 }
 
+type SourceErrorEnvelope = Pick<ErrorEnvelope, "code" | "message" | "details" | "requestId">;
+
 export interface WorkbenchData {
   source: {
-    reason: "not_configured" | "unauthorized" | "forbidden" | "app_server_unavailable" | "request_failure";
+    reason:
+      | "loaded"
+      | "not_configured"
+      | "unauthorized"
+      | "forbidden"
+      | "app_server_unavailable"
+      | "request_failure";
+    error?: SourceErrorEnvelope;
   };
   devices: Device[];
   projects: RemoteProject[];
@@ -39,24 +49,32 @@ export interface LoadWorkbenchDataOptions {
   selectedConversationId?: string | null;
 }
 
-type LoadReason = WorkbenchData["source"]["reason"];
+export type LoadReason = WorkbenchData["source"]["reason"];
 
 const fallbackCurrentProject = "未选择项目";
 
 export function createFallbackWorkbenchData(
   reason: WorkbenchData["source"]["reason"],
   selectedConversationId?: string | null,
+  sourceError?: SourceErrorEnvelope,
 ): WorkbenchData {
   const conversations = [...mockConversations];
 
   return {
-    source: { reason },
+    source: createWorkbenchSource(reason, sourceError),
     devices: [...mockDevices],
     projects: [...mockProjects],
     conversations,
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationId),
   };
+}
+
+function createWorkbenchSource(
+  reason: WorkbenchData["source"]["reason"],
+  sourceError?: SourceErrorEnvelope,
+): WorkbenchData["source"] {
+  return sourceError ? { reason, error: sourceError } : { reason };
 }
 
 function createMetadataOnlyAssistantThreads(conversations: readonly CodexConversation[]): AssistantThreadSnapshot[] {
@@ -103,8 +121,28 @@ function createAssistantThreadsFromConversations(
   conversations: readonly CodexConversation[],
   selectedTimelineConversationId?: string | null,
   timeline?: ConversationTimeline,
+  timelineErrorConversationId?: string | null,
 ): AssistantThreadSnapshot[] {
   return conversations.map((conversation) => {
+    if (timelineErrorConversationId === conversation.id) {
+      return {
+        id: conversation.id,
+        title: conversation.title,
+        deviceId: conversation.deviceId,
+        ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+        projectName: conversation.projectName,
+        status: conversation.status,
+        updatedAt: conversation.updatedAt,
+        forkedFromId: null,
+        parentThreadId: null,
+        loadState: "readError",
+        timeline: {
+          threadId: conversation.id,
+          turns: [],
+        },
+      };
+    }
+
     if (selectedTimelineConversationId !== conversation.id || !timeline) {
       return {
         id: conversation.id,
@@ -213,6 +251,36 @@ function mapSourceReasonFromError(error: unknown): LoadReason {
   return "request_failure";
 }
 
+function createSourceFromError(error: unknown): WorkbenchData["source"] {
+  if (error instanceof WorkerApiRequestError) {
+    return createWorkbenchSource(mapSourceReasonFromError(error), toSourceErrorEnvelope(error.envelope));
+  }
+
+  return createWorkbenchSource("request_failure");
+}
+
+function toSourceErrorEnvelope(error: {
+  code: string;
+  message: string;
+  details?: ErrorEnvelope["details"];
+  requestId?: string;
+}): SourceErrorEnvelope {
+  const sourceError: SourceErrorEnvelope = {
+    code: error.code,
+    message: error.message,
+  };
+
+  if (error.details !== undefined) {
+    sourceError.details = error.details;
+  }
+
+  if (error.requestId !== undefined) {
+    sourceError.requestId = error.requestId;
+  }
+
+  return sourceError;
+}
+
 function createSearchRecents(
   conversations: readonly CodexConversation[],
   selectedConversationId?: string | null,
@@ -257,18 +325,35 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     const timelineConversationId = selectedConversation?.id ?? conversations[0]?.id ?? null;
 
     let timeline: ConversationTimeline | null = null;
+    let timelineError: unknown = null;
     if (capabilities.canReadTimeline && timelineConversationId) {
-      timeline = await client.getTimeline(timelineConversationId);
+      try {
+        timeline = await client.getTimeline(timelineConversationId);
+      } catch (error: unknown) {
+        timelineError = error;
+      }
     }
 
     const assistantThreads = createAssistantThreadsFromConversations(
       conversations,
       timelineConversationId,
       timeline ?? undefined,
+      timelineError && timelineConversationId ? timelineConversationId : null,
     );
 
+    if (timelineError) {
+      return {
+        source: createSourceFromError(timelineError),
+        devices: [createDeviceFromWorkerHealth(workerHealth, options.baseUrl, conversations)],
+        projects: createProjectsFromConversations(conversations),
+        conversations,
+        assistantThreads,
+        searchRecents: createSearchRecents(conversations, options.selectedConversationId),
+      };
+    }
+
     return {
-      source: { reason: "request_failure" },
+      source: createWorkbenchSource("loaded"),
       devices: [createDeviceFromWorkerHealth(workerHealth, options.baseUrl, conversations)],
       projects: createProjectsFromConversations(conversations),
       conversations,
@@ -276,6 +361,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       searchRecents: createSearchRecents(conversations, options.selectedConversationId),
     };
   } catch (error: unknown) {
-    return createFallbackWorkbenchData(mapSourceReasonFromError(error), options.selectedConversationId);
+    const source = createSourceFromError(error);
+    return createFallbackWorkbenchData(source.reason, options.selectedConversationId, source.error);
   }
 }

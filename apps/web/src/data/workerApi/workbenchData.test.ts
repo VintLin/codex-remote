@@ -109,6 +109,8 @@ test("workbench datasource when endpoint responses are valid should create snaps
   const firstConversation = data.conversations[0];
   assert.ok(firstConversation);
   assert.equal(firstConversation.id, "conv-live-1");
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.source.error, undefined);
   assert.equal(data.projects[0]?.id, "p-live");
   assert.equal(data.searchRecents[0]?.conversationId, "conv-live-1");
   assert.equal(data.assistantThreads.length, 2);
@@ -333,6 +335,93 @@ test("workbench datasource when fallback is returned should not reuse rich mock 
   );
   assert.equal(hasRichNodes, false);
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
+});
+
+test("workbench datasource when timeline fetch fails should keep loaded snapshot and mark selected thread readError", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    selectedConversationId: "timeline-error",
+    fetchImpl: createFetchMock({
+      "/v1/worker/health": jsonResponse({
+        deviceId: "w4",
+        status: "connected",
+        checkedAt: "2026-06-20T00:00:00.000Z",
+        codexVersion: null,
+        appServer: {
+          transport: "loopbackWebSocket",
+          readyz: true,
+        },
+      }),
+      "/v1/worker/capabilities": jsonResponse({
+        deviceId: "w4",
+        canReadProjects: true,
+        canReadConversations: true,
+        canReadTimeline: true,
+        canRunReadOnlyProbe: true,
+        appServerTransport: "loopbackWebSocket",
+        supportedSourceKinds: ["cli", "vscode", "appServer"],
+      }),
+      "/v1/conversations": jsonResponse([
+        {
+          id: "timeline-error",
+          title: "Timeline unavailable",
+          deviceId: "w4",
+          projectId: "p4",
+          projectName: "project-four",
+          status: "running",
+          updatedAt: "刚刚",
+          summary: "timeline read failure",
+          sandbox: "workspace-write",
+          approval: "never",
+        },
+        {
+          id: "timeline-ok",
+          title: "Other thread",
+          deviceId: "w4",
+          projectId: "p5",
+          projectName: "project-five",
+          status: "done",
+          updatedAt: "刚刚",
+          summary: "healthy thread",
+          sandbox: "workspace-write",
+          approval: "never",
+        },
+      ]),
+      "/v1/conversations/timeline-error/timeline": jsonResponse(
+        {
+          code: "timeline_read_failed",
+          message: "Unable to read conversation timeline.",
+          details: {
+            operation: "read_timeline",
+            url: "http://secret.internal/admin",
+            stack: "line 1\nline 2",
+            token: "abc-SECRET",
+            privatePath: "/Users/user/Library/Secrets",
+          } as Record<string, string>,
+        },
+        500,
+      ),
+    }),
+  });
+
+  const errored = data.assistantThreads.find((item) => item.id === "timeline-error");
+  const other = data.assistantThreads.find((item) => item.id === "timeline-ok");
+
+  assert.equal(data.source.reason, "request_failure");
+  assert.equal(data.source.error?.code, "timeline_read_failed");
+  assert.equal(data.source.error?.message, "Unable to read conversation timeline.");
+  assert.equal(data.source.error?.details?.operation, "read_timeline");
+  assert.equal(data.source.error?.details && "url" in data.source.error.details, false);
+  assert.equal(data.source.error?.details && "token" in data.source.error.details, false);
+
+  assert.equal(data.devices[0]?.id, "w4");
+  assert.equal(data.devices.length, 1);
+  assert.equal(data.projects.length, 2);
+  assert.equal(data.conversations.length, 2);
+  assert.equal(errored?.loadState, "readError");
+  assert.equal(errored?.timeline.turns.length, 0);
+  assert.equal(other?.loadState, "missingRead");
 });
 
 test("workbench datasource search recents should be derived from conversations", async () => {
