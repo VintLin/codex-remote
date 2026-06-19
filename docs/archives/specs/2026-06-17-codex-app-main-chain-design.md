@@ -1,5 +1,7 @@
 # Codex App Main Chain Design
 
+> Archived on 2026-06-19. The read-only contract/probe slice from this design has been completed. Keep this file as historical design context; current roadmap and next-stage decisions live in `PLAN.md` and `docs/references/development-context.md`.
+
 ## Goal
 
 Build the first real Codex app-server operation spine for Codex Remote.

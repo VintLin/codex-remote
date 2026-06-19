@@ -1,5 +1,7 @@
 # Main Chain Contract Readonly Probe Implementation Plan
 
+> Archived on 2026-06-19. This read-only contract/probe implementation plan has been completed. Keep this file as execution history; do not use it as the active plan for new work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the read-only main-chain API contract slice and a minimal local Worker CLI probe without adding Web or HTTP integration yet.

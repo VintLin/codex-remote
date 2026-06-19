@@ -1,42 +1,37 @@
 # AGENTS.md
 
-## Project Overview
+## Source Of Truth
 
-本项目是一个自托管多设备 Codex Web 控制台。
+- `PLAN.md`：项目总目标、阶段路线、风险和调研状态。
+- `PROJECT_STRUCTURE.md`：目录职责、依赖方向和新增文件规则。
+- `QUESTIONS.md`：调研问题和回答状态。
+- `docs/references/development-context.md`：阶段性技术决策、参考项目和未来阶段上下文。
 
-当前目标是在一个 Web 页面中管理多台设备上的 Codex：查看设备状态、项目列表、对话列表、输出流，发送 follow-up，中止任务，并把不同设备上的 Codex conversations 手动关联到任务看板。
+更新规则：
 
-短期实现允许先通过本机 Worker adapter 验证 app-server 协议和展示链路；长期目标仍是 Control Plane 统一路由多设备。
-
-核心边界：
-
-- 不依赖同一 OpenAI / ChatGPT 账号。
-- 每台设备保留自己的 Codex auth、API key、model provider 和本地配置。
-- Control Plane 不保存 OpenAI / ChatGPT / provider secrets。
-- Codex app-server 只应绑定 localhost 或本机 socket。
-- Device Worker 是唯一对外桥接层。
-- 第一版是 Web，后续预留 iOS App。
+- 阶段状态、下一步建议、风险判断变化时，同步更新 `PLAN.md`。
+- 目录职责、依赖方向或文件放置规则变化时，同步更新 `PROJECT_STRUCTURE.md`。
+- 调研结论变化时，同步更新 `QUESTIONS.md` 和相关 reference。
+- 阶段级设计写入 `docs/superpowers/specs/`，阶段级执行计划写入 `docs/superpowers/plans/`。
+- 已完成或废弃文档统一归档到 `docs/archives/`。
 
 ## Environment
 
 - 包管理器：`pnpm`
 - Monorepo：Turborepo
 - 主要语言：TypeScript
-- 当前实现形态：Web UI + 本机 Worker adapter + Device Worker
-- 最终拓扑：Web UI + Control Plane Server + Device Worker
-- 后续移动端：iOS App 复用 Control Plane API contract，不直接复用 Web UI runtime
+- Web：Next.js
+- Contract：OpenAPI 3.1 + `openapi-typescript`
+- 测试：Node built-in test runner
 
-本地网站启停约定：
+本地网站：
 
-- 启动当前网站：`pnpm web:start`
-- 查看当前网站状态：`pnpm web:status`
-- 关闭当前网站：`pnpm web:stop`
-- 默认 Web 开发服务器运行在 `http://127.0.0.1:5173`
-- 启动脚本会写入 `logs/web-dev.pid` 和 `logs/web-dev.log`
-- 状态脚本会输出 `pid`、端口监听状态和最近日志
-- 如果 `5173` 已被占用，先执行 `pnpm web:stop`，再重新启动
+- 启动：`pnpm web:start`
+- 状态：`pnpm web:status`
+- 关闭：`pnpm web:stop`
+- 默认地址：`http://127.0.0.1:5173`
 
-提交前默认执行：
+提交前默认验证：
 
 ```bash
 pnpm lint
@@ -45,62 +40,46 @@ pnpm test
 pnpm build
 ```
 
-如果某个命令尚未建立，需在最终说明中明确“尚未建立该验证命令”，不要假装已验证。
-
-## Project Structure
-
-目标结构：
-
-```text
-apps/
-  web/
-  control-plane/
-  worker/
-
-packages/
-  shared/
-  codex-protocol/
-  db/
-  api-contract/
-  ui/
-
-docs/
-  specs/
-  plans/
-  references/
-  archives/
-```
-
-文档分类：
-
-- `docs/specs/`：已确认或正在确认的规格。
-- `docs/plans/`：开发执行计划。
-- `docs/references/`：外部资料、协议资料、参考项目调研。
-- `docs/archives/`：完成或废弃的历史规格和计划。
+如果某个命令尚未建立，最终说明必须明确“尚未建立该验证命令”。
 
 ## Architecture Rules
 
 ### 唯一事实源
 
 - Codex app-server 协议类型必须从 `codex app-server generate-ts` / `generate-json-schema` 生成或显式派生。
-- Control Plane API contract 必须有单一 schema 来源，Web、Worker、未来 iOS 都从该来源生成或引用。
+- Control Plane API contract 必须有单一 schema 来源；Web、Worker、未来 iOS 都从该来源生成或引用。
 - 数据库 schema 是持久化字段的唯一事实源；业务类型从 schema 显式派生。
 - 禁止在 API handler、UI、测试中手写平行字段结构。
 
-### 边界
+### 包边界
 
-- `apps/web` 只能调用 Control Plane API。
+- `apps/web` 只能调用 Control Plane-shaped API，不直接调用 Codex app-server。
 - `apps/control-plane` 不能直接调用 Codex app-server。
-- `apps/worker` 负责连接本机 Codex app-server、本机文件系统、本机 git、本机 terminal。
+- `apps/worker` 是本机 Codex app-server、本机文件系统、本机 git、本机 terminal 的边界。
 - `packages/codex-protocol` 不依赖 Web 或 Control Plane。
 - `packages/api-contract` 不依赖具体 UI 框架。
 - `packages/db` 不依赖 Web 组件。
+- `packages/ui` 不拥有业务数据、API 调用、datasource、app-server protocol 或 DB 逻辑。
 
 ### Secrets
 
 - 禁止将 OpenAI API key、ChatGPT auth、Codex auth file 写入 Control Plane DB。
 - 禁止在日志、测试 fixture、截图、文档示例中写真实 token。
-- 如需示例，使用 `REDACTED` 或 `example-token`。
+- 示例 token 只能使用 `REDACTED` 或 `example-token`。
+- 普通日志禁止记录 raw prompt、raw command output、raw JSON-RPC frame、full diff、provider secrets。
+- 服务配置、plist、systemd unit、Scheduled Task 参数中禁止写入 token、provider key、Codex auth。
+
+## Development Rules
+
+- 每个阶段开始前先读 `PLAN.md`，确认当前阶段、non-goals、风险和调研状态。
+- 新增或移动文件前先读 `PROJECT_STRUCTURE.md`，确认目录职责和依赖方向。
+- 阶段性技术决策查 `docs/references/development-context.md`；不要把短期决策扩写进 `AGENTS.md`。
+- 复杂功能先写 `docs/superpowers/specs/`，再写 `docs/superpowers/plans/`，最后实现。
+- 每次只做一个可验证垂直切片；不铺未使用的框架、抽象或扩展点。
+- Contract 变更先改 schema，再生成类型，再改实现。
+- 不主动回滚用户已有改动。
+- 遇到异常 Git 状态，先报告观察结果和建议。
+- 每次完成实现任务必须提供 fresh verification，不复用旧结果。
 
 ## Turborepo Rules
 
@@ -121,70 +100,19 @@ packages:
 
 测试按风险分层：
 
-- Unit：纯函数、schema normalizer、API contract mapper。
-- Integration：Worker 与 app-server probe、Control Plane 与 Worker 通信。
-- E2E：Web UI 控制两台 Worker 的 MVP flow。
+- Unit：纯函数、schema mapper、contract mapper。
+- Integration：跨模块协作、外部进程/服务边界、数据持久化边界。
+- E2E：关键用户流程。
 - Type：`tsc --noEmit` 或包级 typecheck。
 
-Worker probe 是第一阶段必须有的验证入口。它分 read-only 与 full 两层，至少覆盖：
+边界测试优先级高于覆盖率数字；新增跨包或安全边界时，优先补边界测试。
 
-- `initialize`
-- `model/list`
-- `thread/list`（显式 `sourceKinds`、`archived`、`cwd`）
-- `thread/read`
-- `thread/turns/list(itemsView: "full")`
-- `thread/resume`
-- `thread/start`
-- `turn/start`
-- streaming notifications
-- `turn/steer(expectedTurnId)`
-- `turn/interrupt`
-- approval request / response
-- Worker token auth、Origin allowlist、project allowlist
+阶段性测试关注点记录在 `docs/references/development-context.md`。
 
 ## Frontend Rules
 
-第一版 UI 是工作台，不是营销页。
-
-- 默认三栏布局：设备 / 任务导航，列表 / 看板，conversation 操作区。
-- 控件优先服务高频操作：打开对话、发送 follow-up、中止、关联 task。
-- 状态必须清晰展示：online/offline、running、waiting approval、waiting input、interrupted、failed、done。
+- 前端默认服务真实工作流。
+- UI 信息层次优先于装饰；状态、错误和空态必须清晰。
+- 复用 `packages/ui` 的纯展示组件；业务数据、API 调用和协议逻辑留在应用层。
 - 不做大 hero、不做营销型首屏。
 - 不做过度装饰。
-
-## iOS Extension Rules
-
-后续 iOS App 只能连接 Control Plane API。
-
-- iOS 不直接连接 Codex app-server。
-- iOS 不保存 OpenAI / Codex secrets。
-- iOS 类型从 API contract 生成。
-- 需要配对时优先设计 QR / one-time token / trusted device flow。
-
-## Reference Projects
-
-参考项目位于 `project_referenecs/`。使用前先读：
-
-- `docs/references/research/参考项目技术调研 v0.1.md`
-
-优先参考：
-
-- `Sunwood-ai-labs-codex-remote-control-lab`：localhost app-server + token bridge。
-- `friuns2-codex-mobile`：browser-first app-server UI 和 CLI 包装。
-- `getpaseo-paseo`：daemon + clients + mobile/desktop/CLI 长期结构。
-- `openai-codex`：app-server 协议事实源。
-
-不要在 MVP 中照搬：
-
-- 多 agent 编排。
-- provider proxy。
-- Codex Desktop 重打包。
-- Telegram / tunnel / mobile-first 扩展。
-
-## Change Strategy
-
-- 先读 `docs/specs/多设备 Codex 控制台 PRD.md`、`docs/specs/多设备 Codex 控制台 技术规格.md`、`docs/superpowers/specs/2026-06-17-codex-app-main-chain-design.md` 和相关计划，再改代码。
-- 复杂功能先更新 `docs/plans/`，再实现。
-- 不主动回滚用户已有改动。
-- 遇到异常 Git 状态，先报告观察结果和建议。
-- 每次完成实现任务必须提供 fresh verification，不复用旧结果。

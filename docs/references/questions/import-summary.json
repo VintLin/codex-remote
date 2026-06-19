@@ -1,0 +1,110 @@
+[
+  {
+    "index": 1,
+    "title": "Q11：iOS API 设计优化",
+    "url": "https://chatgpt.com/c/6a34ff0d-0270-83ee-9246-cad4814ef695",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/001-Q11-iOS-API-设计优化.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 25586
+  },
+  {
+    "index": 2,
+    "title": "Q7：Codex approval request设计",
+    "url": "https://chatgpt.com/c/6a34fe89-9ed4-83e8-add4-1d75fd4629b8",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/002-Q7-Codex-approval-request设计.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 15863
+  },
+  {
+    "index": 3,
+    "title": "Q4：Worker read-only API 设计",
+    "url": "https://chatgpt.com/c/6a34fdb5-6e10-83ee-ac67-eb5df786055f",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/003-Q4-Worker-read-only-API-设计.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 18009
+  },
+  {
+    "index": 4,
+    "title": "Q9：自托管多设备安全方案",
+    "url": "https://chatgpt.com/c/6a34fec7-14b0-83ee-b3b8-fc890086d461",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/004-Q9-自托管多设备安全方案.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 19359
+  },
+  {
+    "index": 5,
+    "title": "Q6：Codex app-server 参数设计",
+    "url": "https://chatgpt.com/c/6a34fe59-aed0-83e8-aa5c-260fa4e0fe0c",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/005-Q6-Codex-app-server-参数设计.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 19926
+  },
+  {
+    "index": 6,
+    "title": "Q10：DB 选型调研建议",
+    "url": "https://chatgpt.com/c/6a34fefb-1558-83ee-89e5-b3f33992f794",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/006-Q10-DB-选型调研建议.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 15009
+  },
+  {
+    "index": 7,
+    "title": "Q12：Device Worker 安装与管理",
+    "url": "https://chatgpt.com/c/6a34ff35-97a4-83ee-be06-d899c5408141",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/007-Q12-Device-Worker-安装与管理.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 22092
+  },
+  {
+    "index": 8,
+    "title": "Q8：Codex app-server 竞态规则",
+    "url": "https://chatgpt.com/c/6a34fe9d-771c-83ee-bc7e-1743167f70a2",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/008-Q8-Codex-app-server-竞态规则.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 10220
+  },
+  {
+    "index": 9,
+    "title": "Q5：Codex Remote 事件调研",
+    "url": "https://chatgpt.com/c/6a34fe4d-b80c-83e9-91e1-4d90307a73f8",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/009-Q5-Codex-Remote-事件调研.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 17977
+  },
+  {
+    "index": 10,
+    "title": "Q1：最稳定的本机传输方式",
+    "url": "https://chatgpt.com/c/6a34fc62-2084-83e8-9e5c-ebbe3d88c9fa",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/010-Q1-最稳定的本机传输方式.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 9016
+  },
+  {
+    "index": 11,
+    "title": "Q3：HTTP API 使用",
+    "url": "https://chatgpt.com/c/6a34fd34-de9c-83ee-9e54-43f0b431a1d8",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/011-Q3-HTTP-API-使用.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 12068
+  },
+  {
+    "index": 12,
+    "title": "Q2：缺少 thread/turns/list",
+    "url": "https://chatgpt.com/c/6a34fccb-fba8-83ee-9ec6-9400d2beb4bb",
+    "file": "/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply/012-Q2-缺少-thread-turns-list.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 9083
+  }
+]

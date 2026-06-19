@@ -1,0 +1,38 @@
+[
+  {
+    "index": 1,
+    "title": "Q17",
+    "url": "https://chatgpt.com/c/6a350f6e-8b20-83e8-8f91-b9a6cd8aad10",
+    "file": "/Users/Vint/Repos/01_Project_Personal/050_codex_remote/docs/references/questions/q17-cross-platform-secret-storage.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 21456
+  },
+  {
+    "index": 2,
+    "title": "Q16",
+    "url": "https://chatgpt.com/c/6a350f67-9ac8-83ee-b98c-3dd00c75bfc3",
+    "file": "/Users/Vint/Repos/01_Project_Personal/050_codex_remote/docs/references/questions/q16-device-bound-token-mvp.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 21669
+  },
+  {
+    "index": 3,
+    "title": "Q15",
+    "url": "https://chatgpt.com/c/6a350f4c-fc20-83e8-8ca4-dd51b3efe741",
+    "file": "/Users/Vint/Repos/01_Project_Personal/050_codex_remote/docs/references/questions/q15-control-plane-reverse-connection-transport.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 18907
+  },
+  {
+    "index": 4,
+    "title": "Q14",
+    "url": "https://chatgpt.com/c/6a350f40-5ffc-83e8-94a5-8e3f8d130caa",
+    "file": "/Users/Vint/Repos/01_Project_Personal/050_codex_remote/docs/references/questions/q14-db-driver-selection.md",
+    "clicked_copy": true,
+    "used_system_clipboard": true,
+    "text_length": 14775
+  }
+]
