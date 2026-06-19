@@ -48,6 +48,7 @@ const stage2Paths = [
   "/v1/conversations:",
   "/v1/conversations/{conversationId}/timeline:",
 ] as const;
+const timelinePath = "/v1/conversations/{conversationId}/timeline:" as const;
 const stage2ErrorStatuses = ["400", "401", "403", "408", "424", "500"] as const;
 const stage2DisallowedMethods = ["post", "put", "patch", "delete", "head", "options", "trace"];
 const stage2DisallowedOperationIds = ["approval", "stream", "interrupt", "steer", "followUpConversation"];
@@ -382,6 +383,33 @@ test("when worker read-only http api errors are maintained, stage 2 routes shoul
   }
 });
 
+test("when conversation timeline errors are maintained, only the timeline route should require 404 ErrorEnvelope", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const componentResponseDefs = getComponentResponseUsesErrorEnvelope(source);
+
+  for (const path of stage2Paths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    const methodBlocks = extractMethodBlocks(pathBlockLines);
+    assert.equal(methodBlocks.length > 0, true);
+
+    for (const method of methodBlocks) {
+      const responseRefs = extractResponseRefs(method.lines);
+      const responseInfo = responseRefs.get("404");
+      const responseRefsErrorEnvelope = responseInfo
+        ? responseInfo.componentResponseRefs.some((responseName) => componentResponseDefs.get(responseName) === true)
+        : false;
+      const has404ErrorEnvelope = responseInfo?.hasDirectSchemaRef || responseRefsErrorEnvelope;
+
+      if (path === timelinePath) {
+        assert.equal(has404ErrorEnvelope, true);
+        continue;
+      }
+
+      assert.equal(has404ErrorEnvelope ?? false, false);
+    }
+  }
+});
+
 test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const source = readFileSync(openApiPath, "utf8");
   const errorEnvelopeBlock = extractBlockLines(source, /^    ErrorEnvelope:$/);
@@ -403,10 +431,10 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
 
   const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
   const additionalPropertiesIsFalse = /^ {10}additionalProperties:\s*false$/m;
+  const propertiesBlock = extractBlockLines(detailsBlock, /^ {10}properties:\s*$/).join("\n");
   const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
+  const propertyKeys = [...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9]*):\s*$/gm)].map((match) => match[1]);
 
   assert.equal(additionalPropertiesIsFalse.test(detailsBlock), true);
-  for (const key of allowlistedKeys) {
-    assert.match(detailsBlock, new RegExp(`^ {10}${key}:`, "m"));
-  }
+  assert.deepEqual(propertyKeys, allowlistedKeys);
 });
