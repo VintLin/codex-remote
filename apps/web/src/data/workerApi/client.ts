@@ -60,7 +60,7 @@ export class WorkerApiClient implements WorkerApiClientLike {
 
   public constructor(config: WorkerApiClientConfig) {
     this.config = config;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   public async getHealth(): Promise<WorkerHealth> {

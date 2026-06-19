@@ -49,8 +49,8 @@ flowchart LR
 | 0. 架构底座 | monorepo、包边界、contract/protocol 事实源 | 已完成 |
 | 1. Read-only Worker Probe | 验证本机 app-server read-only 主链 | 已完成 |
 | 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | 已完成本地可验证切片 |
-| 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 下一阶段 |
-| 4. 写操作主链 | start、follow-up、stream 输出 | 未开始 |
+| 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 已完成本地可验证切片 |
+| 4. 写操作主链 | start、follow-up、stream 输出 | 下一阶段 |
 | 5. 控制主链 | interrupt、steer、approval request/response | 未开始 |
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 未开始 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 未开始 |
@@ -155,34 +155,44 @@ flowchart LR
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-19-worker-http-readonly-api-design.md`
+- `docs/superpowers/specs/2026-06-20-web-real-datasource-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-19-worker-http-readonly-api.md`
+- `docs/superpowers/plans/2026-06-20-web-real-datasource.md`
 
-Stage 2 已完成：
+Stage 3 已完成：
 
-- `packages/api-contract/openapi.yaml` 增加 5 个 versioned read-only Worker endpoint。
-- `apps/worker` 增加 loopback-only HTTP config、sanitized errors、read-only handlers、Hono boundary、server CLI 和架构边界测试。
-- 本地 smoke：`/v1/worker/capabilities` 返回 200；未配置本机 app-server 时 `/v1/worker/health` 返回 424 `ErrorEnvelope`，无 token、raw URL、stack、prompt、command output 或 full diff 泄漏。
+- `apps/web/src/data/workerApi` 增加 Web-local datasource boundary 和 Worker HTTP client；Web 只消费 `@codex-remote/api-contract`。
+- `CodexRemoteApp` 从 `WorkbenchData` 渲染设备、项目、对话、metadata-only timeline、搜索结果和 datasource 状态。
+- fallback 保留现有 fixture，但 timeline 降为 metadata-only，避免 prompt、assistant text、command output、full diff、tool args 或真实路径进入 Stage 3 fallback。
+- 本地 Chrome smoke：fake Worker 正常路径渲染 `Smoke Worker conversation`、`stage3-smoke`、`loaded`、`turn completed`；搜索可选中 `Smoke complete conversation`；停止 fake Worker 后回到 sanitized `request_failure` fallback；UI 未显示 token 或 raw Worker URL，写控件保持禁用。
+- 修复项：浏览器原生 `fetch` 必须绑定 `globalThis` 后再作为默认 fetch implementation 使用，否则会触发 `Illegal invocation` 并在请求发出前 fallback。
 
-下一步建议进入 Stage 3：Web 接真实数据。
+验证：
 
-范围建议：
+- `pnpm --filter @codex-remote/web test`
+- `pnpm --filter @codex-remote/web typecheck`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
 
-- 建立 Web datasource boundary，用 `api-contract` 类型消费 Worker/Control Plane-shaped API。
-- 保留现有 mock/factory 作为 fallback 和测试夹具，不让 UI 组件直接依赖 mock 数据结构。
-- 先接只读主链：capabilities/health、conversation list、conversation timeline。
-- 不做 write、stream、approval、Control Plane、DB。
+下一步建议进入 Stage 4：写操作主链。
 
-Stage 3 默认设计输入：
+Stage 4 范围建议：
 
-- Web 只依赖 `@codex-remote/api-contract`，不导入 `@codex-remote/codex-protocol`。
-- Datasource 返回 public contract 类型或从 public contract 明确派生的 view state。
-- 首个纵切只读；Web 错误态必须展示 sanitized `ErrorEnvelope` 的 public message/code。
-- Playwright 暂不大规模引入；等 Web + fake Worker datasource 能跑通首个交互纵切链路时，只加少量 smoke。
-- 不创建空 `apps/control-plane`、`packages/db` 或 `packages/shared`；等对应阶段需要真实文件时再创建。
+- 先设计 start/follow-up 的最小 API contract；字段仍以 `packages/api-contract/openapi.yaml` 为唯一事实源。
+- Worker 仍是唯一 app-server 调用者；Web 只能调用 Worker/Control Plane-shaped HTTP API。
+- 先做单设备、单 conversation 的 write 主链；stream 输出只做到 Stage 4 明确范围内的最小可验证切片。
+- 不做 approval、interrupt、steer、Control Plane 多设备、DB、iOS、pairing 或产品化 auth。
+- 写路径必须有 idempotency / expected conversation or turn guardrail；失败返回 sanitized `ErrorEnvelope`。
+
+Stage 4 风险：
+
+- write/stream 比 read-only 更容易泄漏 prompt、command output、stack/cause 或 app-server raw frame；spec 必须先定义日志和 UI 可显示字段白名单。
+- app-server start/follow-up 语义需要从 `packages/codex-protocol` 生成物验证，不允许 Web 直接依赖协议。
+- 需要明确“发送成功”与“任务完成”不是同一状态，避免把 stream send 当成持久 event log。
 
 后续阶段默认设计输入：
 
