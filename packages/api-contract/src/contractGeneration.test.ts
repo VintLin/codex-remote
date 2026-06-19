@@ -433,8 +433,10 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const additionalPropertiesIsFalse = /^ {10}additionalProperties:\s*false$/m;
   const propertiesBlock = extractBlockLines(detailsBlock, /^ {10}properties:\s*$/).join("\n");
   const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
-  const propertyKeys = [...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9]*):\s*$/gm)].map((match) => match[1]);
+  const propertyKeys = [
+    ...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9_-]*):\s*$/gm),
+  ].map((match) => match[1]);
 
   assert.equal(additionalPropertiesIsFalse.test(detailsBlock), true);
-  assert.deepEqual(propertyKeys, allowlistedKeys);
+  assert.deepEqual(new Set(propertyKeys), new Set(allowlistedKeys));
 });
