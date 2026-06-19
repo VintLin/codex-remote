@@ -139,3 +139,51 @@ test("when read-only main-chain schemas are maintained, openapi should define th
     assert.match(source, new RegExp(`^        ${fieldName}`, "m"));
   }
 });
+
+test("when worker read-only http api is maintained, openapi should define versioned stage 2 paths", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const path of [
+    "/v1/worker/health:",
+    "/v1/worker/capabilities:",
+    "/v1/worker/probe:",
+    "/v1/conversations:",
+    "/v1/conversations/{conversationId}/timeline:",
+  ]) {
+    assert.match(source, new RegExp(`^  ${path.replaceAll("/", "\\/")}`, "m"));
+  }
+});
+
+test("when worker read-only http api errors are maintained, routes should use ErrorEnvelope", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const status of ['"400"', '"401"', '"403"', '"408"', '"424"', '"500"']) {
+    assert.match(source, new RegExp(`${status}:[\\s\\S]*\\$ref: "#\\/components\\/schemas\\/ErrorEnvelope"`));
+  }
+});
+
+test("when stage 2 worker routes are implemented, write routes should stay outside the allowlist", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  assert.doesNotMatch(source, /operationId:\s*workerFollowUpConversation/);
+  assert.doesNotMatch(source, /operationId:\s*workerApproval/);
+  assert.doesNotMatch(source, /operationId:\s*workerInterrupt/);
+  assert.doesNotMatch(source, /operationId:\s*workerSteer/);
+});
+
+test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  const allowlistedDetailsField = [
+    /\bdetails:/,
+    /^\s{4}type:\s*object/m,
+    /^\s{6}oneOf:/m,
+    /^\s{8}-\s+\$ref: '#\/components\/schemas\/ProbeFailure'/m,
+    /^\s{8}-\s+\$ref: '#\/components\/schemas\/CommandNotAllowedError'/m,
+    /^\s{8}-\s+\$ref: '#\/components\/schemas\/ConversationNotFoundError'/m,
+  ];
+
+  for (const pattern of allowlistedDetailsField) {
+    assert.match(source, pattern);
+  }
+});
