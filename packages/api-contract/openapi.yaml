@@ -149,17 +149,6 @@ paths:
   /v1/conversations:
     get:
       operationId: listWorkerConversations
-      parameters:
-        - name: deviceId
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: projectId
-          in: query
-          required: false
-          schema:
-            type: string
       responses:
         "200":
           description: Worker conversation list visible to the current actor.

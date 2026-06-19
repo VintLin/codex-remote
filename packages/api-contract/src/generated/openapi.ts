@@ -574,10 +574,7 @@ export interface operations {
     };
     listWorkerConversations: {
         parameters: {
-            query?: {
-                deviceId?: string;
-                projectId?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
