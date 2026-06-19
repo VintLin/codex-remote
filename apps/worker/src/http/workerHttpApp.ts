@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 
 import { isBearerTokenAuthorized, isOriginAllowed } from "../security/workerSecurity.ts";
 import { toErrorEnvelope, WorkerHttpError } from "./errors.ts";
@@ -20,6 +20,8 @@ type WorkerHonoEnv = {
 };
 
 type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 424 | 500;
+const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
+const corsAllowMethods = "GET, OPTIONS";
 
 export function createWorkerHttpApp(context: WorkerReadOnlyHandlerContext): Hono<WorkerHonoEnv> {
   const app = new Hono<WorkerHonoEnv>();
@@ -34,12 +36,21 @@ export function createWorkerHttpApp(context: WorkerReadOnlyHandlerContext): Hono
   app.use("*", async (c, next) => {
     c.set("requestId", c.req.header("x-request-id") ?? randomUUID());
 
-    if (!isBearerTokenAuthorized(c.req.header("authorization"), context.config.workerToken)) {
-      throw new WorkerHttpError(401, "unauthorized", "Missing or invalid bearer token.");
+    const origin = c.req.header("origin");
+    if (!isOriginAllowed(origin, context.config.allowedOrigins)) {
+      throw new WorkerHttpError(403, "origin_forbidden", "Origin is not allowed.");
     }
 
-    if (!isOriginAllowed(c.req.header("origin"), context.config.allowedOrigins)) {
-      throw new WorkerHttpError(403, "origin_forbidden", "Origin is not allowed.");
+    if (origin) {
+      setCorsHeaders(c, origin);
+    }
+
+    if (c.req.method === "OPTIONS") {
+      return c.body(null, 204);
+    }
+
+    if (!isBearerTokenAuthorized(c.req.header("authorization"), context.config.workerToken)) {
+      throw new WorkerHttpError(401, "unauthorized", "Missing or invalid bearer token.");
     }
 
     await next();
@@ -54,6 +65,13 @@ export function createWorkerHttpApp(context: WorkerReadOnlyHandlerContext): Hono
   );
 
   return app;
+}
+
+function setCorsHeaders(c: Context<WorkerHonoEnv>, origin: string): void {
+  c.header("Access-Control-Allow-Origin", origin);
+  c.header("Access-Control-Allow-Headers", corsAllowHeaders);
+  c.header("Access-Control-Allow-Methods", corsAllowMethods);
+  c.header("Vary", "Origin");
 }
 
 function toErrorStatus(status: number): ErrorStatus {

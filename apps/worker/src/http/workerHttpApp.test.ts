@@ -49,7 +49,25 @@ test("worker http app when token is valid and origin is absent or allowlisted, s
 
   assert.equal(cliResponse.status, 200);
   assert.equal(browserResponse.status, 200);
+  assert.equal(browserResponse.headers.get("access-control-allow-origin"), "http://127.0.0.1:5173");
   assert.equal((await cliResponse.json()).canReadConversations, true);
+});
+
+test("worker http app when browser sends preflight, should allow configured origin without bearer auth", async () => {
+  const app = createWorkerHttpApp(await createContext());
+
+  const response = await app.request("/v1/worker/capabilities", {
+    method: "OPTIONS",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      "access-control-request-method": "GET",
+      "access-control-request-headers": "authorization",
+    },
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:5173");
+  assert.match(response.headers.get("access-control-allow-headers") ?? "", /Authorization/);
 });
 
 test("worker http app when timeline is requested, should return ConversationTimeline", async () => {
