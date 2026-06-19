@@ -170,6 +170,32 @@ for (const [status, reason] of [
   });
 }
 
+test("workbench datasource should sanitize unsafe error message content", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/worker/health": jsonResponse(
+        {
+          code: "internal_server_error",
+          message:
+            "Failed to execute request; token=abc-SECRET-raw and contact http://internal.local/admin?token=abc; full diff: {\"json-rpc\":1} stack: 1",
+          details: {},
+        },
+        500,
+      ),
+    }),
+  });
+
+  assert.equal(data.source.reason, "request_failure");
+  assert.equal(data.source.error?.code, "internal_server_error");
+  const message = data.source.error?.message ?? "";
+  assert.equal(message.includes("http://"), false);
+  assert.equal(message.includes("abc-SECRET-raw"), false);
+  assert.equal(message.includes("full diff"), false);
+  assert.equal(message.includes("stack"), false);
+});
+
 test("workbench datasource when conversations are projectless should not create projects", async () => {
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",

@@ -32,6 +32,7 @@ type SanitizedErrorEnvelope = {
 };
 
 const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit"]);
+const fallbackErrorMessage = "Worker request failed.";
 
 export interface WorkerApiErrorEnvelope extends Error {
   status: number;
@@ -119,7 +120,7 @@ export class WorkerApiClient implements WorkerApiClientLike {
 
     const code = typeof body.code === "string" && body.code.trim() !== "" ? body.code : fallback.code;
     const message =
-      typeof body.message === "string" && body.message.trim() !== "" ? body.message : fallback.message;
+      typeof body.message === "string" && body.message.trim() !== "" ? sanitizeErrorMessage(body.message) : fallback.message;
 
     return {
       code,
@@ -202,4 +203,30 @@ function sanitizeErrorDetails(details: unknown): {
 
 function isRecord(value: JsonValue): value is Record<string, JsonValue> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function sanitizeErrorMessage(message: string): string {
+  let sanitized = message.trim();
+  if (sanitized.length === 0) {
+    return fallbackErrorMessage;
+  }
+
+  sanitized = sanitized.replace(/\b(?:https?|wss?|file):\/\/[^\s"'`<>]+/gi, "[redacted-url]");
+  sanitized = sanitized.replace(/(?:api[-_]?key|access[-_]?token|auth[-_]?token|authorization|bearer|token)\s*[:=]\s*[^\s,.;)]+/gi, "token=[redacted-token]");
+  sanitized = sanitized.replace(/\b(?:private path|privatePath|json[-_]rpc|full diff)\b[^.\n]*/gi, "");
+
+  if (containsUnsafeErrorMessageContent(sanitized)) {
+    return fallbackErrorMessage;
+  }
+
+  return sanitized;
+}
+
+function containsUnsafeErrorMessageContent(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    /(stack|cause|prompt|command output|private path|privatePath|json[-_]rpc|full diff)/.test(lower) ||
+    /\b(?:https?|wss?|file):\/\/[^\s"'`<>]+/i.test(message) ||
+    /\b(?:[A-Za-z]:\\|\/)(?:[\w.-]+[\\/])+[\w.-]+/i.test(message)
+  );
 }
