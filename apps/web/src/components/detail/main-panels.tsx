@@ -7,18 +7,22 @@ import type { SearchRecent, WorkbenchData } from "../../data/workerApi/workbench
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
+import type { SubmitFollowUpDraftResult } from "../conversation/followUpComposerSubmit";
 import { DetailWorkspace } from "./detail-workspace";
 import { iconForDevice } from "../shared/icons";
 
 interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
+  canSubmitFollowUp: boolean;
   conversation: CodexConversation | null;
+  followUpStatus: "accepted" | "failed" | "idle" | "submitting";
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
   onBack?: () => void;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
   onSelectAdjacentConversation: (conversationId: string) => void;
+  onSubmitFollowUp: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   previousConversationId: string | null;
@@ -49,7 +53,9 @@ interface SearchDialogProps {
 
 export function ConversationMain({
   assistantThread,
+  canSubmitFollowUp,
   conversation,
+  followUpStatus,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -59,6 +65,7 @@ export function ConversationMain({
   onExpandSidebar,
   onOpenDetail,
   onSelectAdjacentConversation,
+  onSubmitFollowUp,
   previousConversationId,
   source,
 }: ConversationMainProps) {
@@ -130,7 +137,13 @@ export function ConversationMain({
       </header>
 
       <div className="content-scroll conversation-content-scroll">
-        <CodexAssistantThread onOpenDetail={onOpenDetail} thread={assistantThread} />
+        <CodexAssistantThread
+          canSubmitFollowUp={canSubmitFollowUp}
+          followUpStatus={followUpStatus}
+          onOpenDetail={onOpenDetail}
+          onSubmitFollowUp={onSubmitFollowUp}
+          thread={assistantThread}
+        />
       </div>
     </main>
   );

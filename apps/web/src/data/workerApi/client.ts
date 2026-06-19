@@ -1,7 +1,10 @@
 import type {
   CodexConversation,
+  CommandAccepted,
   ConversationTimeline,
   ErrorEnvelope,
+  FollowUpInput,
+  StartConversationInput,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -17,9 +20,12 @@ export interface WorkerApiClientLike {
   getCapabilities(): Promise<WorkerCapabilities>;
   listConversations(): Promise<CodexConversation[]>;
   getTimeline(conversationId: string): Promise<ConversationTimeline>;
+  startConversation(input: StartConversationInput): Promise<CommandAccepted>;
+  followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
 }
 
 type RequestOptions = {
+  body?: unknown;
   method?: string;
 };
 
@@ -83,15 +89,35 @@ export class WorkerApiClient implements WorkerApiClientLike {
     return response;
   }
 
+  public async startConversation(input: StartConversationInput): Promise<CommandAccepted> {
+    const response = await this.request<CommandAccepted>("/v1/conversations", {
+      body: input,
+      method: "POST",
+    });
+    return response;
+  }
+
+  public async followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted> {
+    const response = await this.request<CommandAccepted>(`/v1/conversations/${conversationId}/follow-up`, {
+      body: input,
+      method: "POST",
+    });
+    return response;
+  }
+
   private async request<TResponse>(path: string, options: RequestOptions = {}): Promise<TResponse> {
     const url = new URL(path, this.config.baseUrl);
     const headers = new Headers();
     headers.set("authorization", `Bearer ${this.config.token}`);
     headers.set("accept", "application/json");
+    if (options.body !== undefined) {
+      headers.set("content-type", "application/json");
+    }
 
     const response = await this.fetchImpl(url.toString(), {
       method: options.method ?? "GET",
       headers,
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     });
 
     if (!response.ok) {

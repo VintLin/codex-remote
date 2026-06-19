@@ -11,7 +11,7 @@ interface AppServerReadOnlyProbeClientOptions {
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private firstAllowedThreadId: string | null = null;
   private readonly maxPages = 3;
-  private readonly rpc: AppServerRpcClient;
+  protected readonly rpc: AppServerRpcClient;
   private readonly readyzUrl: string;
   private readonly allowedProjectRoot: string;
   private readonly readyzTimeoutMs: number;
@@ -150,5 +150,15 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
 
   close(): void {
     this.rpc.close();
+  }
+}
+
+export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
+  async startThread(params: v2.ThreadStartParams): Promise<v2.ThreadStartResponse> {
+    return (await this.rpc.request("thread/start", params)) as v2.ThreadStartResponse;
+  }
+
+  async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
+    return (await this.rpc.request("turn/start", params)) as v2.TurnStartResponse;
   }
 }

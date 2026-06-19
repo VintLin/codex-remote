@@ -21,9 +21,13 @@ import type {
 } from "../../domain/assistant/assistantTimeline";
 import { CodexMarkdownText } from "./codex-markdown-text";
 import { CodexToolCallRow, CodexToolGroupRow } from "./codex-tool-call-row";
+import { submitFollowUpDraft, type SubmitFollowUpDraftResult } from "./followUpComposerSubmit";
 
 interface CodexAssistantThreadProps {
+  canSubmitFollowUp?: boolean;
+  followUpStatus?: "accepted" | "failed" | "idle" | "submitting";
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
+  onSubmitFollowUp?: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
   thread: AssistantThreadSnapshot | null;
 }
 
@@ -56,23 +60,41 @@ type TimelineRow =
     };
 
 const noopOpenDetail = () => {};
+const noopSubmitFollowUp = async () => {};
 
-export function CodexAssistantThread({ onOpenDetail = noopOpenDetail, thread }: CodexAssistantThreadProps) {
+export function CodexAssistantThread({
+  canSubmitFollowUp = false,
+  followUpStatus = "idle",
+  onOpenDetail = noopOpenDetail,
+  onSubmitFollowUp = noopSubmitFollowUp,
+  thread,
+}: CodexAssistantThreadProps) {
   return (
     <CodexAssistantRuntimeThread
+      canSubmitFollowUp={canSubmitFollowUp}
+      followUpStatus={followUpStatus}
       key={thread?.id ?? "empty-thread"}
       onOpenDetail={onOpenDetail}
+      onSubmitFollowUp={onSubmitFollowUp}
       thread={thread}
     />
   );
 }
 
-function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAssistantThreadProps>) {
+function CodexAssistantRuntimeThread({
+  canSubmitFollowUp,
+  followUpStatus,
+  onOpenDetail,
+  onSubmitFollowUp,
+  thread,
+}: Required<CodexAssistantThreadProps>) {
   const [accessMenuOpen, setAccessMenuOpen] = useState(false);
+  const [draft, setDraft] = useState("");
   const [selectedAccessMode, setSelectedAccessMode] = useState<(typeof accessModeOptions)[number]["key"]>("full-access");
   const [expandedRunIds, setExpandedRunIds] = useState(() => new Set<string>());
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const accessMenuRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messages = useMemo(() => getRuntimeMessages(thread), [thread]);
   const rows = useMemo(() => getTimelineRows(thread), [thread]);
@@ -88,10 +110,33 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
   const runtime = useExternalStoreRuntime<RuntimeMessageSnapshot>({
     messages,
     convertMessage,
-    isDisabled: true,
-    isSendDisabled: true,
+    isDisabled: !canSubmitFollowUp,
+    isSendDisabled: !canSubmitFollowUp,
     onNew: async () => {},
   });
+  const isSubmitting = followUpStatus === "submitting";
+  const canSend = canSubmitFollowUp && !isSubmitting && draft.trim().length > 0;
+  const syncDraftFromComposer = useCallback(() => {
+    setDraft(composerInputRef.current?.textContent ?? "");
+  }, []);
+  const submitFollowUp = useCallback(async () => {
+    const message = draft.trim();
+    if (!canSend) {
+      return;
+    }
+
+    await submitFollowUpDraft({
+      canSend,
+      message,
+      onSubmitFollowUp,
+      onClearDraft: () => {
+        setDraft("");
+        if (composerInputRef.current) {
+          composerInputRef.current.textContent = "";
+        }
+      },
+    });
+  }, [canSend, draft, onSubmitFollowUp]);
   const toggleRun = useCallback((runId: string) => {
     setExpandedRunIds((current) => {
       const next = new Set(current);
@@ -208,14 +253,25 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
                 <Icon name="down" />
               </button>
             ) : null}
-            <ComposerPrimitive.Root aria-disabled="true" className="codex-assistant-composer">
+            <ComposerPrimitive.Root aria-disabled={!canSubmitFollowUp} className="codex-assistant-composer">
               <div
                 aria-label="Follow-up message"
-                aria-disabled="true"
+                aria-disabled={!canSubmitFollowUp || isSubmitting}
                 className="codex-assistant-composer-input"
+                contentEditable={canSubmitFollowUp && !isSubmitting}
+                onInput={syncDraftFromComposer}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    void submitFollowUp();
+                  }
+                }}
+                onKeyUp={syncDraftFromComposer}
+                ref={composerInputRef}
                 role="textbox"
+                suppressContentEditableWarning
               >
-                要求后续变更
+                {draft}
               </div>
               <div className="codex-assistant-composer-actions">
                 <div className="codex-assistant-composer-left">
@@ -266,11 +322,17 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
                   <button aria-label="语音输入" className="codex-assistant-composer-icon" disabled type="button">
                     <Icon name="mic" />
                   </button>
-                  <ComposerPrimitive.Send aria-label="发送" className="codex-assistant-send" disabled type="button">
+                  <button
+                    aria-label="发送"
+                    className="codex-assistant-send"
+                    disabled={!canSend}
+                    onClick={() => void submitFollowUp()}
+                    type="button"
+                  >
                     <Icon name="arrow-up" />
-                  </ComposerPrimitive.Send>
+                  </button>
                 </div>
-                <span className="codex-assistant-composer-note">当前仅展示演示历史</span>
+                <span className="codex-assistant-composer-status">{getFollowUpStatusLabel(followUpStatus)}</span>
               </div>
             </ComposerPrimitive.Root>
           </ThreadPrimitive.ViewportProvider>
@@ -278,6 +340,19 @@ function CodexAssistantRuntimeThread({ onOpenDetail, thread }: Required<CodexAss
       </section>
     </AssistantRuntimeProvider>
   );
+}
+
+function getFollowUpStatusLabel(status: Required<CodexAssistantThreadProps>["followUpStatus"]): string {
+  if (status === "submitting") {
+    return "正在发送";
+  }
+  if (status === "accepted") {
+    return "已接受，正在刷新";
+  }
+  if (status === "failed") {
+    return "发送失败";
+  }
+  return "输入后发送";
 }
 
 function CodexAssistantProcessedRun(props: { expanded: boolean; label: string; onToggle: () => void }) {

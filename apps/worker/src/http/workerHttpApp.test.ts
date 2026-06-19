@@ -7,7 +7,7 @@ import test from "node:test";
 import type { v2 } from "@codex-remote/codex-protocol";
 
 import { createWorkerHttpApp } from "./workerHttpApp.ts";
-import type { WorkerReadOnlyAppServerClient, WorkerReadOnlyHandlerContext } from "./readOnlyHandlers.ts";
+import { createWorkerWriteHandlerState, type WorkerWriteAppServerClient, type WorkerWriteHandlerContext } from "./writeHandlers.ts";
 import type { WorkerHttpConfig } from "./workerHttpConfig.ts";
 
 const authHeaders = { authorization: "Bearer example-token" };
@@ -68,6 +68,7 @@ test("worker http app when browser sends preflight, should allow configured orig
   assert.equal(response.status, 204);
   assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:5173");
   assert.match(response.headers.get("access-control-allow-headers") ?? "", /Authorization/);
+  assert.match(response.headers.get("access-control-allow-methods") ?? "", /POST/);
 });
 
 test("worker http app when timeline is requested, should return ConversationTimeline", async () => {
@@ -102,6 +103,107 @@ test("worker http app when route is outside stage 2 allowlist, should not implem
   assert.equal(response.status, 404);
 });
 
+test("worker http app when follow-up is accepted, should return CommandAccepted with 202", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+
+  const response = await app.request("/v1/conversations/thread-123/follow-up", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: "Continue safely",
+      clientRequestId: "client-http-follow-up-1",
+      expectedConversationId: "thread-123",
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(body.status, "accepted");
+  assert.equal(body.conversationId, "thread-123");
+  assert.equal(body.turnId, "turn-started");
+});
+
+test("worker http app when start is accepted, should return CommandAccepted with 202", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+
+  const response = await app.request("/v1/conversations", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      projectId: context.projectId,
+      message: "Start safely",
+      clientRequestId: "client-http-start-1",
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(body.status, "accepted");
+  assert.equal(body.conversationId, "thread-started");
+  assert.equal(body.turnId, "turn-started");
+});
+
+test("worker http app when write body is invalid, should return 400 without app-server write", async () => {
+  const client = new FakeClient();
+  const context = await createContext({ client });
+  const app = createWorkerHttpApp(context);
+
+  const invalidJsonResponse = await app.request("/v1/conversations", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: "{",
+  });
+  const missingFieldResponse = await app.request("/v1/conversations/thread-123/follow-up", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ message: "Continue" }),
+  });
+  const extraFieldResponse = await app.request("/v1/conversations/thread-123/follow-up", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: "Continue",
+      clientRequestId: "client-http-follow-up-extra",
+      expectedConversationId: "thread-123",
+      rawJsonRpc: "{}",
+    }),
+  });
+  const overlongIdResponse = await app.request("/v1/conversations/thread-123/follow-up", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: "Continue",
+      clientRequestId: "x".repeat(129),
+      expectedConversationId: "thread-123",
+    }),
+  });
+  const startExtraFieldResponse = await app.request("/v1/conversations", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      projectId: context.projectId,
+      message: "Start",
+      clientRequestId: "client-http-start-extra",
+      rawJsonRpc: "{}",
+    }),
+  });
+
+  assert.equal(invalidJsonResponse.status, 400);
+  assert.equal((await invalidJsonResponse.json()).code, "invalid_request");
+  assert.equal(missingFieldResponse.status, 400);
+  assert.equal((await missingFieldResponse.json()).code, "invalid_request");
+  assert.equal(extraFieldResponse.status, 400);
+  assert.equal((await extraFieldResponse.json()).code, "invalid_request");
+  assert.equal(overlongIdResponse.status, 400);
+  assert.equal((await overlongIdResponse.json()).code, "invalid_request");
+  assert.equal(startExtraFieldResponse.status, 400);
+  assert.equal((await startExtraFieldResponse.json()).code, "invalid_request");
+  assert.equal(client.startThreadCalls, 0);
+  assert.equal(client.startTurnCalls, 0);
+});
+
 test("worker http app when handler fails, should return sanitized ErrorEnvelope", async () => {
   const leakMarkers = [
     "ws://127.0.0.1:4321",
@@ -131,7 +233,7 @@ test("worker http app when handler fails, should return sanitized ErrorEnvelope"
   }
 });
 
-async function createContext(options: { client?: WorkerReadOnlyAppServerClient } = {}): Promise<WorkerReadOnlyHandlerContext> {
+async function createContext(options: { client?: WorkerWriteAppServerClient } = {}): Promise<WorkerWriteHandlerContext & { projectId: string }> {
   const allowedProjectRoot = await mkdtemp(join(tmpdir(), "worker-http-app-"));
   const project = join(allowedProjectRoot, "project");
   await mkdir(project);
@@ -154,10 +256,14 @@ async function createContext(options: { client?: WorkerReadOnlyAppServerClient }
     } satisfies WorkerHttpConfig,
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,
+    writeState: createWorkerWriteHandlerState(),
+    projectId: allowedProjectRoot.split("/").at(-1) ?? "project",
   };
 }
 
-class FakeClient implements WorkerReadOnlyAppServerClient {
+class FakeClient implements WorkerWriteAppServerClient {
+  startThreadCalls = 0;
+  startTurnCalls = 0;
   private readonly cwd: string;
   private readonly listError: Error | null;
 
@@ -182,6 +288,16 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
 
   async readThread(): Promise<v2.ThreadReadResponse> {
     return { thread: createThread({ cwd: this.cwd }) };
+  }
+
+  async startThread(): Promise<v2.ThreadStartResponse> {
+    this.startThreadCalls += 1;
+    return { thread: createThread({ cwd: this.cwd, id: "thread-started", turns: [] }) } as v2.ThreadStartResponse;
+  }
+
+  async startTurn(): Promise<v2.TurnStartResponse> {
+    this.startTurnCalls += 1;
+    return { turn: createTurn({ id: "turn-started", status: "inProgress" }) };
   }
 
   close(): void {}

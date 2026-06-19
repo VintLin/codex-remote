@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
+import { WorkerApiClient } from "../../data/workerApi/client";
 import {
   createDefaultSidebarSectionState,
   createSidebarModel,
   resolveConversationNavigator,
   toggleSidebarSection,
 } from "../../domain/sidebar/sidebarModel";
+import { submitConversationFollowUp, type FollowUpSubmitStatus } from "./followUpSubmitController";
 import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
 import {
   AutomationDetailPane,
@@ -45,6 +47,7 @@ export function CodexRemoteApp() {
   const [mobilePane, setMobilePane] = useState<MobileWorkspacePane>("sidebar");
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
+  const [followUpStatus, setFollowUpStatus] = useState<FollowUpSubmitStatus>("idle");
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +70,30 @@ export function CodexRemoteApp() {
         : { nextConversationId: null, previousConversationId: null },
     [selectedConversationId, sidebarModel],
   );
+  const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(workerToken);
+
+  const refreshWorkbenchData = useCallback(async (conversationId: string | null) => {
+    const nextWorkbenchData = await loadWorkbenchData({
+      baseUrl: workerBaseUrl,
+      token: workerToken,
+      selectedConversationId: conversationId,
+    });
+    setWorkbenchData(nextWorkbenchData);
+  }, []);
+
+  const submitFollowUp = useCallback(async (message: string) => {
+    return submitConversationFollowUp({
+      conversationId: conversation?.id ?? null,
+      createClientRequestId: () => crypto.randomUUID(),
+      message,
+      refreshWorkbenchData,
+      setFollowUpStatus,
+      workerClient: new WorkerApiClient({
+        baseUrl: workerBaseUrl,
+        token: workerToken,
+      }),
+    });
+  }, [conversation, refreshWorkbenchData]);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -146,6 +173,7 @@ export function CodexRemoteApp() {
 
   useEffect(() => {
     setSelectedDetailTarget(null);
+    setFollowUpStatus("idle");
   }, [assistantThread?.id, conversation?.id]);
 
   useEffect(() => {
@@ -289,7 +317,9 @@ export function CodexRemoteApp() {
         main: (
           <ConversationMain
             assistantThread={null}
+            canSubmitFollowUp={false}
             conversation={null}
+            followUpStatus={followUpStatus}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -304,6 +334,7 @@ export function CodexRemoteApp() {
               }
             }}
             onSelectAdjacentConversation={selectConversation}
+            onSubmitFollowUp={submitFollowUp}
             previousConversationId={conversationNavigator.previousConversationId}
             source={source}
           />
@@ -325,7 +356,9 @@ export function CodexRemoteApp() {
       main: (
         <ConversationMain
           assistantThread={assistantThread}
+          canSubmitFollowUp={canSubmitFollowUp}
           conversation={conversation}
+          followUpStatus={followUpStatus}
           isDetailCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}
           isSidebarCollapsed={isSidebarCollapsed}
@@ -340,6 +373,7 @@ export function CodexRemoteApp() {
             }
           }}
           onSelectAdjacentConversation={selectConversation}
+          onSubmitFollowUp={submitFollowUp}
           previousConversationId={conversationNavigator.previousConversationId}
           source={source}
         />

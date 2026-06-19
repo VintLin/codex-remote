@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Hono, type Context } from "hono";
+import type { FollowUpInput, StartConversationInput } from "@codex-remote/api-contract";
 
 import { isBearerTokenAuthorized, isOriginAllowed } from "../security/workerSecurity.ts";
 import { toErrorEnvelope, WorkerHttpError } from "./errors.ts";
@@ -10,8 +11,12 @@ import {
   listConversations,
   readConversationTimeline,
   runProbe,
-  type WorkerReadOnlyHandlerContext,
 } from "./readOnlyHandlers.ts";
+import {
+  followUpConversation,
+  startConversation,
+  type WorkerWriteHandlerContext,
+} from "./writeHandlers.ts";
 
 type WorkerHonoEnv = {
   Variables: {
@@ -19,11 +24,13 @@ type WorkerHonoEnv = {
   };
 };
 
-type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 424 | 500;
+type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 409 | 424 | 500;
 const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
-const corsAllowMethods = "GET, OPTIONS";
+const corsAllowMethods = "GET, POST, OPTIONS";
+const clientRequestIdMaxLength = 128;
+const messageMaxLength = 20_000;
 
-export function createWorkerHttpApp(context: WorkerReadOnlyHandlerContext): Hono<WorkerHonoEnv> {
+export function createWorkerHttpApp(context: WorkerWriteHandlerContext): Hono<WorkerHonoEnv> {
   const app = new Hono<WorkerHonoEnv>();
 
   app.onError((error, c) => {
@@ -60,11 +67,89 @@ export function createWorkerHttpApp(context: WorkerReadOnlyHandlerContext): Hono
   app.get("/v1/worker/capabilities", (c) => c.json(getCapabilities(context)));
   app.get("/v1/worker/probe", async (c) => c.json(await runProbe(context)));
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
+  app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));
   app.get("/v1/conversations/:conversationId/timeline", async (c) =>
     c.json(await readConversationTimeline(context, c.req.param("conversationId"))),
   );
+  app.post("/v1/conversations/:conversationId/follow-up", async (c) =>
+    c.json(await followUpConversation(context, c.req.param("conversationId"), await readFollowUpInput(c)), 202),
+  );
 
   return app;
+}
+
+async function readStartInput(c: Context<WorkerHonoEnv>): Promise<StartConversationInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["projectId", "message", "clientRequestId"]);
+
+  return {
+    projectId: getRequiredStringField(body, "projectId"),
+    message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+  };
+}
+
+async function readFollowUpInput(c: Context<WorkerHonoEnv>): Promise<FollowUpInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["message", "clientRequestId", "expectedConversationId"]);
+  const expectedConversationId = getOptionalStringField(body, "expectedConversationId");
+
+  return {
+    message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+    ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readJsonObject(c: Context<WorkerHonoEnv>): Promise<Record<string, unknown>> {
+  let body: unknown;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    throwInvalidBody();
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throwInvalidBody();
+  }
+
+  return body as Record<string, unknown>;
+}
+
+function assertKnownFields(body: Record<string, unknown>, allowedFields: readonly string[]): void {
+  const allowed = new Set(allowedFields);
+  if (Object.keys(body).some((field) => !allowed.has(field))) {
+    throwInvalidBody();
+  }
+}
+
+function getRequiredStringField(
+  body: Record<string, unknown>,
+  field: string,
+  options: { maxLength?: number } = {},
+): string {
+  const value = body[field];
+  if (typeof value !== "string" || value.length < 1 || (options.maxLength !== undefined && value.length > options.maxLength)) {
+    throwInvalidBody();
+  }
+
+  return value;
+}
+
+function getOptionalStringField(body: Record<string, unknown>, field: string): string | undefined {
+  if (!(field in body)) {
+    return undefined;
+  }
+
+  return getRequiredStringField(body, field);
+}
+
+function throwInvalidBody(): never {
+  throw new WorkerHttpError(400, "invalid_request", "Request validation failed.", {
+    operation: "http_body",
+    retryable: false,
+  });
 }
 
 function setCorsHeaders(c: Context<WorkerHonoEnv>, origin: string): void {
@@ -81,6 +166,7 @@ function toErrorStatus(status: number): ErrorStatus {
     case 403:
     case 404:
     case 408:
+    case 409:
     case 424:
     case 500:
       return status;

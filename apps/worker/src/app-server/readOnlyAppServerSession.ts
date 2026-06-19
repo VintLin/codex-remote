@@ -8,7 +8,10 @@ import {
   type AppServerProcessHandle,
 } from "./appServerProcessService.ts";
 import { connectAppServerRpcClient } from "./appServerRpcClient.ts";
-import { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient.ts";
+import {
+  AppServerReadOnlyProbeClient,
+  AppServerWorkerClient,
+} from "../probe/appServerReadOnlyProbeClient.ts";
 
 export interface OpenReadOnlyAppServerSessionOptions {
   configuredUrl: string | null;
@@ -25,7 +28,26 @@ export interface ReadOnlyAppServerSession {
   close(): void;
 }
 
+export interface WorkerAppServerSession {
+  client: AppServerWorkerClient;
+  startedByWorker: boolean;
+  close(): void;
+}
+
 class SessionAppServerReadOnlyProbeClient extends AppServerReadOnlyProbeClient {
+  private closed = false;
+
+  override close(): void {
+    if (this.closed) {
+      return;
+    }
+
+    this.closed = true;
+    super.close();
+  }
+}
+
+class SessionAppServerWorkerClient extends AppServerWorkerClient {
   private closed = false;
 
   override close(): void {
@@ -45,9 +67,27 @@ function createReadOnlyAppServerSessionError(kind: "app_server_env_not_configure
 export async function openReadOnlyAppServerSession(
   options: OpenReadOnlyAppServerSessionOptions,
 ): Promise<ReadOnlyAppServerSession> {
+  return await openAppServerSession(options, SessionAppServerReadOnlyProbeClient);
+}
+
+export async function openWorkerAppServerSession(
+  options: OpenReadOnlyAppServerSessionOptions,
+): Promise<WorkerAppServerSession> {
+  return await openAppServerSession(options, SessionAppServerWorkerClient);
+}
+
+async function openAppServerSession<TClient extends AppServerReadOnlyProbeClient>(
+  options: OpenReadOnlyAppServerSessionOptions,
+  Client: new (
+    rpc: Awaited<ReturnType<typeof connectAppServerRpcClient>>,
+    readyzUrl: string,
+    allowedProjectRoot: string,
+    options?: { readyzTimeoutMs?: number },
+  ) => TClient,
+): Promise<{ client: TClient; startedByWorker: boolean; close(): void }> {
   const configuredUrl = options.configuredUrl?.trim() ? options.configuredUrl : null;
   let appServer: AppServerProcessHandle | null = null;
-  let client: SessionAppServerReadOnlyProbeClient | null = null;
+  let client: TClient | null = null;
 
   try {
     const appServerUrl = configuredUrl
@@ -72,7 +112,7 @@ export async function openReadOnlyAppServerSession(
       ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
     });
 
-    client = new SessionAppServerReadOnlyProbeClient(rpc, readyzUrl, options.allowedProjectRoot, {
+    client = new Client(rpc, readyzUrl, options.allowedProjectRoot, {
       ...(options.readyzTimeoutMs === undefined ? {} : { readyzTimeoutMs: options.readyzTimeoutMs }),
     });
 

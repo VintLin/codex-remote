@@ -50,8 +50,8 @@ flowchart LR
 | 1. Read-only Worker Probe | 验证本机 app-server read-only 主链 | 已完成 |
 | 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | 已完成本地可验证切片 |
 | 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 已完成本地可验证切片 |
-| 4. 写操作主链 | start、follow-up、stream 输出 | 下一阶段 |
-| 5. 控制主链 | interrupt、steer、approval request/response | 未开始 |
+| 4. 写操作主链 | start、follow-up、stream 输出 | 已完成本地可验证切片 |
+| 5. 控制主链 | interrupt、steer、approval request/response | 下一阶段 |
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 未开始 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 未开始 |
 | 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 未开始 |
@@ -155,22 +155,31 @@ flowchart LR
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-web-real-datasource-design.md`
+- `docs/superpowers/specs/2026-06-20-worker-write-stream-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-web-real-datasource.md`
+- `docs/superpowers/plans/2026-06-20-worker-write-stream.md`
 
-Stage 3 已完成：
+Stage 4 已完成：
 
-- `apps/web/src/data/workerApi` 增加 Web-local datasource boundary 和 Worker HTTP client；Web 只消费 `@codex-remote/api-contract`。
-- `CodexRemoteApp` 从 `WorkbenchData` 渲染设备、项目、对话、metadata-only timeline、搜索结果和 datasource 状态。
-- fallback 保留现有 fixture，但 timeline 降为 metadata-only，避免 prompt、assistant text、command output、full diff、tool args 或真实路径进入 Stage 3 fallback。
-- 本地 Chrome smoke：fake Worker 正常路径渲染 `Smoke Worker conversation`、`stage3-smoke`、`loaded`、`turn completed`；搜索可选中 `Smoke complete conversation`；停止 fake Worker 后回到 sanitized `request_failure` fallback；UI 未显示 token 或 raw Worker URL，写控件保持禁用。
-- 修复项：浏览器原生 `fetch` 必须绑定 `globalThis` 后再作为默认 fetch implementation 使用，否则会触发 `Illegal invocation` 并在请求发出前 fallback。
+- `packages/api-contract/openapi.yaml` 定义版本化写接口：`POST /v1/conversations` 与 `POST /v1/conversations/{conversationId}/follow-up`；旧的未版本化 follow-up 写路径已移除。
+- `apps/worker` 是唯一 app-server 写调用边界，使用生成的 `packages/codex-protocol` 方法类型映射 `thread/start` 和 `turn/start`。
+- Worker 写路径实现 project/conversation guard、process-local bounded idempotency、same-key different-fingerprint conflict、sanitized `ErrorEnvelope`。
+- Web 只通过 Worker HTTP client 发送 existing-conversation follow-up；成功显示 accepted、清空 composer 并刷新 metadata-only timeline；失败显示 compact failed 状态并保留 composer 文本。
+- fake Worker smoke server 支持 Stage 4 POST endpoints，用于浏览器正常和失败路径验证。
+- Web start conversation UI 明确延期；Worker/API start 已实现并测试。
+- 未引入 Control Plane、DB、durable stream、SSE/WebSocket、approval、interrupt、steer、iOS、pairing 或产品化 auth。
+- Chrome smoke 修复项：
+  - 自定义 contenteditable composer 不能使用 `ComposerPrimitive.Send`，否则按钮会受 assistant-ui 内部 composer 状态限制并保持 disabled；已改为普通 send button。
+  - shell 将 Worker failure 脱敏为 resolved failed result 后，composer helper 必须按显式结果判断是否清空 draft；已改为仅 `accepted` 清空。
 
 验证：
 
+- `pnpm --filter @codex-remote/api-contract test`
+- `pnpm --filter @codex-remote/api-contract build`
+- `pnpm --filter @codex-remote/worker test`
+- `pnpm --filter @codex-remote/worker typecheck`
 - `pnpm --filter @codex-remote/web test`
 - `pnpm --filter @codex-remote/web typecheck`
 - `pnpm lint`
@@ -178,21 +187,28 @@ Stage 3 已完成：
 - `pnpm test`
 - `pnpm build`
 
-下一步建议进入 Stage 4：写操作主链。
+Chrome 验证：
 
-Stage 4 范围建议：
+- 正常路径：fake Worker read state 加载为 `Smoke Worker conversation`、datasource `loaded`；输入 follow-up 后发送按钮启用；提交后显示 accepted、composer 清空、timeline 刷新出 metadata-only `turn in_progress`。
+- 失败路径：输入 `smoke-fail` 后显示 `发送失败`，composer 文本保留，Chrome console 无 error。
+- 泄漏检查：UI 不显示 token、raw Worker URL、prompt echo on success、command output、full diff、stack/cause 或 raw JSON-RPC。
 
-- 先设计 start/follow-up 的最小 API contract；字段仍以 `packages/api-contract/openapi.yaml` 为唯一事实源。
+下一步建议进入 Stage 5：控制主链。
+
+Stage 5 范围建议：
+
+- 先设计 interrupt、steer、approval request/response 的最小 API contract；字段仍以 `packages/api-contract/openapi.yaml` 为唯一事实源。
 - Worker 仍是唯一 app-server 调用者；Web 只能调用 Worker/Control Plane-shaped HTTP API。
-- 先做单设备、单 conversation 的 write 主链；stream 输出只做到 Stage 4 明确范围内的最小可验证切片。
-- 不做 approval、interrupt、steer、Control Plane 多设备、DB、iOS、pairing 或产品化 auth。
-- 写路径必须有 idempotency / expected conversation or turn guardrail；失败返回 sanitized `ErrorEnvelope`。
+- interrupt/steer 必须要求 `expectedTurnId` 或等价并发 guard；approval response 必须有 pending approval identity、CAS/idempotency 和显式用户决策。
+- 不把 steer 当 follow-up，不把 approval 当普通错误，不自动接受 approval。
+- 不做 Control Plane 多设备、DB、iOS、pairing、reverse WSS、产品化 auth 或任务看板。
+- 控制路径失败必须返回 sanitized `ErrorEnvelope`。
 
-Stage 4 风险：
+Stage 5 风险：
 
-- write/stream 比 read-only 更容易泄漏 prompt、command output、stack/cause 或 app-server raw frame；spec 必须先定义日志和 UI 可显示字段白名单。
-- app-server start/follow-up 语义需要从 `packages/codex-protocol` 生成物验证，不允许 Web 直接依赖协议。
-- 需要明确“发送成功”与“任务完成”不是同一状态，避免把 stream send 当成持久 event log。
+- interrupt/steer 与 follow-up 的 app-server 语义不同，错误合并会导致误操作或状态错乱；spec 必须先验证生成协议类型。
+- approval response 是安全边界，必须避免自动接受、重复提交、过期 approval 或不匹配 turn 被执行。
+- 控制操作更容易泄漏 raw app-server state、command output、stack/cause 或私密路径；日志、UI、测试 fixture 继续保持白名单。
 
 后续阶段默认设计输入：
 

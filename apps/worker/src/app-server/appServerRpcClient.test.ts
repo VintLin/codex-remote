@@ -101,6 +101,27 @@ test("when sending a request, should resolve matching response id", async () => 
   assert.deepEqual(await response, { data: [], nextCursor: null });
 });
 
+test("when sending stage 4 write requests, should serialize generated app-server methods", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket);
+
+  const threadStart = client.request("thread/start", { cwd: "/repo/project" });
+  assert.match(socket.sent[0] ?? "", /"method":"thread\/start"/);
+  assert.match(socket.sent[0] ?? "", /"cwd":"\/repo\/project"/);
+  socket.receive(JSON.stringify({ id: 1, result: { thread: { id: "thread-1" } } }));
+  assert.deepEqual(await threadStart, { thread: { id: "thread-1" } });
+
+  const turnStart = client.request("turn/start", {
+    threadId: "thread-1",
+    clientUserMessageId: "client-message-1",
+    input: [{ type: "text", text: "Run tests", text_elements: [] }],
+  });
+  assert.match(socket.sent[1] ?? "", /"method":"turn\/start"/);
+  assert.match(socket.sent[1] ?? "", /"threadId":"thread-1"/);
+  socket.receive(JSON.stringify({ id: 2, result: { turn: { id: "turn-1" } } }));
+  assert.deepEqual(await turnStart, { turn: { id: "turn-1" } });
+});
+
 test("when socket responds synchronously during send, should still resolve the request", async () => {
   const socket = new SyncResponseSocket();
   const client = new AppServerRpcClient(socket);

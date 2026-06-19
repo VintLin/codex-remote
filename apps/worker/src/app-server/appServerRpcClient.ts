@@ -30,7 +30,13 @@ interface SocketLike {
   addEventListener(event: "close", handler: () => void, options?: AddEventListenerOptions): void;
 }
 
-type ReadOnlyAppServerMethod = "initialize" | "model/list" | "thread/list" | "thread/read";
+type WorkerAppServerMethod =
+  | "initialize"
+  | "model/list"
+  | "thread/list"
+  | "thread/read"
+  | "thread/start"
+  | "turn/start";
 type RpcClientErrorKind =
   | "app_server_connection_error"
   | "app_server_connection_timeout"
@@ -139,7 +145,7 @@ export class AppServerRpcClient {
     });
   }
 
-  async request<M extends ReadOnlyAppServerMethod>(
+  async request<M extends WorkerAppServerMethod>(
     method: M,
     params: Extract<ClientRequest, { method: M }>["params"],
   ): Promise<unknown> {

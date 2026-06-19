@@ -28,6 +28,7 @@ export type CodexConversation = components["schemas"]["CodexConversation"];
 export type BoardTask = components["schemas"]["BoardTask"];
 export type DiffLine = components["schemas"]["DiffLine"];
 export type ConversationInputItem = components["schemas"]["ConversationInputItem"];
+export type StartConversationInput = components["schemas"]["StartConversationInput"];
 export type FollowUpInput = components["schemas"]["FollowUpInput"];
 export type CommandAccepted = components["schemas"]["CommandAccepted"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];

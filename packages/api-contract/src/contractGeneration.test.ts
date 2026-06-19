@@ -19,6 +19,7 @@ const schemaTypeNames = [
   "BoardTask",
   "DiffLine",
   "ConversationInputItem",
+  "StartConversationInput",
   "FollowUpInput",
   "CommandAccepted",
   "ErrorEnvelope",
@@ -52,6 +53,12 @@ const timelinePath = "/v1/conversations/{conversationId}/timeline:" as const;
 const stage2ErrorStatuses = ["400", "401", "403", "408", "424", "500"] as const;
 const stage2DisallowedMethods = ["post", "put", "patch", "delete", "head", "options", "trace"];
 const stage2DisallowedOperationIds = ["approval", "stream", "interrupt", "steer", "followUpConversation"];
+const stage4WritePaths = ["/v1/conversations:", "/v1/conversations/{conversationId}/follow-up:"] as const;
+const stage4WriteErrorStatuses = {
+  "/v1/conversations:": ["400", "401", "403", "408", "409", "424", "500"],
+  "/v1/conversations/{conversationId}/follow-up:": ["400", "401", "403", "404", "408", "409", "424", "500"],
+} as const satisfies Record<(typeof stage4WritePaths)[number], readonly string[]>;
+const writeMethods = ["post", "put", "patch", "delete"] as const;
 
 function indentOf(line: string): number {
   return line.match(/^\s*/)?.[0].length ?? 0;
@@ -248,6 +255,34 @@ function extractVersionedPathLines(source: string): string[] {
   return paths;
 }
 
+function extractPathMethodPairs(source: string): string[] {
+  const lines = source.split("\n");
+  let currentPath: string | undefined;
+  const pathMethodPairs: string[] = [];
+
+  for (const line of lines) {
+    const pathMatch = line.match(/^  (\/[^:]+):$/);
+    if (pathMatch) {
+      currentPath = expectCapturedGroup(pathMatch, "path capture should exist");
+      continue;
+    }
+
+    if (!currentPath) {
+      continue;
+    }
+
+    const methodMatch = line.match(/^ {4}(get|post|put|patch|delete|head|options|trace):\s*$/);
+    if (!methodMatch) {
+      continue;
+    }
+
+    const method = expectCapturedGroup(methodMatch, "method capture should exist");
+    pathMethodPairs.push(`${currentPath}:${method}`);
+  }
+
+  return pathMethodPairs;
+}
+
 function collectTypeScriptSourceFiles(directoryPath: string): string[] {
   const entries = readdirSync(directoryPath, { withFileTypes: true });
   const files: string[] = [];
@@ -275,6 +310,7 @@ test("when api contract schemas are maintained, openapi.yaml should be the sourc
   assert.match(source, /Device:/);
   assert.match(source, /RemoteProject:/);
   assert.match(source, /CodexConversation:/);
+  assert.match(source, /StartConversationInput:/);
   assert.match(source, /FollowUpInput:/);
 });
 
@@ -349,21 +385,24 @@ test("when read-only main-chain schemas are maintained, openapi should define th
 test("when worker read-only http api is maintained, openapi should define versioned stage 2 paths", () => {
   const source = readFileSync(openApiPath, "utf8");
   const versionedPathLines = extractVersionedPathLines(source);
-  const expectedVersionedPaths = [...stage2Paths];
 
-  assert.deepEqual(versionedPathLines.sort(), expectedVersionedPaths.sort());
+  for (const path of stage2Paths) {
+    assert.equal(versionedPathLines.includes(path), true);
+  }
 
   for (const path of stage2Paths) {
     const pathBlockLines = extractPathBlock(source, path);
     assert.equal(pathBlockLines.length > 0, true);
     const methods = extractMethodBlocks(pathBlockLines);
     const methodNames = methods.map((methodBlock) => methodBlock.method);
-    const disallowedMethodUsages = methodNames.filter((methodName) => stage2DisallowedMethods.includes(methodName));
-    assert.deepEqual(disallowedMethodUsages, []);
-    assert.deepEqual(methodNames.filter((methodName) => methodName !== "get"), []);
+    if (path !== "/v1/conversations:") {
+      const disallowedMethodUsages = methodNames.filter((methodName) => stage2DisallowedMethods.includes(methodName));
+      assert.deepEqual(disallowedMethodUsages, []);
+      assert.deepEqual(methodNames.filter((methodName) => methodName !== "get"), []);
+    }
     assert.equal(methodNames.includes("get"), true);
 
-    const methodLines = methods.flatMap((methodBlock) => methodBlock.lines);
+    const methodLines = methods.filter((methodBlock) => methodBlock.method === "get").flatMap((methodBlock) => methodBlock.lines);
     for (const methodLine of methodLines) {
       const operationMatch = methodLine.match(/^\s{6}operationId:\s*(\S+)$/);
       if (!operationMatch) {
@@ -375,6 +414,63 @@ test("when worker read-only http api is maintained, openapi should define versio
           operationId.toLowerCase().includes(disallowedOperationId.toLowerCase()),
         ),
       );
+    }
+  }
+});
+
+test("when worker write http api is maintained, openapi should define only versioned stage 4 write paths", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const writePathMethodPairs = extractPathMethodPairs(source).filter((pathMethodPair) => {
+    const method = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
+    return writeMethods.some((writeMethod) => writeMethod === method);
+  });
+  const expectedWritePathMethodPairs = stage4WritePaths.map((path) => `${path.slice(0, -1)}:post`);
+
+  assert.deepEqual(writePathMethodPairs.sort(), expectedWritePathMethodPairs.sort());
+  for (const pathMethodPair of writePathMethodPairs) {
+    assert.match(pathMethodPair, /^\/v1\//);
+  }
+
+  const startPathBlockLines = extractPathBlock(source, "/v1/conversations:");
+  const startMethod = expectDefined(
+    extractMethodBlocks(startPathBlockLines).find((methodBlock) => methodBlock.method === "post"),
+    "start write route should define POST",
+  );
+  const startMethodSource = startMethod.lines.join("\n");
+  assert.match(startMethodSource, /^ {6}operationId:\s*startWorkerConversation$/m);
+  assert.match(startMethodSource, /#\/components\/schemas\/StartConversationInput/);
+  assert.match(startMethodSource, /#\/components\/schemas\/CommandAccepted/);
+
+  const followUpPathBlockLines = extractPathBlock(source, "/v1/conversations/{conversationId}/follow-up:");
+  const followUpMethod = expectDefined(
+    extractMethodBlocks(followUpPathBlockLines).find((methodBlock) => methodBlock.method === "post"),
+    "follow-up write route should define POST",
+  );
+  const followUpMethodSource = followUpMethod.lines.join("\n");
+  assert.match(followUpMethodSource, /^ {6}operationId:\s*followUpWorkerConversation$/m);
+  assert.match(followUpMethodSource, /#\/components\/schemas\/FollowUpInput/);
+  assert.match(followUpMethodSource, /#\/components\/schemas\/CommandAccepted/);
+});
+
+test("when worker write http api errors are maintained, stage 4 write routes should use ErrorEnvelope", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const componentResponseDefs = getComponentResponseUsesErrorEnvelope(source);
+
+  for (const path of stage4WritePaths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    const method = expectDefined(
+      extractMethodBlocks(pathBlockLines).find((methodBlock) => methodBlock.method === "post"),
+      `${path} should define POST`,
+    );
+    const responseRefs = extractResponseRefs(method.lines);
+
+    for (const status of stage4WriteErrorStatuses[path]) {
+      const responseInfo = responseRefs.get(status);
+      assert.equal(typeof responseInfo, "object");
+      const responseRefsErrorEnvelope = responseInfo
+        ? responseInfo.componentResponseRefs.some((responseName) => componentResponseDefs.get(responseName) === true)
+        : false;
+      assert.equal(responseInfo?.hasDirectSchemaRef || responseRefsErrorEnvelope, true);
     }
   }
 });

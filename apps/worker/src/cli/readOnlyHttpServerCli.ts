@@ -1,13 +1,14 @@
 import { serve } from "@hono/node-server";
 
-import { openReadOnlyAppServerSession } from "../app-server/readOnlyAppServerSession.ts";
+import { openWorkerAppServerSession } from "../app-server/readOnlyAppServerSession.ts";
 import { createWorkerHttpApp } from "../http/workerHttpApp.ts";
 import { loadWorkerHttpConfig, type WorkerHttpConfig } from "../http/workerHttpConfig.ts";
-import type {
-  WorkerReadOnlyAppServerClient,
-  WorkerReadOnlyHandlerContext,
-} from "../http/readOnlyHandlers.ts";
-import type { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient.ts";
+import {
+  createWorkerWriteHandlerState,
+  type WorkerWriteAppServerClient,
+  type WorkerWriteHandlerContext,
+} from "../http/writeHandlers.ts";
+import type { AppServerWorkerClient } from "../probe/appServerReadOnlyProbeClient.ts";
 
 interface StartReadOnlyHttpServerOptions {
   env: NodeJS.ProcessEnv;
@@ -27,7 +28,7 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
   }
 
   try {
-    const app = createWorkerHttpApp(createDefaultWorkerReadOnlyHandlerContext(config));
+    const app = createWorkerHttpApp(createDefaultWorkerHandlerContext(config));
     const serveHttp = options.serveHttp ?? serve;
     serveHttp({
       fetch: app.fetch,
@@ -43,12 +44,13 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
   }
 }
 
-function createDefaultWorkerReadOnlyHandlerContext(config: WorkerHttpConfig): WorkerReadOnlyHandlerContext {
+function createDefaultWorkerHandlerContext(config: WorkerHttpConfig): WorkerWriteHandlerContext {
   return {
     config,
     now: () => new Date().toISOString(),
+    writeState: createWorkerWriteHandlerState(),
     openClient: async () => {
-      const session = await openReadOnlyAppServerSession({
+      const session = await openWorkerAppServerSession({
         configuredUrl: config.appServerUrl,
         startAppServer: config.startAppServer,
         allowedProjectRoot: config.allowedProjectRoot,
@@ -63,15 +65,17 @@ function createDefaultWorkerReadOnlyHandlerContext(config: WorkerHttpConfig): Wo
 }
 
 function createSessionClient(
-  client: AppServerReadOnlyProbeClient,
+  client: AppServerWorkerClient,
   closeSession: () => void,
-): WorkerReadOnlyAppServerClient {
+): WorkerWriteAppServerClient {
   return {
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
     initialized: () => client.initialized(),
     listThreads: (params) => client.listThreadsWithParams(params),
     readThread: (params) => client.readThread(params),
+    startThread: (params) => client.startThread(params),
+    startTurn: (params) => client.startTurn(params),
     close: () => closeSession(),
   };
 }

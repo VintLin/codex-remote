@@ -52,22 +52,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/conversations/{conversationId}/follow-up": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["followUpConversation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/worker/health": {
         parameters: {
             query?: never;
@@ -125,7 +109,7 @@ export interface paths {
         };
         get: operations["listWorkerConversations"];
         put?: never;
-        post?: never;
+        post: operations["startWorkerConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -142,6 +126,22 @@ export interface paths {
         get: operations["getConversationTimeline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/follow-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["followUpWorkerConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -308,13 +308,23 @@ export interface components {
             type: "text";
             text: string;
         };
+        StartConversationInput: {
+            projectId: string;
+            message: string;
+            clientRequestId: string;
+        };
         FollowUpInput: {
-            deviceId: string;
-            projectId?: string;
-            input: components["schemas"]["ConversationInputItem"][];
+            message: string;
+            clientRequestId: string;
+            expectedConversationId?: string;
         };
         CommandAccepted: {
-            commandId: string;
+            id: string;
+            /** @enum {string} */
+            status: "accepted";
+            conversationId: string;
+            turnId: string | null;
+            /** Format: date-time */
             acceptedAt: string;
         };
         ErrorEnvelope: {
@@ -370,6 +380,15 @@ export interface components {
         };
         /** @description Worker request timed out before a stable response was produced. */
         RequestTimeoutError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description Request conflicts with an existing write command. */
+        ConflictError: {
             headers: {
                 [name: string]: unknown;
             };
@@ -464,32 +483,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodexConversation"][];
-                };
-            };
-        };
-    };
-    followUpConversation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FollowUpInput"];
-            };
-        };
-        responses: {
-            /** @description Follow-up accepted. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CommandAccepted"];
                 };
             };
         };
@@ -598,6 +591,37 @@ export interface operations {
             500: components["responses"]["InternalWorkerError"];
         };
     };
+    startWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartConversationInput"];
+            };
+        };
+        responses: {
+            /** @description Start command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
     getConversationTimeline: {
         parameters: {
             query?: never;
@@ -623,6 +647,40 @@ export interface operations {
             403: components["responses"]["ForbiddenError"];
             404: components["responses"]["ConversationNotFoundError"];
             408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    followUpWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowUpInput"];
+            };
+        };
+        responses: {
+            /** @description Follow-up command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
             424: components["responses"]["AppServerUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };

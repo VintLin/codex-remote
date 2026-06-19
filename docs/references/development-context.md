@@ -17,32 +17,30 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-The next planned stage is Worker HTTP API Read-only MVP.
+The next planned stage is Stage 5: control main chain for interrupt, steer, and approval request/response.
 
-Stage 2 default design input:
+Stage 4 completed context:
 
-- HTTP boundary may use Hono.
-- Hono must stay at the HTTP boundary; business handlers stay framework-independent.
-- Candidate endpoints:
-  - `GET /v1/worker/health`
-  - `GET /v1/worker/capabilities`
-  - `GET /v1/worker/probe`
-  - `GET /v1/conversations`
-  - `GET /v1/conversations/{conversationId}/timeline`
-- Timeline MVP defaults to `thread/read(includeTurns=true)`.
-- `thread/turns/list` remains optional experimental capability until generated protocol and runtime support are verified.
-- Do not expose raw app-server JSON-RPC.
-- Do not bind Web to app-server method names.
-- Do not create empty `apps/control-plane`, `packages/db`, or `packages/shared`; wait until the relevant stage needs real files.
-- Playwright should not be introduced broadly yet; add a small smoke suite when Web + fake Worker datasource can run the first interactive vertical user flow.
+- Worker HTTP write boundary is versioned under `/v1`.
+- Public write fields start in `packages/api-contract/openapi.yaml`; generated types flow to Web and Worker.
+- Legacy unversioned follow-up write contract was removed from the public API.
+- Worker remains the only app that maps public write input to generated Codex app-server protocol types.
+- `POST /v1/conversations` is implemented and tested at Worker/API level, but Web start UI remains deferred.
+- Web-facing Stage 4 scope is existing-conversation follow-up only.
+- Post-write observation uses existing read projections; no streaming transport or event log was introduced.
+- Process-local idempotency keys are operation plus target plus `clientRequestId`, with same-key different-fingerprint conflict behavior.
+- Chrome smoke verified normal accepted and sanitized failure paths with no token, raw Worker URL, prompt echo on success, command output, full diff, stack/cause, or JSON-RPC in UI.
 
-Stage 2 spec should also decide:
+Stage 5 default design input:
 
-- Opaque `conversationId` semantics; Web must not infer app-server thread internals.
-- Standard error envelope and HTTP status mapping.
-- CORS and Origin allowlist behavior at the Hono boundary.
-- `thread/turns/list` experimental generation/runtime validation before treating it as a capability.
-- Node LTS support target. Local development may use the current installed Node, but product/runtime promises should be validated on Node LTS.
+- Keep public control operations schema-first in `packages/api-contract/openapi.yaml`.
+- Do not collapse follow-up, steer, interrupt, and approval response into one generic write endpoint.
+- `apps/worker` remains the only Codex app-server caller; `apps/web` stays on Worker/Control Plane-shaped HTTP contract.
+- Require explicit expected ids for control operations where applicable, especially `expectedTurnId` for interrupt/steer.
+- Approval handling is an explicit user-decision channel, not an ordinary error or automatic retry.
+- Approval responses must be idempotent and fail closed if the pending approval state does not match.
+- Do not implement Control Plane multi-device routing, DB persistence, reverse WSS, iOS, pairing, productized auth, or broad task board behavior in Stage 5 unless the Stage 5 spec explicitly narrows one of them as a required control verification dependency.
+- Do not expose raw app-server JSON-RPC, raw notification payload, prompt echo, command output, full diff, stack/cause, provider secrets, raw app-server URL, or private paths.
 
 ## App-Server Integration Notes
 

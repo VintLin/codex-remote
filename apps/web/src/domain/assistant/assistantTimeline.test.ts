@@ -27,10 +27,16 @@ test("when rendering the assistant thread, should keep assistant-ui runtime and 
   assert.match(source, /useExternalStoreRuntime/);
   assert.match(source, /ComposerPrimitive/);
   assert.match(source, /ThreadPrimitive\.ViewportProvider/);
+  assert.match(source, /onSubmitFollowUp/);
+  assert.match(source, /contentEditable/);
+  assert.match(source, /onKeyUp/);
+  assert.match(source, /codex-assistant-composer-status/);
   assert.doesNotMatch(source, /<ThreadPrimitive\.Viewport[\s>]/);
   assert.doesNotMatch(source, /ComposerPrimitive\.Input/);
+  assert.doesNotMatch(source, /ComposerPrimitive\.Send/);
   assert.doesNotMatch(source, /<form\b/);
   assert.doesNotMatch(source, /<textarea\b/);
+  assert.doesNotMatch(source, /isSendDisabled:\s*true/);
 });
 
 test("when rendering the composer access control, should expose the confirmed approval mode menu options", () => {

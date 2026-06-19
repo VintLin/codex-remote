@@ -58,28 +58,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CodexConversation"
-  /conversations/{conversationId}/follow-up:
-    post:
-      operationId: followUpConversation
-      parameters:
-        - name: conversationId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FollowUpInput"
-      responses:
-        "202":
-          description: Follow-up accepted.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CommandAccepted"
   /v1/worker/health:
     get:
       operationId: getWorkerHealth
@@ -170,6 +148,35 @@ paths:
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+    post:
+      operationId: startWorkerConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartConversationInput"
+      responses:
+        "202":
+          description: Start command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/conversations/{conversationId}/timeline:
     get:
       operationId: getConversationTimeline
@@ -196,6 +203,44 @@ paths:
           $ref: "#/components/responses/ConversationNotFoundError"
         "408":
           $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/follow-up:
+    post:
+      operationId: followUpWorkerConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpInput"
+      responses:
+        "202":
+          description: Follow-up command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
         "424":
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
@@ -228,6 +273,12 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     RequestTimeoutError:
       description: Worker request timed out before a stable response was produced.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ConflictError:
+      description: Request conflicts with an existing write command.
       content:
         application/json:
           schema:
@@ -720,32 +771,69 @@ components:
             - text
         text:
           type: string
+          minLength: 1
+          maxLength: 20000
+    StartConversationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - projectId
+        - message
+        - clientRequestId
+      properties:
+        projectId:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
     FollowUpInput:
       type: object
       additionalProperties: false
       required:
-        - deviceId
-        - input
+        - message
+        - clientRequestId
       properties:
-        deviceId:
+        message:
           type: string
-        projectId:
+          minLength: 1
+          maxLength: 20000
+        clientRequestId:
           type: string
-        input:
-          type: array
-          items:
-            $ref: "#/components/schemas/ConversationInputItem"
+          minLength: 1
+          maxLength: 128
+        expectedConversationId:
+          type: string
     CommandAccepted:
       type: object
       additionalProperties: false
       required:
-        - commandId
+        - id
+        - status
+        - conversationId
+        - turnId
         - acceptedAt
       properties:
-        commandId:
+        id:
           type: string
+        status:
+          type: string
+          enum:
+            - accepted
+        conversationId:
+          type: string
+        turnId:
+          type:
+            - string
+            - "null"
         acceptedAt:
           type: string
+          format: date-time
     ErrorEnvelope:
       type: object
       additionalProperties: false
