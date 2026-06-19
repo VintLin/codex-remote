@@ -1,13 +1,7 @@
 import type { Device, RemoteProject, CodexConversation } from "@codex-remote/api-contract";
 import type { AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline.ts";
 
-import {
-  assistantThreads as mockAssistantThreads,
-  conversations as mockConversations,
-  devices as mockDevices,
-  searchRecents as mockSearchRecents,
-  sidebarProjects as mockProjects,
-} from "../app-server/mockData.ts";
+import { conversations as mockConversations, devices as mockDevices, sidebarProjects as mockProjects } from "../app-server/mockData.ts";
 
 import { WorkerApiClient } from "./client.ts";
 
@@ -37,20 +31,67 @@ export interface LoadWorkbenchDataOptions {
   selectedConversationId?: string | null;
 }
 
-export function createFallbackWorkbenchData(reason: WorkbenchData["source"]["reason"]): WorkbenchData {
+export function createFallbackWorkbenchData(
+  reason: WorkbenchData["source"]["reason"],
+  selectedConversationId?: string | null,
+): WorkbenchData {
+  const conversations = [...mockConversations];
+
   return {
     source: { reason },
     devices: [...mockDevices],
     projects: [...mockProjects],
-    conversations: [...mockConversations],
-    assistantThreads: [...mockAssistantThreads],
-    searchRecents: [...mockSearchRecents],
+    conversations,
+    assistantThreads: createMetadataOnlyAssistantThreads(conversations),
+    searchRecents: createSearchRecents(conversations, selectedConversationId),
   };
+}
+
+function createMetadataOnlyAssistantThreads(conversations: readonly CodexConversation[]): AssistantThreadSnapshot[] {
+  return conversations.map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    deviceId: conversation.deviceId,
+    ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+    projectName: conversation.projectName,
+    status: conversation.status,
+    updatedAt: conversation.updatedAt,
+    forkedFromId: null,
+    parentThreadId: null,
+    loadState: "empty",
+    timeline: {
+      threadId: conversation.id,
+      turns: [],
+    },
+  }));
+}
+
+function createSearchRecents(
+  conversations: readonly CodexConversation[],
+  selectedConversationId?: string | null,
+): SearchRecent[] {
+  return conversations.map((conversation) => {
+    const result: SearchRecent = {
+      conversationId: conversation.id,
+      title: conversation.title,
+      project: conversation.projectName,
+    };
+
+    if (selectedConversationId === conversation.id) {
+      result.active = true;
+    }
+
+    if (conversation.status === "waiting") {
+      result.marker = true;
+    }
+
+    return result;
+  });
 }
 
 export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Promise<WorkbenchData> {
   if (!options.token) {
-    return createFallbackWorkbenchData("not_configured");
+    return createFallbackWorkbenchData("not_configured", options.selectedConversationId);
   }
 
   new WorkerApiClient({
@@ -59,5 +100,5 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     fetchImpl: options.fetchImpl,
   });
 
-  return createFallbackWorkbenchData("request_failure");
+  return createFallbackWorkbenchData("request_failure", options.selectedConversationId);
 }

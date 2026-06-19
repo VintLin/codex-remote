@@ -23,18 +23,18 @@ export class WorkerApiClient implements WorkerApiClientLike {
   }
 
   public async getHealth(): Promise<WorkerHealth> {
-    throw new Error(`placeholder worker api client not implemented in task 1: ${this.config.baseUrl}`);
+    throw new Error("placeholder worker api client not implemented in task 1");
   }
 
   public async getCapabilities(): Promise<WorkerCapabilities> {
-    throw new Error(`placeholder worker api client not implemented in task 1: ${this.config.baseUrl}`);
+    throw new Error("placeholder worker api client not implemented in task 1");
   }
 
   public async listConversations(): Promise<CodexConversation[]> {
-    throw new Error(`placeholder worker api client not implemented in task 1: ${this.config.baseUrl}`);
+    throw new Error("placeholder worker api client not implemented in task 1");
   }
 
   public async getTimeline(_conversationId: string): Promise<ConversationTimeline> {
-    throw new Error(`placeholder worker api client not implemented in task 1: ${this.config.baseUrl}`);
+    throw new Error("placeholder worker api client not implemented in task 1");
   }
 }

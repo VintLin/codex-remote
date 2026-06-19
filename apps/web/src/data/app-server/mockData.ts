@@ -1,16 +1,9 @@
 import type { BoardTask, CodexConversation, Device, DiffLine, RemoteProject } from "@codex-remote/api-contract";
+import type { SearchRecent } from "../workerApi/workbenchData.ts";
 import {
   classifyLinkTarget,
   type AssistantThreadSnapshot,
 } from "../../domain/assistant/assistantTimeline.ts";
-
-export interface SearchRecent {
-  conversationId: string;
-  title: string;
-  project: string;
-  active?: boolean;
-  marker?: boolean;
-}
 
 export const devices: Device[] = [
   {

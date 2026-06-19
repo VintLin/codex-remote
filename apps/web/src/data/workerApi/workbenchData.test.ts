@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { ErrorEnvelope } from "@codex-remote/api-contract";
 
-import { conversations as mockConversations, searchRecents as mockSearchRecents } from "../app-server/mockData.ts";
+import { assistantThreads as mockAssistantThreads, conversations as mockConversations } from "../app-server/mockData.ts";
 import { loadWorkbenchData, createFallbackWorkbenchData } from "./workbenchData.ts";
 
 function jsonResponse<T>(payload: T, status = 200): Response {
@@ -112,6 +112,8 @@ test("workbench datasource when endpoint responses are valid should create snaps
 test("workbench datasource when token is missing should return fallback and skip fetch", async () => {
   let requestCount = 0;
 
+  const fallback = createFallbackWorkbenchData("not_configured");
+
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",
     token: "",
@@ -124,7 +126,14 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.equal(requestCount, 0);
   assert.equal(data.source.reason, "not_configured");
   assert.deepEqual(data.conversations, mockConversations);
-  assert.deepEqual(data.searchRecents, mockSearchRecents);
+  assert.deepEqual(data.searchRecents, fallback.searchRecents);
+  assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
+  assert.equal(data.assistantThreads.length, mockConversations.length);
+  const hasRichNodes = data.assistantThreads.some((thread) =>
+    thread.timeline.turns.some((turn) => turn.nodes.length > 0),
+  );
+  assert.equal(hasRichNodes, false);
+  assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
 });
 
 for (const [status, reason] of [
@@ -313,7 +322,12 @@ test("workbench datasource when fallback is returned should not reuse rich mock 
   });
 
   const fallback = createFallbackWorkbenchData("not_configured");
-  assert.notDeepEqual(data.assistantThreads, fallback.assistantThreads);
+  assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
+  const hasRichNodes = data.assistantThreads.some((thread) =>
+    thread.timeline.turns.some((turn) => turn.nodes.length > 0),
+  );
+  assert.equal(hasRichNodes, false);
+  assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
 });
 
 test("workbench datasource search recents should be derived from conversations", async () => {
@@ -374,12 +388,12 @@ test("workbench datasource search recents should be derived from conversations",
     conversationId: conversation.id,
     title: conversation.title,
     project: conversation.projectName,
-    active: false,
-    marker: false,
   }));
 
   assert.equal(data.searchRecents.length, conversations.length);
   assert.equal(data.searchRecents[0]?.conversationId, expected[0]?.conversationId);
   assert.equal(data.searchRecents[0]?.title, expected[0]?.title);
   assert.equal(data.searchRecents[0]?.project, expected[0]?.project);
+  assert.equal("active" in data.searchRecents[0]!, false);
+  assert.equal("marker" in data.searchRecents[0]!, false);
 });
