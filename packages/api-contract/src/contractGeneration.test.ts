@@ -188,12 +188,44 @@ function getComponentResponseUsesErrorEnvelope(source: string): Map<string, bool
     const responseName = responseNameMatch[1];
     const responseNext = i + 1 < responseHeaderIndices.length ? responseHeaderIndices[i + 1] : responsesBlock.length;
     const responseBody = responsesBlock.slice(responseHeaderIndex + 1, responseNext).join("\n");
-    const usesErrorEnvelope =
-      /#\/components\/schemas\/ErrorEnvelope/.test(responseBody) || /"ErrorEnvelope"/.test(responseBody);
+    const usesErrorEnvelope = /^\s*\$ref:\s*["']#\/components\/schemas\/ErrorEnvelope["']$/m.test(responseBody);
     responseDefs.set(responseName, usesErrorEnvelope);
   }
 
   return responseDefs;
+}
+
+function extractVersionedPathLines(source: string): string[] {
+  const lines = source.split("\n");
+  const pathsStart = lines.findIndex((line) => /^paths:$/i.test(line));
+  if (pathsStart === -1) {
+    return [];
+  }
+
+  let i = pathsStart + 1;
+  const paths: string[] = [];
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") {
+      i += 1;
+      continue;
+    }
+
+    const indent = indentOf(line);
+    if (indent === 0) {
+      break;
+    }
+
+    const versionedPathMatch = line.match(/^  (\/v1\/.*):$/);
+    if (versionedPathMatch) {
+      paths.push(`  ${versionedPathMatch[1]}:`);
+    }
+
+    i += 1;
+  }
+
+  return paths;
 }
 
 function collectTypeScriptSourceFiles(directoryPath: string): string[] {
@@ -296,18 +328,10 @@ test("when read-only main-chain schemas are maintained, openapi should define th
 
 test("when worker read-only http api is maintained, openapi should define versioned stage 2 paths", () => {
   const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+  const expectedVersionedPaths = [...stage2Paths];
 
-  const disallowedVersionedPathLines = [
-    "/v1/conversations/{conversationId}/follow-up:",
-    "/v1/conversations/{conversationId}/stream:",
-    "/v1/conversations/{conversationId}/approval:",
-    "/v1/conversations/{conversationId}/interrupt:",
-    "/v1/conversations/{conversationId}/steer:",
-  ];
-
-  for (const forbiddenPath of disallowedVersionedPathLines) {
-    assert.doesNotMatch(source, new RegExp(`^  ${escapeRegExp(forbiddenPath)}$`, "m"));
-  }
+  assert.deepEqual(versionedPathLines.sort(), expectedVersionedPaths.sort());
 
   for (const path of stage2Paths) {
     const pathBlockLines = extractPathBlock(source, path);
@@ -378,10 +402,10 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   }
 
   const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
-  const disallowedAdditionalProperties = /^(\s{8}.*)?additionalProperties:\s*true$/m;
+  const additionalPropertiesIsFalse = /^\s{8}additionalProperties:\s*false$/m;
   const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
 
-  assert.equal(disallowedAdditionalProperties.test(detailsBlock), false);
+  assert.equal(additionalPropertiesIsFalse.test(detailsBlock), true);
   for (const key of allowlistedKeys) {
     assert.match(detailsBlock, new RegExp(`^ {8}${key}:`));
   }
