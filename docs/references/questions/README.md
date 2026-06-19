@@ -1,45 +1,36 @@
-# Research Answers Import Index
+# Research Answers
 
-Q1-Q12 imported from:
+Start with `SYNTHESIS.md`. It is the maintained index of adopted decisions and remaining local verification work.
 
-`/Users/Vint/Repos/00_Tasks/01_DailyMission/assets/chatgpt-qx/20260619-1706-copy-reply`
+## Retained Answers
 
-Q14-Q17 imported from local ChatGPT run:
+These answers still provide useful detail for upcoming stage specs:
 
-`docs/references/questions/q14-q17-chatgpt-run`
+| Question | Answer file | Why retained |
+| --- | --- | --- |
+| Q1 | `q01-codex-app-server-local-transport.md` | Stage 2 transport and app-server lifecycle |
+| Q2 | `q02-thread-turns-list-protocol-gap.md` | timeline fallback and experimental protocol handling |
+| Q4 | `q04-worker-readonly-http-api-endpoints.md` | Worker HTTP API read-only shape |
+| Q5 | `q05-app-server-streaming-events.md` | future streaming and event projection |
+| Q6 | `q06-thread-start-resume-turn-start.md` | future write/follow-up modeling |
+| Q7 | `q07-approval-request-lifecycle.md` | approval registry and decision lifecycle |
+| Q9 | `q09-control-plane-auth-device-pairing.md` | device pairing and Control Plane auth |
+| Q11 | `q11-ios-api-contract-constraints.md` | future iOS API guardrails |
+| Q12 | `q12-device-worker-installation-management.md` | Worker productization |
+| Q14 | `q14-db-driver-selection.md` | Stage 7 SQLite driver decision |
+| Q15 | `q15-control-plane-reverse-connection-transport.md` | Stage 6 reverse connection |
+| Q16 | `q16-device-bound-token-mvp.md` | Stage 6 auth threat model input |
+| Q17 | `q17-cross-platform-secret-storage.md` | Worker identity secret storage |
 
-Imported at: 2026-06-19
+## Archived Process Material
 
-## Files
+Low-value or fully absorbed material was moved to `docs/archives/references/questions/`:
 
-Start with:
+- `q03-worker-http-api-stack.md`
+- `q08-turn-interrupt-steer-races.md`
+- `q10-db-stack-selection.md`
+- `q13-e2e-playwright-introduction.md`
+- `research-prompts-archive.md`
+- `import*.json`
 
-- `SYNTHESIS.md`
-- `research-prompts-archive.md` keeps the completed Q1-Q17 prompt set that used to live in root `QUESTIONS.md`.
-
-| Question | Imported answer |
-| --- | --- |
-| Q1 | `q01-codex-app-server-local-transport.md` |
-| Q2 | `q02-thread-turns-list-protocol-gap.md` |
-| Q3 | `q03-worker-http-api-stack.md` |
-| Q4 | `q04-worker-readonly-http-api-endpoints.md` |
-| Q5 | `q05-app-server-streaming-events.md` |
-| Q6 | `q06-thread-start-resume-turn-start.md` |
-| Q7 | `q07-approval-request-lifecycle.md` |
-| Q8 | `q08-turn-interrupt-steer-races.md` |
-| Q9 | `q09-control-plane-auth-device-pairing.md` |
-| Q10 | `q10-db-stack-selection.md` |
-| Q11 | `q11-ios-api-contract-constraints.md` |
-| Q12 | `q12-device-worker-installation-management.md` |
-| Q13 | `q13-e2e-playwright-introduction.md` |
-| Q14 | `q14-db-driver-selection.md` |
-| Q15 | `q15-control-plane-reverse-connection-transport.md` |
-| Q16 | `q16-device-bound-token-mvp.md` |
-| Q17 | `q17-cross-platform-secret-storage.md` |
-
-Import metadata:
-
-- `import-summary.json`
-- `import-failures.json`
-- `import-q14-q17-summary.json`
-- `import-q14-q17-failures.json`
+Those files are retained for auditability but are not part of the active reference set.

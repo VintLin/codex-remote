@@ -3,6 +3,8 @@
 ## Source Of Truth
 
 - `PLAN.md`：项目总目标、阶段路线、风险和调研状态。
+- `PRODUCT.md`：产品定位、目标用户、MVP 范围、体验原则和非目标。
+- `DESIGN.md`：视觉系统、设计 token、组件风格和前端设计约束。
 - `PROJECT_STRUCTURE.md`：目录职责、依赖方向和新增文件规则。
 - `QUESTIONS.md`：调研问题和回答状态。
 - `docs/references/development-context.md`：阶段性技术决策、参考项目和未来阶段上下文。
@@ -10,6 +12,8 @@
 更新规则：
 
 - 阶段状态、下一步建议、风险判断变化时，同步更新 `PLAN.md`。
+- 产品定位、MVP 范围或体验原则变化时，同步更新 `PRODUCT.md`。
+- 视觉系统、组件风格或设计 token 变化时，同步更新 `DESIGN.md`。
 - 目录职责、依赖方向或文件放置规则变化时，同步更新 `PROJECT_STRUCTURE.md`。
 - 调研结论变化时，同步更新 `QUESTIONS.md` 和相关 reference。
 - 阶段级设计写入 `docs/superpowers/specs/`，阶段级执行计划写入 `docs/superpowers/plans/`。

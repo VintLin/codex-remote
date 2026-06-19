@@ -30,6 +30,8 @@ flowchart LR
 
 目录职责和依赖方向以 `PROJECT_STRUCTURE.md` 为准。新增阶段目录或移动代码前，先更新该文件。
 
+产品定位和 MVP 范围以 `PRODUCT.md` 为准；视觉系统和组件风格以 `DESIGN.md` 为准。
+
 ## 架构原则
 
 - `packages/api-contract/openapi.yaml` 是 Web、Worker、Control Plane、未来 iOS 的唯一 API 事实源。
@@ -46,7 +48,7 @@ flowchart LR
 | --- | --- | --- |
 | 0. 架构底座 | monorepo、包边界、contract/protocol 事实源 | 已完成 |
 | 1. Read-only Worker Probe | 验证本机 app-server read-only 主链 | 已完成 |
-| 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | 下一步 |
+| 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | Spec 与 plan 已写，下一步执行 |
 | 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 未开始 |
 | 4. 写操作主链 | start、follow-up、stream 输出 | 未开始 |
 | 5. 控制主链 | interrupt、steer、approval request/response | 未开始 |
@@ -112,6 +114,9 @@ flowchart LR
 | Approval 处理不严谨 | 可能误执行命令或文件操作 | approval 独立主链，显式用户决策，不自动接受 |
 | streaming 不是可靠 event log | Web timeline 乱序、重复或断线后丢状态 | Worker 生成 `seq/eventId`，Web 做 snapshot reconciliation，断线补偿不依赖 app-server replay |
 | DB 过早复杂化 | 分散主链实现成本 | Stage 7 默认 SQLite + Drizzle；多实例写入、remote sync、PostgreSQL 等到真实需求出现再评估 |
+| 运行时版本承诺过早 | 本地可跑但产品化不可维护 | 本地开发可用当前 Node；产品/runtime 支持矩阵按 Node LTS 做阶段验证 |
+| API contract 过度 Web-specific | 未来 iOS/Worker 破坏性迁移 | 保持 stable `operationId`、opaque cursor、明确 `additionalProperties` 和标准错误形态 |
+| device-bound token 误降级 | 普通 bearer 被误当设备绑定凭证 | Stage 6 先写 threat model；bearer+rotation 只能作为明确降级或开发姿态 |
 
 ## 调研状态
 
@@ -144,9 +149,19 @@ flowchart LR
 
 产品化支持矩阵以后续阶段 spec 为准；本地开发可用当前 Node 版本，但长期运行和分发优先按 Node LTS 验证。
 
+`docs/references/codex-app-server.md` 是 app-server 协议解释性参考；`packages/codex-protocol` 的生成物仍是 Worker 代码使用的协议类型事实源。
+
 ## 下一步建议
 
-下一份 Superpowers spec 建议写：Worker HTTP API Read-only MVP。
+当前活跃 Superpowers spec：
+
+- `docs/superpowers/specs/2026-06-19-worker-http-readonly-api-design.md`
+
+当前活跃 Superpowers plan：
+
+- `docs/superpowers/plans/2026-06-19-worker-http-readonly-api.md`
+
+下一步建议按 plan 执行 Stage 2，优先采用 Subagent-Driven 拆分：contract、runtime safety、projection/handler、HTTP boundary、integration/review。
 
 范围只包括把当前 Worker probe 能力变成稳定 API，不做 DB、不做 stream、不做写操作。
 

@@ -3,6 +3,7 @@
 - Source root: https://developers.openai.com/codex/app
 - Captured at: 2026-06-14T13:28:35+00:00
 - Pages captured: 14 / 14
+- JSON metadata snapshots were archived to `docs/archives/references/openai-codex-app-pages-metadata-2026-06-14/`; use the Markdown pages below for active reference.
 
 ## Pages
 

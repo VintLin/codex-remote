@@ -36,6 +36,31 @@ Stage 2 default design input:
 - Do not create empty `apps/control-plane`, `packages/db`, or `packages/shared`; wait until the relevant stage needs real files.
 - Playwright should not be introduced broadly yet; add a small smoke suite when Web + fake Worker datasource can run the first interactive vertical user flow.
 
+Stage 2 spec should also decide:
+
+- Opaque `conversationId` semantics; Web must not infer app-server thread internals.
+- Standard error envelope and HTTP status mapping.
+- CORS and Origin allowlist behavior at the Hono boundary.
+- `thread/turns/list` experimental generation/runtime validation before treating it as a capability.
+- Node LTS support target. Local development may use the current installed Node, but product/runtime promises should be validated on Node LTS.
+
+## App-Server Integration Notes
+
+`docs/references/codex-app-server.md` is an explanatory protocol reference. It is not the type source of truth; `packages/codex-protocol` generated artifacts are.
+
+Adopted integration assumptions:
+
+- Worker owns app-server lifecycle and transport.
+- Product direction prefers Worker-owned `stdio` where available; loopback WebSocket remains useful for probe/debug fallback.
+- Unix socket is a later local-daemon optimization for macOS/Linux.
+- WebSocket app-server transport must stay loopback-only unless upstream auth is explicitly configured and verified.
+- JSON-RPC setup must preserve `initialize` then `initialized` ordering.
+- Worker RPC client must enforce request timeouts, pending-request cleanup, close/error rejection, and bounded queue/backpressure behavior.
+- `thread/list(cwd=...)` is the read-list entry point for project-scoped conversations.
+- `thread/read(includeTurns=true)` is the timeline MVP fallback.
+- Approval server requests are explicit user-decision state, not ordinary errors.
+- App-server notifications are stream signals, not a durable event log; Web-facing events still need Worker-generated `seq/eventId` and snapshot reconciliation.
+
 ## Current Frontend Context
 
 The first Web UI should be a workbench, not a landing page.
@@ -43,6 +68,13 @@ The first Web UI should be a workbench, not a landing page.
 - Default layout direction: device / task navigation, list or board, conversation operation area.
 - Controls should serve high-frequency operations: open conversation, send follow-up, interrupt, associate task.
 - Status should be visible and unambiguous: online/offline, running, waiting approval, waiting input, interrupted, failed, done.
+
+Product UX guardrails from official Codex App references:
+
+- Codex Remote should model Device / Project / Conversation / Task ownership explicitly; it is not a single-thread chat clone.
+- Worktree and review concepts are product behaviors, but MVP should only expose them when the underlying Git state is available through stable boundaries.
+- In-app browser, Chrome extension, computer use, automations, and local environments are future capability areas with separate safety boundaries; do not fold them into the read-only or first write slice.
+- Official App page snapshots in `docs/references/openai-codex-app-pages/pages/` are product behavior references, not API schema sources.
 
 ## Current Testing Focus
 
@@ -74,7 +106,9 @@ Boundary tests are more important than coverage numbers in the current architect
 - Reverse connection default direction: Worker outbound WSS.
 - WSS is not durable delivery by itself; stage spec must define `msg_id/seq/ack/lease/resume/credit`, generation fencing, replay, and backpressure.
 - Device-bound auth long-term direction: DPoP-compatible sender-constrained token.
+- Plain bearer token plus rotation is only a fallback/development posture, not a device-bound-token design.
 - Stage 6 must define threat model before implementing device-bound auth.
+- Stage 6 should explicitly model pairing session, device heartbeat, connection status, token rotation, revocation, and audit boundaries.
 
 ### DB / Persistence
 
@@ -101,12 +135,13 @@ Boundary tests are more important than coverage numbers in the current architect
 - iOS types derive from API contract.
 - Pairing should prefer QR / one-time token / trusted device flow.
 - Current stage should only keep API guardrails; do not implement full mobile sync/artifact APIs now.
+- API schemas should keep stable `operationId`, explicit `additionalProperties`, opaque cursors, unknown enum tolerance, and a standard problem/error shape where practical.
 
 ## Reference Projects
 
 Reference projects live under `project_referenecs/`. Before using them, read:
 
-- `docs/references/research/参考项目技术调研 v0.1.md`
+- `docs/references/research/参考项目架构调研报告 v0.2.md`
 
 Prefer:
 
@@ -129,6 +164,8 @@ Stage-specific researched decisions still need local verification before impleme
 - Installed Codex CLI app-server behavior.
 - Experimental `thread/turns/list` support.
 - Node runtime and Hono assumptions.
+- Current Codex CLI transport/auth/approval/events behavior against `docs/references/codex-app-server.md`.
+- Official Codex App Windows sandbox, worktree, and local environment behavior against this project's target platforms.
 - `better-sqlite3` native install/build matrix.
 - OS keyring and Linux/headless fallback behavior.
 - WSS reverse connection through self-hosted proxy/topology.

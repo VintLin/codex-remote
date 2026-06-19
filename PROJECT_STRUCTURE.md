@@ -6,21 +6,27 @@ This document defines where code and documents belong. It is a boundary guide, n
 
 Do not create future-stage directories until a stage spec needs real files there.
 
-## Current Top-Level Shape
+## Current And Deferred Shape
 
 ```text
 apps/
   web/
   worker/
+  control-plane/    # 暂不创建，等 Stage 6
 
 packages/
   api-contract/
   codex-protocol/
   ui/
+  shared/           # 暂不主动扩展；只有跨包纯工具且复用两次以上才放
+  db/               # Stage 7 再创建
 
 docs/
   references/
   archives/
+    specs/
+    plans/
+    references/
   superpowers/
     specs/
     plans/
@@ -180,19 +186,32 @@ Not allowed:
 ### Root Documents
 
 - `PLAN.md`: live roadmap, stage status, risks, and research status.
+- `PRODUCT.md`: product positioning, users, MVP scope, product principles, and non-goals.
+- `DESIGN.md`: visual system, design tokens, component style, and frontend design constraints.
 - `QUESTIONS.md`: research question queue and answer status.
 - `PROJECT_STRUCTURE.md`: directory ownership and dependency boundaries.
 - `AGENTS.md`: execution rules for agents working in this repo.
 
 ### `docs/references`
 
-External references, imported research, source notes, screenshots, and non-authoritative background.
+External references, imported research, source notes, screenshots, and non-authoritative background. References are evidence, not product/API facts of record.
 
-`docs/references/questions/` stores ChatGPT/web research answers. Start with `docs/references/questions/SYNTHESIS.md`.
+Use these current references first:
+
+- `docs/references/codex-app-server.md`: explanatory app-server protocol reference. `packages/codex-protocol` remains the type source of truth.
+- `docs/references/openai-codex-app-pages/pages/`: official Codex App product behavior references, not API contracts or DTO sources.
+- `docs/references/questions/SYNTHESIS.md`: research conclusion index.
+- `docs/references/research/参考项目架构调研报告 v0.2.md`: reference-project evidence and adoption/rejection rationale.
+
+Do not keep absorbed PRDs, specs, prompt logs, or import metadata in `docs/references/`; archive them under `docs/archives/`.
 
 ### `docs/archives`
 
 Completed or superseded documents, including historical specs/plans and completed Superpowers workflow artifacts.
+
+- `docs/archives/specs/`: superseded specs and PRDs.
+- `docs/archives/plans/`: completed or superseded execution plans.
+- `docs/archives/references/`: absorbed reference material, prompt/import logs, duplicate metadata, and old research summaries.
 
 ### `docs/superpowers`
 
