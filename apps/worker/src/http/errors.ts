@@ -97,6 +97,7 @@ export function mapUnknownError(error: unknown, operation: string): WorkerHttpEr
     [
       "app_server_connection_error",
       "app_server_connection_timeout",
+      "app_server_env_not_configured",
       "app_server_spawn_failed",
       "app_server_websocket_unavailable",
     ].includes(error.message)
