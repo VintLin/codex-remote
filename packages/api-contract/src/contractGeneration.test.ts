@@ -145,7 +145,7 @@ function extractResponseRefs(methodLines: string[]): Map<string, { hasDirectSche
 
     const statusLines = methodLines.slice(i + 1, statusBlockEnd).join("\n");
     const hasDirectSchemaRef =
-      /#\/components\/schemas\/ErrorEnvelope/.test(statusLines);
+      /^\s*\$ref:\s*["']#\/components\/schemas\/ErrorEnvelope["']$/m.test(statusLines);
 
     const componentResponseRefs = [
       ...statusLines.matchAll(/#\/components\/responses\/([A-Za-z0-9_-]+)/g),
@@ -219,7 +219,7 @@ function extractVersionedPathLines(source: string): string[] {
 
     const versionedPathMatch = line.match(/^  (\/v1\/.*):$/);
     if (versionedPathMatch) {
-      paths.push(`  ${versionedPathMatch[1]}:`);
+      paths.push(`${versionedPathMatch[1]}:`);
     }
 
     i += 1;
@@ -387,9 +387,9 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const errorEnvelopeBlock = extractBlockLines(source, /^    ErrorEnvelope:$/);
   assert.equal(errorEnvelopeBlock.length > 0, true);
 
-  const detailsBlockStart = errorEnvelopeBlock.findIndex((line) => /^ {6}details:\s*$/.test(line));
+  const detailsBlockStart = errorEnvelopeBlock.findIndex((line) => /^ {8}details:\s*$/.test(line));
   assert.equal(detailsBlockStart >= 0, true);
-  const detailsIndent = 6;
+  const detailsIndent = 8;
   let detailsBlockEnd = errorEnvelopeBlock.length;
   for (let i = detailsBlockStart + 1; i < errorEnvelopeBlock.length; i += 1) {
     if (errorEnvelopeBlock[i].trim() === "") {
@@ -402,11 +402,11 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   }
 
   const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
-  const additionalPropertiesIsFalse = /^\s{8}additionalProperties:\s*false$/m;
+  const additionalPropertiesIsFalse = /^ {10}additionalProperties:\s*false$/m;
   const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
 
   assert.equal(additionalPropertiesIsFalse.test(detailsBlock), true);
   for (const key of allowlistedKeys) {
-    assert.match(detailsBlock, new RegExp(`^ {8}${key}:`));
+    assert.match(detailsBlock, new RegExp(`^ {10}${key}:`, "m"));
   }
 });
