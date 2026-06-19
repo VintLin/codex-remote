@@ -71,6 +71,23 @@ test("worker http projections when projecting conversations, should use safe tit
     assert.equal(untitledConversation.title, "Untitled conversation");
     assert.equal(untitledConversation.summary, "");
   });
+
+  await t.test("when project name differs from allowed project root basename, should use basename for title fallback", () => {
+    const conversation = projectThreadToConversation(
+      createThread({
+        name: null,
+        preview: "",
+      }),
+      {
+        ...defaultContext,
+        allowedProjectRoot: "/tmp/real-project-root",
+        projectName: "Display Name That Must Not Be Used For Title",
+      },
+    );
+
+    assert.equal(conversation.title, "real-project-root");
+    assert.equal(conversation.projectName, "Display Name That Must Not Be Used For Title");
+  });
 });
 
 test("worker http projections when projecting timeline, should keep metadata only and derive deterministic snapshot revision", () => {
@@ -191,6 +208,26 @@ test("worker http projections when statuses are unknown, should map thread and t
     completedAt: 15,
     durationMs: 5_000,
   });
+});
+
+test("worker http projections when idle conversation has no supported latest turn status, should stay unknown instead of done", () => {
+  const noTurnsConversation = projectThreadToConversation(
+    createThread({
+      status: { type: "idle" },
+      turns: [],
+    }),
+    defaultContext,
+  );
+  const unknownLatestTurnConversation = projectThreadToConversation(
+    createThread({
+      status: { type: "idle" },
+      turns: [createTurn({ status: "mystery" as unknown as v2.Turn["status"] })],
+    }),
+    defaultContext,
+  );
+
+  assert.equal(noTurnsConversation.status, "unknown");
+  assert.equal(unknownLatestTurnConversation.status, "unknown");
 });
 
 function createThread(overrides: Partial<v2.Thread> = {}): v2.Thread {

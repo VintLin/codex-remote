@@ -75,8 +75,8 @@ function getConversationTitle(thread: v2.Thread, context: ConversationProjection
     return normalizedPreview;
   }
 
-  const normalizedProjectName = normalizeText(context.projectName) ?? normalizeText(basename(context.allowedProjectRoot));
-  return normalizedProjectName ?? "Untitled conversation";
+  const allowedProjectBasename = normalizeText(basename(context.allowedProjectRoot));
+  return allowedProjectBasename ?? "Untitled conversation";
 }
 
 function getProjectName(context: ConversationProjectionContext): string {
@@ -116,7 +116,7 @@ function mapConversationStatus(thread: v2.Thread): ConversationStatus {
   if (latestTurnStatus === "failed") {
     return "failed";
   }
-  if (latestTurnStatus === "completed" || latestTurnStatus === "interrupted" || latestTurnStatus === "unknown") {
+  if (latestTurnStatus === "completed" || latestTurnStatus === "interrupted") {
     return "done";
   }
 
