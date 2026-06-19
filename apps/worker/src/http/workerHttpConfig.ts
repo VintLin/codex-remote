@@ -116,10 +116,9 @@ async function canonicalizeProjectRoot(value: string | undefined): Promise<strin
 function parseAllowedOrigins(value: string | undefined): readonly string[] {
   const rawOrigins = requireNonEmptyValue(value)
     .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+    .map((origin) => origin.trim());
 
-  if (rawOrigins.length === 0) {
+  if (rawOrigins.length === 0 || rawOrigins.some((origin) => !origin)) {
     throw new Error("worker_config_invalid");
   }
 

@@ -54,6 +54,24 @@ test("worker http config when wildcard origin is configured should reject", asyn
   await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
 });
 
+test("worker http config when allowed origins contains blank segments should reject", async (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
+
+  await t.test("when allowed origins has trailing comma", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_ALLOWED_ORIGINS = "http://127.0.0.1:5173,";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when allowed origins has double comma", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_ALLOWED_ORIGINS = "http://127.0.0.1:5173,,http://localhost:3000";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+});
+
 test("worker http config when bind host is non-loopback should reject", async () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
   const env = createBaseEnv(fixtureRoot);
