@@ -48,8 +48,8 @@ flowchart LR
 | --- | --- | --- |
 | 0. 架构底座 | monorepo、包边界、contract/protocol 事实源 | 已完成 |
 | 1. Read-only Worker Probe | 验证本机 app-server read-only 主链 | 已完成 |
-| 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | Spec 与 plan 已写，下一步执行 |
-| 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 未开始 |
+| 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | 已完成本地可验证切片 |
+| 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 下一阶段 |
 | 4. 写操作主链 | start、follow-up、stream 输出 | 未开始 |
 | 5. 控制主链 | interrupt、steer、approval request/response | 未开始 |
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 未开始 |
@@ -153,24 +153,34 @@ flowchart LR
 
 ## 下一步建议
 
-当前活跃 Superpowers spec：
+最近完成的 Superpowers spec：
 
 - `docs/superpowers/specs/2026-06-19-worker-http-readonly-api-design.md`
 
-当前活跃 Superpowers plan：
+最近完成的 Superpowers plan：
 
 - `docs/superpowers/plans/2026-06-19-worker-http-readonly-api.md`
 
-下一步建议按 plan 执行 Stage 2，优先采用 Subagent-Driven 拆分：contract、runtime safety、projection/handler、HTTP boundary、integration/review。
+Stage 2 已完成：
 
-范围只包括把当前 Worker probe 能力变成稳定 API，不做 DB、不做 stream、不做写操作。
+- `packages/api-contract/openapi.yaml` 增加 5 个 versioned read-only Worker endpoint。
+- `apps/worker` 增加 loopback-only HTTP config、sanitized errors、read-only handlers、Hono boundary、server CLI 和架构边界测试。
+- 本地 smoke：`/v1/worker/capabilities` 返回 200；未配置本机 app-server 时 `/v1/worker/health` 返回 424 `ErrorEnvelope`，无 token、raw URL、stack、prompt、command output 或 full diff 泄漏。
 
-Stage 2 默认设计输入：
+下一步建议进入 Stage 3：Web 接真实数据。
 
-- HTTP 边界优先采用 Hono，业务 handler 保持框架无关。
-- 最小 endpoint：`GET /v1/worker/health`、`GET /v1/worker/capabilities`、`GET /v1/worker/probe`、`GET /v1/conversations`、`GET /v1/conversations/{conversationId}/timeline`。
-- Timeline MVP 默认使用 `thread/read(includeTurns=true)`；`thread/turns/list` 只作为 optional experimental capability。
-- 不暴露 raw app-server JSON-RPC，不把 Web 绑定到 app-server method name。
+范围建议：
+
+- 建立 Web datasource boundary，用 `api-contract` 类型消费 Worker/Control Plane-shaped API。
+- 保留现有 mock/factory 作为 fallback 和测试夹具，不让 UI 组件直接依赖 mock 数据结构。
+- 先接只读主链：capabilities/health、conversation list、conversation timeline。
+- 不做 write、stream、approval、Control Plane、DB。
+
+Stage 3 默认设计输入：
+
+- Web 只依赖 `@codex-remote/api-contract`，不导入 `@codex-remote/codex-protocol`。
+- Datasource 返回 public contract 类型或从 public contract 明确派生的 view state。
+- 首个纵切只读；Web 错误态必须展示 sanitized `ErrorEnvelope` 的 public message/code。
 - Playwright 暂不大规模引入；等 Web + fake Worker datasource 能跑通首个交互纵切链路时，只加少量 smoke。
 - 不创建空 `apps/control-plane`、`packages/db` 或 `packages/shared`；等对应阶段需要真实文件时再创建。
 
