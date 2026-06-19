@@ -63,6 +63,52 @@ test("worker http config when bind host is non-loopback should reject", async ()
   await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
 });
 
+test("worker http config when explicit empty defaulted values are provided should reject", async (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
+
+  await t.test("when bind host is empty", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_HTTP_HOST = "";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when bind host is whitespace", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_HTTP_HOST = "   ";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when port is empty", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_HTTP_PORT = "";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when port is whitespace", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_HTTP_PORT = "   ";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when start app server is empty", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_START_APP_SERVER = "";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when start app server is whitespace", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_START_APP_SERVER = "   ";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+});
+
 test("worker http config when timeout is invalid should reject", async (t) => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
 

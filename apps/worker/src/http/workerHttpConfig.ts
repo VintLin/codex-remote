@@ -144,7 +144,14 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
 }
 
 function parseBindHost(value: string | undefined): string {
-  const host = (value?.trim() || "127.0.0.1");
+  if (value === undefined) {
+    return "127.0.0.1";
+  }
+
+  const host = value.trim();
+  if (!host) {
+    throw new Error("worker_config_invalid");
+  }
 
   if (!isLoopbackHost(host)) {
     throw new Error("worker_config_invalid");
@@ -154,8 +161,12 @@ function parseBindHost(value: string | undefined): string {
 }
 
 function parsePort(value: string | undefined): number {
-  if (!value) {
+  if (value === undefined) {
     return 8787;
+  }
+
+  if (!value.trim()) {
+    throw new Error("worker_config_invalid");
   }
 
   const parsed = Number(value);
@@ -179,8 +190,12 @@ function parseAppServerUrl(value: string | undefined): string | null {
 }
 
 function parseBooleanFlag(value: string | undefined): boolean {
-  if (!value) {
+  if (value === undefined) {
     return false;
+  }
+
+  if (!value.trim()) {
+    throw new Error("worker_config_invalid");
   }
 
   if (value === "true") {
