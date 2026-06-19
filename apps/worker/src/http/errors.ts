@@ -44,6 +44,8 @@ const unsafeStringPatterns = [
   /^@@ .* @@$/m,
 ] as const;
 
+const safeIdentifierPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
+
 type AllowedDetailKey = keyof NonNullable<ErrorEnvelope["details"]>;
 type WorkerHttpErrorDetails = Partial<Record<AllowedDetailKey, unknown>> & Record<string, unknown>;
 
@@ -72,7 +74,7 @@ export function toErrorEnvelope(error: unknown, requestId: string): ErrorEnvelop
 
   return {
     code: httpError.code,
-    message: sanitizePublicMessage(httpError.code, httpError.message),
+    message: publicMessages[httpError.code],
     ...(details ? { details } : {}),
     requestId,
   };
@@ -111,16 +113,6 @@ export function mapUnknownError(error: unknown, operation: string): WorkerHttpEr
   });
 }
 
-function sanitizePublicMessage(code: WorkerHttpErrorCode, message: string): string {
-  const fallback = publicMessages[code];
-
-  if (!message.trim() || containsUnsafeString(message)) {
-    return fallback;
-  }
-
-  return message;
-}
-
 function sanitizeDetails(details: WorkerHttpErrorDetails | undefined): ErrorEnvelope["details"] | undefined {
   if (!details) {
     return undefined;
@@ -135,25 +127,25 @@ function sanitizeDetails(details: WorkerHttpErrorDetails | undefined): ErrorEnve
 
     switch (key as AllowedDetailKey) {
       case "operation": {
-        if (typeof value === "string" && value.trim() && !containsUnsafeString(value)) {
+        if (isSafeIdentifier(value)) {
           sanitized.operation = value;
         }
         break;
       }
       case "diagnosticId": {
-        if (typeof value === "string" && value.trim() && !containsUnsafeString(value)) {
+        if (isSafeIdentifier(value)) {
           sanitized.diagnosticId = value;
         }
         break;
       }
       case "reason": {
-        if (typeof value === "string" && value.trim() && !containsUnsafeString(value)) {
+        if (isSafeIdentifier(value)) {
           sanitized.reason = value;
         }
         break;
       }
       case "field": {
-        if (typeof value === "string" && value.trim() && !containsUnsafeString(value)) {
+        if (isSafeIdentifier(value)) {
           sanitized.field = value;
         }
         break;
@@ -180,4 +172,8 @@ function sanitizeDetails(details: WorkerHttpErrorDetails | undefined): ErrorEnve
 
 function containsUnsafeString(value: string): boolean {
   return unsafeStringPatterns.some((pattern) => pattern.test(value));
+}
+
+function isSafeIdentifier(value: unknown): value is string {
+  return typeof value === "string" && safeIdentifierPattern.test(value) && !containsUnsafeString(value);
 }

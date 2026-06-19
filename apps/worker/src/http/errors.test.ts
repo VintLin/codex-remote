@@ -96,6 +96,69 @@ test("worker http errors when details contain forbidden keys should drop them fr
   });
 });
 
+test("worker http errors when custom WorkerHttpError message looks safe should still use curated envelope message", () => {
+  const envelope = toErrorEnvelope(
+    new WorkerHttpError(500, "worker_internal_error", "database deadlock on job queue", {
+      operation: "worker.probe",
+      retryable: false,
+    }),
+    "req-curated-message",
+  );
+
+  assert.equal(envelope.message, "Worker request failed.");
+  assert.doesNotMatch(JSON.stringify(envelope), /database deadlock on job queue/);
+});
+
+test("worker http errors when allowlisted string details contain prose should drop them", () => {
+  const envelope = toErrorEnvelope(
+    new WorkerHttpError(400, "invalid_request", "Request validation failed.", {
+      operation: "timeline read failed",
+      reason: "cursor is malformed after upstream retry",
+      field: "cursor",
+      diagnosticId: "diag-http-001",
+      retryable: false,
+      limit: 25,
+    }),
+    "req-prose-details",
+  );
+
+  assert.deepEqual(envelope, {
+    code: "invalid_request",
+    message: "Request validation failed.",
+    details: {
+      field: "cursor",
+      diagnosticId: "diag-http-001",
+      retryable: false,
+      limit: 25,
+    },
+    requestId: "req-prose-details",
+  });
+});
+
+test("worker http errors when allowlisted string details are controlled identifiers should keep them", () => {
+  const envelope = toErrorEnvelope(
+    new WorkerHttpError(404, "conversation_not_found", "unused internal detail", {
+      operation: "conversation.timeline",
+      reason: "not_found",
+      field: "conversationId",
+      diagnosticId: "diag-http-404",
+    }),
+    "req-identifier-details",
+  );
+
+  assert.deepEqual(envelope, {
+    code: "conversation_not_found",
+    message: "Conversation was not found.",
+    details: {
+      operation: "conversation.timeline",
+      reason: "not_found",
+      field: "conversationId",
+      diagnosticId: "diag-http-404",
+    },
+    requestId: "req-identifier-details",
+  });
+});
+
 test("worker http errors when serializing envelopes should not leak raw sensitive strings", () => {
   const upstream = new Error("token=secret-token\n@@ -1,2 +1,2 @@\n- old\n+ new");
   (upstream as Error & { stack?: string }).stack =
