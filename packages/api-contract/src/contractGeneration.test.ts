@@ -61,6 +61,17 @@ function escapeRegExp(patternText: string): string {
   return patternText.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function expectDefined<T>(value: T | undefined, message: string): NonNullable<T> {
+  assert.notEqual(value, undefined, message);
+  return value as NonNullable<T>;
+}
+
+function expectCapturedGroup(match: RegExpMatchArray | RegExpExecArray | null, message: string): string {
+  assert.notEqual(match, null, message);
+  const matchedGroups = expectDefined(match, message);
+  return expectDefined(matchedGroups[1], message);
+}
+
 function extractBlockLines(source: string, startLinePattern: RegExp): string[] {
   const lines = source.split("\n");
   const startIndex = lines.findIndex((line) => startLinePattern.test(line));
@@ -68,11 +79,11 @@ function extractBlockLines(source: string, startLinePattern: RegExp): string[] {
     return [];
   }
 
-  const startIndent = indentOf(lines[startIndex]);
+  const startIndent = indentOf(expectDefined(lines[startIndex], "start line should exist"));
   let endIndex = startIndex + 1;
 
   while (endIndex < lines.length) {
-    const currentLine = lines[endIndex];
+    const currentLine = expectDefined(lines[endIndex], "block line should exist");
     if (currentLine.trim() !== "" && indentOf(currentLine) <= startIndent) {
       break;
     }
@@ -93,19 +104,22 @@ function extractMethodBlocks(pathBlockLines: string[]): MethodBlock[] {
   const methodHeaderPattern = /^ {4}(get|post|put|patch|delete|head|options|trace):\s*$/;
   const methodHeaderIndices: number[] = [];
   for (let i = 0; i < pathBlockLines.length; i += 1) {
-    if (methodHeaderPattern.test(pathBlockLines[i])) {
+    if (methodHeaderPattern.test(expectDefined(pathBlockLines[i], "method header line should exist"))) {
       methodHeaderIndices.push(i);
     }
   }
 
   for (let i = 0; i < methodHeaderIndices.length; i += 1) {
-    const methodLineIndex = methodHeaderIndices[i];
-    const methodMatch = methodHeaderPattern.exec(pathBlockLines[methodLineIndex]);
+    const methodLineIndex = expectDefined(methodHeaderIndices[i], "method header index should exist");
+    const methodMatch = methodHeaderPattern.exec(expectDefined(pathBlockLines[methodLineIndex], "method line should exist"));
     if (!methodMatch) {
       continue;
     }
-    const method = methodMatch[1];
-    const sliceEnd = i + 1 < methodHeaderIndices.length ? methodHeaderIndices[i + 1] : pathBlockLines.length;
+    const method = expectCapturedGroup(methodMatch, "method capture should exist");
+    const sliceEnd =
+      i + 1 < methodHeaderIndices.length
+        ? expectDefined(methodHeaderIndices[i + 1], "next method header index should exist")
+        : pathBlockLines.length;
     methods.push({
       method,
       lines: pathBlockLines.slice(methodLineIndex, sliceEnd),
@@ -123,16 +137,16 @@ function extractResponseRefs(methodLines: string[]): Map<string, { hasDirectSche
   }
 
   for (let i = responsesLineIndex + 1; i < methodLines.length; i += 1) {
-    const statusLine = methodLines[i];
+    const statusLine = expectDefined(methodLines[i], "status line should exist");
     const statusMatch = statusLine.match(/^ {8}"(\d{3})":\s*$/);
     if (!statusMatch) {
       continue;
     }
 
-    const status = statusMatch[1];
+    const status = expectCapturedGroup(statusMatch, "status capture should exist");
     let statusBlockEnd = i + 1;
     while (statusBlockEnd < methodLines.length) {
-      const blockLine = methodLines[statusBlockEnd];
+      const blockLine = expectDefined(methodLines[statusBlockEnd], "status block line should exist");
       const blockIndent = indentOf(blockLine);
       if (blockLine.trim() === "") {
         statusBlockEnd += 1;
@@ -150,7 +164,7 @@ function extractResponseRefs(methodLines: string[]): Map<string, { hasDirectSche
 
     const componentResponseRefs = [
       ...statusLines.matchAll(/#\/components\/responses\/([A-Za-z0-9_-]+)/g),
-    ].map((match) => match[1]);
+    ].map((match) => expectDefined(match[1], "component response capture should exist"));
 
     responseInfo.set(status, {
       hasDirectSchemaRef,
@@ -175,19 +189,24 @@ function getComponentResponseUsesErrorEnvelope(source: string): Map<string, bool
   const responseHeaderPattern = /^ {4}([A-Za-z0-9_-]+):\s*$/;
   const responseHeaderIndices: number[] = [];
   for (let i = 0; i < responsesBlock.length; i += 1) {
-    if (responseHeaderPattern.test(responsesBlock[i])) {
+    if (responseHeaderPattern.test(expectDefined(responsesBlock[i], "response header line should exist"))) {
       responseHeaderIndices.push(i);
     }
   }
 
   for (let i = 0; i < responseHeaderIndices.length; i += 1) {
-    const responseHeaderIndex = responseHeaderIndices[i];
-    const responseNameMatch = responseHeaderPattern.exec(responsesBlock[responseHeaderIndex]);
+    const responseHeaderIndex = expectDefined(responseHeaderIndices[i], "response header index should exist");
+    const responseNameMatch = responseHeaderPattern.exec(
+      expectDefined(responsesBlock[responseHeaderIndex], "response header should exist"),
+    );
     if (!responseNameMatch) {
       continue;
     }
-    const responseName = responseNameMatch[1];
-    const responseNext = i + 1 < responseHeaderIndices.length ? responseHeaderIndices[i + 1] : responsesBlock.length;
+    const responseName = expectCapturedGroup(responseNameMatch, "response name capture should exist");
+    const responseNext =
+      i + 1 < responseHeaderIndices.length
+        ? expectDefined(responseHeaderIndices[i + 1], "next response header index should exist")
+        : responsesBlock.length;
     const responseBody = responsesBlock.slice(responseHeaderIndex + 1, responseNext).join("\n");
     const usesErrorEnvelope = /^\s*\$ref:\s*["']#\/components\/schemas\/ErrorEnvelope["']$/m.test(responseBody);
     responseDefs.set(responseName, usesErrorEnvelope);
@@ -207,7 +226,7 @@ function extractVersionedPathLines(source: string): string[] {
   const paths: string[] = [];
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = expectDefined(lines[i], "path line should exist");
     if (line.trim() === "") {
       i += 1;
       continue;
@@ -350,7 +369,7 @@ test("when worker read-only http api is maintained, openapi should define versio
       if (!operationMatch) {
         continue;
       }
-      const operationId = operationMatch[1];
+      const operationId = expectCapturedGroup(operationMatch, "operationId capture should exist");
       assert.ok(
         !stage2DisallowedOperationIds.some((disallowedOperationId) =>
           operationId.toLowerCase().includes(disallowedOperationId.toLowerCase()),
@@ -420,10 +439,11 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const detailsIndent = 8;
   let detailsBlockEnd = errorEnvelopeBlock.length;
   for (let i = detailsBlockStart + 1; i < errorEnvelopeBlock.length; i += 1) {
-    if (errorEnvelopeBlock[i].trim() === "") {
+    const blockLine = expectDefined(errorEnvelopeBlock[i], "details block line should exist");
+    if (blockLine.trim() === "") {
       continue;
     }
-    if (indentOf(errorEnvelopeBlock[i]) <= detailsIndent) {
+    if (indentOf(blockLine) <= detailsIndent) {
       detailsBlockEnd = i;
       break;
     }
@@ -435,7 +455,7 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
   const propertyKeys = [
     ...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9_-]*):\s*$/gm),
-  ].map((match) => match[1]);
+  ].map((match) => expectDefined(match[1], "property key capture should exist"));
 
   assert.equal(additionalPropertiesIsFalse.test(detailsBlock), true);
   assert.deepEqual(new Set(propertyKeys), new Set(allowlistedKeys));
