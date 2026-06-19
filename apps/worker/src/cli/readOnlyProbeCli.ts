@@ -1,14 +1,7 @@
 import {
-  assertLoopbackWebSocketUrl,
-  chooseLoopbackPort,
-  startLoopbackAppServer,
-  stopAppServer,
-  toReadyzUrl,
-  waitForReadyz,
-  type AppServerProcessHandle,
-} from "../app-server/appServerProcessService.ts";
-import { connectAppServerRpcClient } from "../app-server/appServerRpcClient.ts";
-import { AppServerReadOnlyProbeClient } from "../probe/appServerReadOnlyProbeClient.ts";
+  openReadOnlyAppServerSession,
+  type ReadOnlyAppServerSession,
+} from "../app-server/readOnlyAppServerSession.ts";
 import { createReadOnlyProbeFailureSummary, runReadOnlyProbe } from "../probe/readOnlyProbe.ts";
 
 function classifyProbeCliFailure(error: unknown): {
@@ -27,6 +20,7 @@ function classifyProbeCliFailure(error: unknown): {
   if (
     error instanceof Error &&
     [
+      "app_server_env_not_configured",
       "app_server_connection_error",
       "app_server_connection_timeout",
       "app_server_request_timeout",
@@ -49,35 +43,31 @@ function classifyProbeCliFailure(error: unknown): {
 
 async function main(): Promise<number> {
   const allowedProjectRoot = process.env.CODEX_REMOTE_ALLOWED_PROJECT_ROOT ?? process.cwd();
-  const configuredUrl = process.env.CODEX_APP_SERVER_URL;
+  const configuredUrl = process.env.CODEX_APP_SERVER_URL?.trim() || null;
   const shouldStartAppServer = process.env.CODEX_REMOTE_START_APP_SERVER === "1";
-  let appServer: AppServerProcessHandle | null = null;
+  let session: ReadOnlyAppServerSession | null = null;
+  const attemptedWorkerStart = !configuredUrl && shouldStartAppServer;
 
   try {
-    const appServerUrl = configuredUrl
-      ? assertLoopbackWebSocketUrl(configuredUrl)
-      : shouldStartAppServer
-        ? `ws://127.0.0.1:${await chooseLoopbackPort()}`
-        : null;
+    try {
+      session = await openReadOnlyAppServerSession({
+        configuredUrl,
+        startAppServer: shouldStartAppServer,
+        allowedProjectRoot,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "app_server_env_not_configured") {
+        const summary = await runReadOnlyProbe();
+        process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+        return 1;
+      }
 
-    if (!appServerUrl) {
-      const summary = await runReadOnlyProbe();
-      process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-      return 1;
+      throw error;
     }
 
-    if (!configuredUrl) {
-      appServer = startLoopbackAppServer(Number(new URL(appServerUrl).port));
-      await appServer.spawned;
-      await waitForReadyz(appServer.readyzUrl);
-    }
-
-    const readyzUrl = appServer?.readyzUrl ?? toReadyzUrl(appServerUrl);
-    const rpc = await connectAppServerRpcClient(appServerUrl);
-    const client = new AppServerReadOnlyProbeClient(rpc, readyzUrl, allowedProjectRoot);
     const summary = await runReadOnlyProbe({
-      client,
-      startedByWorker: Boolean(appServer),
+      client: session.client,
+      startedByWorker: session.startedByWorker,
     });
 
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
@@ -88,14 +78,12 @@ async function main(): Promise<number> {
       checkName: failure.checkName,
       failureType: failure.failureType,
       errorKind: failure.errorKind,
-      startedByWorker: Boolean(appServer),
+      startedByWorker: session?.startedByWorker ?? attemptedWorkerStart,
     });
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return 1;
   } finally {
-    if (appServer) {
-      stopAppServer(appServer);
-    }
+    session?.close();
   }
 }
 
