@@ -41,6 +41,160 @@ const schemaTypeNames = [
   "WorkerProbeSummary",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
+const stage2Paths = [
+  "/v1/worker/health:",
+  "/v1/worker/capabilities:",
+  "/v1/worker/probe:",
+  "/v1/conversations:",
+  "/v1/conversations/{conversationId}/timeline:",
+] as const;
+const stage2ErrorStatuses = ["400", "401", "403", "408", "424", "500"] as const;
+const stage2DisallowedMethods = ["post", "put", "patch", "delete", "head", "options", "trace"];
+const stage2DisallowedOperationIds = ["approval", "stream", "interrupt", "steer", "followUpConversation"];
+
+function indentOf(line: string): number {
+  return line.match(/^\s*/)?.[0].length ?? 0;
+}
+
+function escapeRegExp(patternText: string): string {
+  return patternText.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractBlockLines(source: string, startLinePattern: RegExp): string[] {
+  const lines = source.split("\n");
+  const startIndex = lines.findIndex((line) => startLinePattern.test(line));
+  if (startIndex === -1) {
+    return [];
+  }
+
+  const startIndent = indentOf(lines[startIndex]);
+  let endIndex = startIndex + 1;
+
+  while (endIndex < lines.length) {
+    const currentLine = lines[endIndex];
+    if (currentLine.trim() !== "" && indentOf(currentLine) <= startIndent) {
+      break;
+    }
+    endIndex += 1;
+  }
+
+  return lines.slice(startIndex, endIndex);
+}
+
+function extractPathBlock(source: string, pathLine: string): string[] {
+  return extractBlockLines(source, new RegExp(`^  ${escapeRegExp(pathLine)}$`));
+}
+
+type MethodBlock = { method: string; lines: string[] };
+
+function extractMethodBlocks(pathBlockLines: string[]): MethodBlock[] {
+  const methods: MethodBlock[] = [];
+  const methodHeaderPattern = /^ {4}(get|post|put|patch|delete|head|options|trace):\s*$/;
+  const methodHeaderIndices: number[] = [];
+  for (let i = 0; i < pathBlockLines.length; i += 1) {
+    if (methodHeaderPattern.test(pathBlockLines[i])) {
+      methodHeaderIndices.push(i);
+    }
+  }
+
+  for (let i = 0; i < methodHeaderIndices.length; i += 1) {
+    const methodLineIndex = methodHeaderIndices[i];
+    const methodMatch = methodHeaderPattern.exec(pathBlockLines[methodLineIndex]);
+    if (!methodMatch) {
+      continue;
+    }
+    const method = methodMatch[1];
+    const sliceEnd = i + 1 < methodHeaderIndices.length ? methodHeaderIndices[i + 1] : pathBlockLines.length;
+    methods.push({
+      method,
+      lines: pathBlockLines.slice(methodLineIndex, sliceEnd),
+    });
+  }
+
+  return methods;
+}
+
+function extractResponseRefs(methodLines: string[]): Map<string, { hasDirectSchemaRef: boolean; componentResponseRefs: string[] }> {
+  const responsesLineIndex = methodLines.findIndex((line) => /^ {6}responses:\s*$/.test(line));
+  const responseInfo = new Map<string, { hasDirectSchemaRef: boolean; componentResponseRefs: string[] }>();
+  if (responsesLineIndex === -1) {
+    return responseInfo;
+  }
+
+  for (let i = responsesLineIndex + 1; i < methodLines.length; i += 1) {
+    const statusLine = methodLines[i];
+    const statusMatch = statusLine.match(/^ {8}"(\d{3})":\s*$/);
+    if (!statusMatch) {
+      continue;
+    }
+
+    const status = statusMatch[1];
+    let statusBlockEnd = i + 1;
+    while (statusBlockEnd < methodLines.length) {
+      const blockLine = methodLines[statusBlockEnd];
+      const blockIndent = indentOf(blockLine);
+      if (blockLine.trim() === "") {
+        statusBlockEnd += 1;
+        continue;
+      }
+      if (blockIndent <= 8 || /^ {8}"\d{3}":\s*$/.test(blockLine)) {
+        break;
+      }
+      statusBlockEnd += 1;
+    }
+
+    const statusLines = methodLines.slice(i + 1, statusBlockEnd).join("\n");
+    const hasDirectSchemaRef =
+      /#\/components\/schemas\/ErrorEnvelope/.test(statusLines);
+
+    const componentResponseRefs = [
+      ...statusLines.matchAll(/#\/components\/responses\/([A-Za-z0-9_-]+)/g),
+    ].map((match) => match[1]);
+
+    responseInfo.set(status, {
+      hasDirectSchemaRef,
+      componentResponseRefs,
+    });
+
+    i = statusBlockEnd - 1;
+  }
+
+  return responseInfo;
+}
+
+function getComponentResponseUsesErrorEnvelope(source: string): Map<string, boolean> {
+  const componentsBlock = extractBlockLines(source, /^components:$/);
+  const responsesBlock = extractBlockLines(componentsBlock.join("\n"), /^  responses:$/);
+  const responseDefs = new Map<string, boolean>();
+
+  if (responsesBlock.length === 0) {
+    return responseDefs;
+  }
+
+  const responseHeaderPattern = /^ {4}([A-Za-z0-9_-]+):\s*$/;
+  const responseHeaderIndices: number[] = [];
+  for (let i = 0; i < responsesBlock.length; i += 1) {
+    if (responseHeaderPattern.test(responsesBlock[i])) {
+      responseHeaderIndices.push(i);
+    }
+  }
+
+  for (let i = 0; i < responseHeaderIndices.length; i += 1) {
+    const responseHeaderIndex = responseHeaderIndices[i];
+    const responseNameMatch = responseHeaderPattern.exec(responsesBlock[responseHeaderIndex]);
+    if (!responseNameMatch) {
+      continue;
+    }
+    const responseName = responseNameMatch[1];
+    const responseNext = i + 1 < responseHeaderIndices.length ? responseHeaderIndices[i + 1] : responsesBlock.length;
+    const responseBody = responsesBlock.slice(responseHeaderIndex + 1, responseNext).join("\n");
+    const usesErrorEnvelope =
+      /#\/components\/schemas\/ErrorEnvelope/.test(responseBody) || /"ErrorEnvelope"/.test(responseBody);
+    responseDefs.set(responseName, usesErrorEnvelope);
+  }
+
+  return responseDefs;
+}
 
 function collectTypeScriptSourceFiles(directoryPath: string): string[] {
   const entries = readdirSync(directoryPath, { withFileTypes: true });
@@ -143,47 +297,92 @@ test("when read-only main-chain schemas are maintained, openapi should define th
 test("when worker read-only http api is maintained, openapi should define versioned stage 2 paths", () => {
   const source = readFileSync(openApiPath, "utf8");
 
-  for (const path of [
-    "/v1/worker/health:",
-    "/v1/worker/capabilities:",
-    "/v1/worker/probe:",
-    "/v1/conversations:",
-    "/v1/conversations/{conversationId}/timeline:",
-  ]) {
-    assert.match(source, new RegExp(`^  ${path.replaceAll("/", "\\/")}`, "m"));
+  const disallowedVersionedPathLines = [
+    "/v1/conversations/{conversationId}/follow-up:",
+    "/v1/conversations/{conversationId}/stream:",
+    "/v1/conversations/{conversationId}/approval:",
+    "/v1/conversations/{conversationId}/interrupt:",
+    "/v1/conversations/{conversationId}/steer:",
+  ];
+
+  for (const forbiddenPath of disallowedVersionedPathLines) {
+    assert.doesNotMatch(source, new RegExp(`^  ${escapeRegExp(forbiddenPath)}$`, "m"));
+  }
+
+  for (const path of stage2Paths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    assert.equal(pathBlockLines.length > 0, true);
+    const methods = extractMethodBlocks(pathBlockLines);
+    const methodNames = methods.map((methodBlock) => methodBlock.method);
+    const disallowedMethodUsages = methodNames.filter((methodName) => stage2DisallowedMethods.includes(methodName));
+    assert.deepEqual(disallowedMethodUsages, []);
+    assert.deepEqual(methodNames.filter((methodName) => methodName !== "get"), []);
+    assert.equal(methodNames.includes("get"), true);
+
+    const methodLines = methods.flatMap((methodBlock) => methodBlock.lines);
+    for (const methodLine of methodLines) {
+      const operationMatch = methodLine.match(/^\s{6}operationId:\s*(\S+)$/);
+      if (!operationMatch) {
+        continue;
+      }
+      const operationId = operationMatch[1];
+      assert.ok(
+        !stage2DisallowedOperationIds.some((disallowedOperationId) =>
+          operationId.toLowerCase().includes(disallowedOperationId.toLowerCase()),
+        ),
+      );
+    }
   }
 });
 
-test("when worker read-only http api errors are maintained, routes should use ErrorEnvelope", () => {
+test("when worker read-only http api errors are maintained, stage 2 routes should use ErrorEnvelope", () => {
   const source = readFileSync(openApiPath, "utf8");
+  const componentResponseDefs = getComponentResponseUsesErrorEnvelope(source);
 
-  for (const status of ['"400"', '"401"', '"403"', '"408"', '"424"', '"500"']) {
-    assert.match(source, new RegExp(`${status}:[\\s\\S]*\\$ref: "#\\/components\\/schemas\\/ErrorEnvelope"`));
+  for (const path of stage2Paths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    const methodBlocks = extractMethodBlocks(pathBlockLines);
+    assert.equal(methodBlocks.length > 0, true);
+
+    for (const method of methodBlocks) {
+      const responseRefs = extractResponseRefs(method.lines);
+      for (const status of stage2ErrorStatuses) {
+        const responseInfo = responseRefs.get(status);
+        assert.equal(typeof responseInfo, "object");
+        const responseRefsErrorEnvelope = responseInfo
+          ? responseInfo.componentResponseRefs.some((responseName) => componentResponseDefs.get(responseName) === true)
+          : false;
+        assert.equal(responseInfo?.hasDirectSchemaRef || responseRefsErrorEnvelope, true);
+      }
+    }
   }
-});
-
-test("when stage 2 worker routes are implemented, write routes should stay outside the allowlist", () => {
-  const source = readFileSync(openApiPath, "utf8");
-
-  assert.doesNotMatch(source, /operationId:\s*workerFollowUpConversation/);
-  assert.doesNotMatch(source, /operationId:\s*workerApproval/);
-  assert.doesNotMatch(source, /operationId:\s*workerInterrupt/);
-  assert.doesNotMatch(source, /operationId:\s*workerSteer/);
 });
 
 test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const source = readFileSync(openApiPath, "utf8");
+  const errorEnvelopeBlock = extractBlockLines(source, /^    ErrorEnvelope:$/);
+  assert.equal(errorEnvelopeBlock.length > 0, true);
 
-  const allowlistedDetailsField = [
-    /\bdetails:/,
-    /^\s{4}type:\s*object/m,
-    /^\s{6}oneOf:/m,
-    /^\s{8}-\s+\$ref: '#\/components\/schemas\/ProbeFailure'/m,
-    /^\s{8}-\s+\$ref: '#\/components\/schemas\/CommandNotAllowedError'/m,
-    /^\s{8}-\s+\$ref: '#\/components\/schemas\/ConversationNotFoundError'/m,
-  ];
+  const detailsBlockStart = errorEnvelopeBlock.findIndex((line) => /^ {6}details:\s*$/.test(line));
+  assert.equal(detailsBlockStart >= 0, true);
+  const detailsIndent = 6;
+  let detailsBlockEnd = errorEnvelopeBlock.length;
+  for (let i = detailsBlockStart + 1; i < errorEnvelopeBlock.length; i += 1) {
+    if (errorEnvelopeBlock[i].trim() === "") {
+      continue;
+    }
+    if (indentOf(errorEnvelopeBlock[i]) <= detailsIndent) {
+      detailsBlockEnd = i;
+      break;
+    }
+  }
 
-  for (const pattern of allowlistedDetailsField) {
-    assert.match(source, pattern);
+  const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
+  const disallowedAdditionalProperties = /^(\s{8}.*)?additionalProperties:\s*true$/m;
+  const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
+
+  assert.equal(disallowedAdditionalProperties.test(detailsBlock), false);
+  for (const key of allowlistedKeys) {
+    assert.match(detailsBlock, new RegExp(`^ {8}${key}:`));
   }
 });
