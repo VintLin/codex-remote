@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ErrorEnvelope } from "@codex-remote/api-contract";
+import type {
+  AssistantTimelineNode,
+  AssistantTimelineTurn,
+  AssistantThreadSnapshot,
+} from "../../domain/assistant/assistantTimeline.ts";
 
 import { assistantThreads as mockAssistantThreads, conversations as mockConversations } from "../app-server/mockData.ts";
 import { loadWorkbenchData, createFallbackWorkbenchData } from "./workbenchData.ts";
@@ -129,8 +134,8 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.deepEqual(data.searchRecents, fallback.searchRecents);
   assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
   assert.equal(data.assistantThreads.length, mockConversations.length);
-  const hasRichNodes = data.assistantThreads.some((thread) =>
-    thread.timeline.turns.some((turn) => turn.nodes.length > 0),
+  const hasRichNodes = data.assistantThreads.some((thread: AssistantThreadSnapshot) =>
+    thread.timeline.turns.some((turn: AssistantTimelineTurn) => turn.nodes.length > 0),
   );
   assert.equal(hasRichNodes, false);
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
@@ -300,13 +305,13 @@ test("workbench datasource when timeline loads should create metadata-only nodes
 
   const thread = data.assistantThreads.find((item) => item.id === "timeline");
   assert.ok(thread);
-  const unsafeNodes = thread.timeline.turns.flatMap((turn) =>
-    turn.nodes.filter((node) => node.type !== "contextCompaction"),
+  const unsafeNodes = thread.timeline.turns.flatMap((turn: AssistantTimelineTurn) =>
+    turn.nodes.filter((node: AssistantTimelineNode) => node.type !== "contextCompaction"),
   );
 
   assert.equal(unsafeNodes.length, 0);
-  const labels = thread.timeline.turns.flatMap((turn) =>
-    turn.nodes.map((node) => (node.type === "contextCompaction" ? node.text : "")),
+  const labels = thread.timeline.turns.flatMap((turn: AssistantTimelineTurn) =>
+    turn.nodes.map((node: AssistantTimelineNode) => (node.type === "contextCompaction" ? node.text : "")),
   );
   assert.deepEqual(labels.includes(""), false);
 });
@@ -323,8 +328,8 @@ test("workbench datasource when fallback is returned should not reuse rich mock 
 
   const fallback = createFallbackWorkbenchData("not_configured");
   assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
-  const hasRichNodes = data.assistantThreads.some((thread) =>
-    thread.timeline.turns.some((turn) => turn.nodes.length > 0),
+  const hasRichNodes = data.assistantThreads.some((thread: AssistantThreadSnapshot) =>
+    thread.timeline.turns.some((turn: AssistantTimelineTurn) => turn.nodes.length > 0),
   );
   assert.equal(hasRichNodes, false);
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
