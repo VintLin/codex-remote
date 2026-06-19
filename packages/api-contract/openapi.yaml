@@ -80,7 +80,181 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CommandAccepted"
+  /v1/worker/health:
+    get:
+      operationId: getWorkerHealth
+      responses:
+        "200":
+          description: Worker and app-server readiness.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerHealth"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/worker/capabilities:
+    get:
+      operationId: getWorkerCapabilities
+      responses:
+        "200":
+          description: Read-only worker capabilities visible to the current actor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerCapabilities"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/worker/probe:
+    get:
+      operationId: getWorkerProbeSummary
+      responses:
+        "200":
+          description: Latest worker-owned read-only probe summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerProbeSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations:
+    get:
+      operationId: listWorkerConversations
+      parameters:
+        - name: deviceId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Worker conversation list visible to the current actor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CodexConversation"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/timeline:
+    get:
+      operationId: getConversationTimeline
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline snapshot for a single conversation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationTimeline"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
+  responses:
+    BadRequestError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UnauthorizedError:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ForbiddenError:
+      description: Caller is not allowed to access the requested worker resource.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ConversationNotFoundError:
+      description: The requested conversation timeline could not be found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RequestTimeoutError:
+      description: Worker request timed out before a stable response was produced.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AppServerUnavailableError:
+      description: Worker could not reach the local Codex app-server dependency.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalWorkerError:
+      description: Worker hit an unexpected internal failure.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
     DeviceConnectionStatus:
       type: string
@@ -596,6 +770,19 @@ components:
           type: string
         details:
           type: object
-          additionalProperties: true
+          additionalProperties: false
+          properties:
+            operation:
+              type: string
+            retryable:
+              type: boolean
+            diagnosticId:
+              type: string
+            reason:
+              type: string
+            field:
+              type: string
+            limit:
+              type: number
         requestId:
           type: string
