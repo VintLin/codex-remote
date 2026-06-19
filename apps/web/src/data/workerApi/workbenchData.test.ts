@@ -397,7 +397,7 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
             url: "http://secret.internal/admin",
             stack: "line 1\nline 2",
             token: "abc-SECRET",
-            privatePath: "/Users/user/Library/Secrets",
+            privatePath: "relative/path/Secrets",
           } as Record<string, string>,
         },
         500,

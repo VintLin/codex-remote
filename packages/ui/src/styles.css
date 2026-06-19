@@ -1261,6 +1261,15 @@ button.sidebar-list-content {
   gap: 8px;
 }
 
+.datasource-status {
+  max-width: min(380px, 100%);
+  overflow: hidden;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-compact);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conversation-toolbar {
   flex: 0 0 auto;
   gap: 7px;

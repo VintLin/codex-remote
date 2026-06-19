@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
-import { assistantThreads, conversations, devices, sidebarProjects } from "../../data/app-server/mockData";
+import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import {
   createDefaultSidebarSectionState,
   createSidebarModel,
@@ -24,13 +24,18 @@ import { type AppView, Sidebar, type SidebarPressedItem } from "../sidebar/sideb
 
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
 type MobileWorkspacePane = "detail" | "main" | "sidebar";
+const workerBaseUrl = process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL ?? "http://127.0.0.1:8787";
+const workerToken = process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN ?? "";
 
 export function CodexRemoteApp() {
+  const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
-  const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]!.id);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(() => conversations[0]?.id ?? null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState(workbenchData.devices[0]!.id);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
+    () => workbenchData.conversations[0]?.id ?? null,
+  );
   const [expandedProjectIds, setExpandedProjectIds] = useState(
-    () => new Set(sidebarProjects.filter((project) => project.expanded).map((project) => project.id)),
+    () => new Set(workbenchData.projects.filter((project) => project.expanded).map((project) => project.id)),
   );
   const [sectionState, setSectionState] = useState(createDefaultSidebarSectionState);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -43,7 +48,7 @@ export function CodexRemoteApp() {
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-
+  const { devices, projects, conversations, assistantThreads, searchRecents, source } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
     conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
@@ -52,8 +57,8 @@ export function CodexRemoteApp() {
     null;
   const assistantThread = conversation ? assistantThreads.find((thread) => thread.id === conversation.id) ?? null : null;
   const sidebarModel = useMemo(
-    () => createSidebarModel({ conversations, expandedProjectIds, projects: sidebarProjects }),
-    [expandedProjectIds],
+    () => createSidebarModel({ conversations, expandedProjectIds, projects }),
+    [expandedProjectIds, conversations, projects],
   );
   const conversationNavigator = useMemo(
     () =>
@@ -62,6 +67,57 @@ export function CodexRemoteApp() {
         : { nextConversationId: null, previousConversationId: null },
     [selectedConversationId, sidebarModel],
   );
+
+  useEffect(() => {
+    let shouldIgnore = false;
+    void (async () => {
+      const nextWorkbenchData = await loadWorkbenchData({
+        baseUrl: workerBaseUrl,
+        token: workerToken,
+        selectedConversationId,
+      });
+      if (!shouldIgnore) {
+        setWorkbenchData(nextWorkbenchData);
+      }
+    })();
+
+    return () => {
+      shouldIgnore = true;
+    };
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (selectedDeviceId !== "" && !devices.some((deviceItem) => deviceItem.id === selectedDeviceId)) {
+      const fallbackDevice = devices[0];
+      if (fallbackDevice) {
+        setSelectedDeviceId(fallbackDevice.id);
+      }
+      return;
+    }
+
+    if (!devices.length) {
+      setSelectedConversationId(null);
+      return;
+    }
+
+    const fallbackConversation =
+      conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
+      conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
+      conversations[0] ??
+      null;
+
+    if (fallbackConversation && fallbackConversation.id !== selectedConversationId) {
+      setSelectedConversationId(fallbackConversation.id);
+    }
+
+    if (!fallbackConversation) {
+      setSelectedConversationId(null);
+    }
+
+    if (fallbackConversation && fallbackConversation.deviceId !== selectedDeviceId) {
+      setSelectedDeviceId(fallbackConversation.deviceId);
+    }
+  }, [conversations, devices, selectedConversationId, selectedDeviceId]);
 
   useEffect(() => {
     return () => {
@@ -131,7 +187,7 @@ export function CodexRemoteApp() {
   const selectDevice = (nextDeviceId: string) => {
     setSelectedDeviceId(nextDeviceId);
     setSelectedConversationId(
-      conversations.find((conversationItem) => conversationItem.deviceId === nextDeviceId)?.id ?? selectedConversationId,
+      conversations.find((conversationItem) => conversationItem.deviceId === nextDeviceId)?.id ?? null,
     );
   };
 
@@ -171,6 +227,7 @@ export function CodexRemoteApp() {
             onBack={() => setMobilePane("main")}
             onCollapse={() => setIsDetailCollapsed(true)}
             selectedDeviceId={selectedDeviceId}
+            devices={devices}
           />
         ),
         main: (
@@ -188,6 +245,7 @@ export function CodexRemoteApp() {
             }}
             onSelectDevice={selectDevice}
             selectedDeviceId={selectedDeviceId}
+            devices={devices}
           />
         ),
       };
@@ -247,6 +305,7 @@ export function CodexRemoteApp() {
             }}
             onSelectAdjacentConversation={selectConversation}
             previousConversationId={conversationNavigator.previousConversationId}
+            source={source}
           />
         ),
       };
@@ -282,6 +341,7 @@ export function CodexRemoteApp() {
           }}
           onSelectAdjacentConversation={selectConversation}
           previousConversationId={conversationNavigator.previousConversationId}
+          source={source}
         />
       ),
     };
@@ -332,6 +392,7 @@ export function CodexRemoteApp() {
         onClose={() => setIsSearchOpen(false)}
         onSelectConversation={selectConversation}
         open={isSearchOpen}
+        searchRecents={searchRecents}
         selectedConversationId={selectedConversationId}
       />
     </>

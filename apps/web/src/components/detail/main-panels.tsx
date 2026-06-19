@@ -3,7 +3,7 @@
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import type { CodexConversation, Device, DeviceConnectionStatus, TaskStatus } from "@codex-remote/api-contract";
-import { devices, searchRecents } from "../../data/app-server/mockData";
+import type { SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -23,6 +23,7 @@ interface ConversationMainProps {
   onExpandSidebar: () => void;
   previousConversationId: string | null;
   nextConversationId: string | null;
+  source: WorkbenchData["source"];
 }
 
 interface DevicesPageProps {
@@ -35,6 +36,7 @@ interface DevicesPageProps {
   onOpenDetail?: (deviceId: string) => void;
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
+  devices: Device[];
 }
 
 interface SearchDialogProps {
@@ -42,6 +44,7 @@ interface SearchDialogProps {
   onSelectConversation: (conversationId: string) => void;
   open: boolean;
   selectedConversationId: string | null;
+  searchRecents: SearchRecent[];
 }
 
 export function ConversationMain({
@@ -57,8 +60,16 @@ export function ConversationMain({
   onOpenDetail,
   onSelectAdjacentConversation,
   previousConversationId,
+  source,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? "对话" : conversation.title;
+  const datasourceStatus: string[] = [source.reason];
+  if (source.error?.code) {
+    datasourceStatus.push(source.error.code);
+  }
+  if (source.error?.message) {
+    datasourceStatus.push(source.error.message);
+  }
 
   return (
     <main className="main-pane">
@@ -104,6 +115,9 @@ export function ConversationMain({
           </div>
         </div>
         <div aria-label="Conversation controls" className="toolbar conversation-toolbar">
+          <span className="datasource-status" title={datasourceStatus.join(" · ")}>
+            {datasourceStatus.join(" · ")}
+          </span>
           {!isMobile ? (
             <button aria-label="布局列表" className="icon-button conversation-layout-button" type="button">
               <Icon name="layout-list" />
@@ -159,8 +173,8 @@ export function DevicesPage({
   onOpenDetail,
   onSelectDevice,
   selectedDeviceId,
+  devices,
 }: DevicesPageProps) {
-  const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
   return (
     <main className="main-pane devices-page">
       <header className="topbar">
@@ -233,14 +247,36 @@ export function DeviceDetailPane({
   onBack,
   onCollapse,
   selectedDeviceId,
+  devices,
 }: {
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
   onCollapse: () => void;
   selectedDeviceId: string;
+  devices: Device[];
 }) {
-  const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0]!;
+  const selectedDevice = devices.find((device) => device.id === selectedDeviceId) ?? devices[0];
+
+  if (!selectedDevice) {
+    return (
+      <RightDetailPane
+        ariaLabel="Device detail"
+        backLabel="返回设备列表"
+        className="device-detail-pane"
+        isCollapsed={isCollapsed}
+        isMobile={isMobile}
+        onBack={onBack}
+        onCollapse={onCollapse}
+        title="设备详情"
+        titleIcon="laptop"
+      >
+        <section className="linked-task">
+          <h2>暂无设备数据</h2>
+        </section>
+      </RightDetailPane>
+    );
+  }
 
   return (
     <RightDetailPane
@@ -341,7 +377,13 @@ export function AutomationDetailPane({
   );
 }
 
-export function SearchDialog({ onClose, onSelectConversation, open, selectedConversationId }: SearchDialogProps) {
+export function SearchDialog({
+  onClose,
+  onSelectConversation,
+  open,
+  searchRecents,
+  selectedConversationId,
+}: SearchDialogProps) {
   if (!open) {
     return null;
   }
