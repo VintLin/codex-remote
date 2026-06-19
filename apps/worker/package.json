@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test": "node --test",
     "lint": "tsc --noEmit --pretty false",
-    "probe:read": "node src/cli/readOnlyProbeCli.ts"
+    "probe:read": "node src/cli/readOnlyProbeCli.ts",
+    "serve:read": "node src/cli/readOnlyHttpServerCli.ts"
   },
   "dependencies": {
     "@codex-remote/api-contract": "workspace:*",
-    "@codex-remote/codex-protocol": "workspace:*"
+    "@codex-remote/codex-protocol": "workspace:*",
+    "hono": "^4.12.26"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
