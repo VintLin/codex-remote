@@ -93,6 +93,20 @@ test("worker http config when timeout is invalid should reject", async (t) => {
 
     await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
   });
+
+  await t.test("when connect timeout is empty", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_CONNECT_TIMEOUT_MS = "";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when request timeout is whitespace", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_REQUEST_TIMEOUT_MS = "   ";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
 });
 
 test("worker http config when config is valid should return canonical project root", async () => {
@@ -118,7 +132,7 @@ test("worker http config when config is valid should return canonical project ro
   assert.equal(config.requestTimeoutMs, 5000);
 });
 
-test("worker http config when validation fails should not leak sensitive input", async () => {
+test("worker http config when project root validation fails should not leak sensitive input", async () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
   const outsideRoot = join(fixtureRoot, "outside");
   const env = createBaseEnv(fixtureRoot);
@@ -135,6 +149,23 @@ test("worker http config when validation fails should not leak sensitive input",
       assert.doesNotMatch(error.message, /secret-token/);
       assert.doesNotMatch(error.message, /ws:\/\/127\.0\.0\.1:4318/);
       assert.doesNotMatch(error.message, /outside/);
+      return true;
+    },
+  );
+});
+
+test("worker http config when app server url is invalid should not leak raw url", async () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
+  const env = createBaseEnv(fixtureRoot);
+
+  env.CODEX_APP_SERVER_URL = "ws://127.0.0.1:4318/private?token=secret";
+
+  await assert.rejects(
+    loadWorkerHttpConfig(env),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /worker_config_invalid/);
+      assert.doesNotMatch(error.message, /ws:\/\/127\.0\.0\.1:4318\/private\?token=secret/);
       return true;
     },
   );

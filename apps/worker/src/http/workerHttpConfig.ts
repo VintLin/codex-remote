@@ -37,8 +37,12 @@ export function isLoopbackHost(host: string): boolean {
 }
 
 export function parsePositiveBoundedInteger(value: string | undefined, fallback: number): number {
-  if (!value) {
+  if (value === undefined) {
     return fallback;
+  }
+
+  if (!value.trim()) {
+    throw new Error("worker_config_invalid");
   }
 
   const parsed = Number(value);
