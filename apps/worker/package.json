@@ -17,6 +17,7 @@
   "dependencies": {
     "@codex-remote/api-contract": "workspace:*",
     "@codex-remote/codex-protocol": "workspace:*",
+    "@hono/node-server": "^2.0.5",
     "hono": "^4.12.26"
   },
   "devDependencies": {

@@ -75,16 +75,34 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   }
 
   async listThreads(): Promise<unknown> {
-    let cursor: string | null = null;
+    return await this.listThreadsWithParams({
+      cwd: this.allowedProjectRoot,
+      sourceKinds: ["cli", "vscode", "appServer"],
+      archived: false,
+      limit: 25,
+      sortDirection: "desc",
+      cursor: null,
+    });
+  }
+
+  async listThreadsWithParams(params: {
+    cwd: string;
+    sourceKinds: readonly ["cli", "vscode", "appServer"];
+    archived: false;
+    limit: number;
+    sortDirection: "desc";
+    cursor: string | null;
+  }): Promise<v2.ThreadListResponse> {
+    let cursor: string | null = params.cursor;
     let lastResponse: v2.ThreadListResponse | null = null;
 
     for (let page = 0; page < this.maxPages; page += 1) {
       const response = (await this.rpc.request("thread/list", {
-        cwd: this.allowedProjectRoot,
-        sourceKinds: ["cli", "vscode", "appServer"],
-        archived: false,
-        limit: 25,
-        sortDirection: "desc",
+        cwd: params.cwd,
+        sourceKinds: [...params.sourceKinds],
+        archived: params.archived,
+        limit: params.limit,
+        sortDirection: params.sortDirection,
         cursor,
       })) as v2.ThreadListResponse;
 
@@ -106,7 +124,11 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
       }
     }
 
-    return lastResponse;
+    return lastResponse ?? { data: [], nextCursor: null, backwardsCursor: null };
+  }
+
+  async readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse> {
+    return (await this.rpc.request("thread/read", params)) as v2.ThreadReadResponse;
   }
 
   async readFirstAllowedThread(): Promise<unknown> {
