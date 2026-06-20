@@ -198,6 +198,7 @@ Not allowed:
 ### Root Documents
 
 - `PLAN.md`: live roadmap, stage status, risks, and research status.
+- `CODEX_APP_PARITY.md`: Codex App-like product capability target, parity gaps, and capability-area stage split direction.
 - `PRODUCT.md`: product positioning, users, MVP scope, product principles, and non-goals.
 - `DESIGN.md`: visual system, design tokens, component style, and frontend design constraints.
 - `QUESTIONS.md`: research question queue and answer status.

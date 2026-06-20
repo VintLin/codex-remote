@@ -2,9 +2,9 @@
 
 ## 总目标
 
-构建一个自托管的多设备 Codex Web 控制台。
+构建一个自托管的多设备 Codex Web 控制台和浏览器工作台，尽量提供与 Codex App 一致的功能体验。
 
-核心能力是在一个 Web 工作台中管理多台设备上的 Codex：查看设备状态、项目、对话和输出流，发送 follow-up，中止任务，处理 approval，并把不同设备上的 Codex conversations 关联到任务看板。
+核心能力是在一个 Web 工作台中管理多台设备上的 Codex：查看设备状态、项目、对话和输出流，发送 follow-up，中止任务，处理 approval，并逐步补齐 Codex App-like 的会话生命周期、实时 timeline、文件、Shell、Git、搜索、模型、配置、技能、插件、MCP、账户和实时语音等能力，同时把不同设备上的 Codex conversations 关联到任务看板。
 
 长期拓扑：
 
@@ -31,6 +31,8 @@ flowchart LR
 目录职责和依赖方向以 `PROJECT_STRUCTURE.md` 为准。新增阶段目录或移动代码前，先更新该文件。
 
 产品定位和 MVP 范围以 `PRODUCT.md` 为准；视觉系统和组件风格以 `DESIGN.md` 为准。
+
+Codex App-like 能力对齐以 `CODEX_APP_PARITY.md` 为准；`FEATURE_SUPPORT.md` 记录当前支持状态和 app-server 协议覆盖。
 
 ## 架构原则
 
@@ -109,9 +111,15 @@ Stage 10 当前证据：
 - 未闭环：approval decision 还没有真实 pending approval 可供 Web/Control Plane/Worker decline/cancel；因此 approval 不能宣称 product-ready。
 - 未进入：用户可控权限模式、自动审批、production approval safety model、installer/keychain/pairing、reverse WSS、外部部署、iOS、streaming event log。
 
+当前 Codex App parity 方向：
+
+- 根路线文档：`CODEX_APP_PARITY.md`。
+- 支持状态矩阵：`FEATURE_SUPPORT.md`。
+- 下一阶段不再默认等同于权限控制 / approval productionization；应先围绕 Codex App-like 能力面拆分 stage，再为选中的能力面写 spec 和 plan。
+
 当前 active Superpowers 文档：
 
-- 无。下一阶段开始前先写新的权限控制 / approval productionization spec 和 plan。
+- 无。下一阶段开始前先从 `CODEX_APP_PARITY.md` 选择一个能力面，写新的 stage spec 和 plan。
 
 已归档 Superpowers 文档：
 
@@ -440,14 +448,18 @@ Stage 8 剩余限制：
 
 - Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
 - Stage 10 已实现 isolated approval fixture，但当前 Codex app-server 不产生 safe pending approval；Stage 10 状态为 blocked，不继续用更危险的动作补覆盖率。
-- 下一阶段应先写权限控制 / approval productionization spec。它要明确哪些权限由用户控制、哪些只在 Worker 本机保存、Web/Control Plane 能传哪些枚举、哪些高危模式需要二次确认。
-- Approval decision 的下一条最小证据路径：在临时 fixture 项目中验证 trusted project-local rules 或等价 app-server-supported rules 注入，只验证 decline/cancel；不要自动修改用户 `~/.codex/rules`，不要复制 auth 到临时 `CODEX_HOME`，不要自动 accept 或 policy amendment。
+- 下一阶段应先基于 `CODEX_APP_PARITY.md` 选择一个 Codex App-like 能力面并写 stage spec/plan；不要再把“权限控制 / approval productionization”作为唯一默认下一步。
+- Approval decision 的下一条最小证据路径仍然保留为 approval/input 能力面的候选工作：在临时 fixture 项目中验证 trusted project-local rules 或等价 app-server-supported rules 注入，只验证 decline/cancel；不要自动修改用户 `~/.codex/rules`，不要复制 auth 到临时 `CODEX_HOME`，不要自动 accept 或 policy amendment。
 - Q23 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是当前 approval 阻塞；Q24 degraded-vs-empty 当前已有 real-pass evidence。
 
 后续阶段默认设计输入：
 
-- 权限控制：先支持最小受控枚举，不开放 raw app-server JSON-RPC、raw config、raw prompt、raw command 或 raw path；高危选项必须显示明确风险状态。
-- Production approval：区分一次性 decline/cancel/accept、session 级授权、policy amendment、rules-based prompt；默认只实现最小安全子集。
+- Conversation workbench parity：优先补会话 lifecycle、active turn 状态、timeline stream、server request cards。
+- Local work tools：补文件、Shell、Git/review、fuzzy search，但仍只能通过 Worker 调 app-server 或本机边界。
+- Runtime management：补模型、provider capabilities、config、requirements、experiments、account status。
+- Extension management：补 skills、hooks、plugins、marketplace、MCP、apps。
+- Advanced realtime/platform：补 realtime voice、Windows sandbox、external agent config、feedback。
+- Approval/input：作为 parity 路线中的一个能力面处理；区分一次性 decline/cancel/accept、session 级授权、policy amendment、rules-based prompt，默认只实现最小可验证子集。
 - Reverse connection：仍默认 WSS；必须设计应用层 `msg_id/seq/ack/lease/resume/credit`，不要把 WebSocket send 当作任务完成。
 - Device-bound auth：长期方向为 DPoP-compatible sender-constrained token，但实现前必须先写 threat model。
 - Productization：Worker device identity secret 默认 OS keyring；Linux/headless file fallback 必须显式 opt-in。

@@ -52,7 +52,7 @@ Stage 9 reopened a narrower research queue for real local verification. Q21, Q23
 
 ## Current Open Research Questions
 
-Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步如果进入权限控制 / approval productionization，应先写阶段 spec，再决定是否新增独立研究问题。
+Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步路线先按 `CODEX_APP_PARITY.md` 做 Codex App-like 能力对齐；如果某个能力面需要新的不可本地验证事实，再新增独立研究问题。
 
 ### Q21. Real command/control protocol compatibility
 
@@ -102,7 +102,7 @@ Archived process material:
 
 ## Local Verification Backlog
 
-These are not broad research questions. Q21, Q23, and Q24 are answered by Stage 9 local evidence; Q22 remains partial and belongs to the next approval / permission stage. Keep the remaining items with their later stage specs before coding:
+These are not broad research questions. Q21, Q23, and Q24 are answered by Stage 9 local evidence; Q22 remains partial and belongs to the approval/input capability area in the Codex App parity roadmap. Keep the remaining items with their later stage specs before coding:
 
 - Verify whether generated protocol and local runtime support `thread/turns/list`.
 - Verify Node runtime and Hono assumptions for the Worker HTTP boundary.

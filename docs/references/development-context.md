@@ -4,7 +4,7 @@ This document stores stage-specific planning context and researched decisions. `
 
 ## Product Context
 
-Codex Remote is a self-hosted multi-device Codex Web console.
+Codex Remote is a self-hosted multi-device Codex Web console and browser workbench aiming for practical Codex App-like experience parity. `CODEX_APP_PARITY.md` is the current capability target for that direction.
 
 Long-term product boundaries:
 
@@ -18,6 +18,8 @@ Long-term product boundaries:
 ## Current Stage Context
 
 Stages 0-9 have completed local verifiable slices. Stage 10 implemented an isolated approval fixture, but the current Codex app-server run still does not emit a safe pending approval, so `approval decision` remains a documented safety `real-gap` and is not product-ready. New work should not assume installer, keychain, pairing, reverse WSS, external deployment, iOS, production multi-tenant capabilities, output streaming, automatic approval, policy amendment, user-layer rules edits, auth-copying paths, or production approval safety model exist.
+
+Next roadmap work should start from Codex App parity capability areas, not from permission/approval alone. Approval remains a gap under the approval/input area, while filesystem, shell, Git, search, model/config, skills/plugins/MCP, account, realtime voice, and platform-specific capabilities each need their own bounded stages.
 
 Stage 4 completed context:
 

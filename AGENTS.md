@@ -7,12 +7,14 @@
 - `DESIGN.md`：视觉系统、设计 token、组件风格和前端设计约束。
 - `PROJECT_STRUCTURE.md`：目录职责、依赖方向和新增文件规则。
 - `QUESTIONS.md`：调研问题和回答状态。
+- `CODEX_APP_PARITY.md`：Codex App-like 体验对齐目标、能力分组和后续阶段拆分方向。
 - `docs/references/development-context.md`：阶段性技术决策、参考项目和未来阶段上下文。
 
 更新规则：
 
 - 阶段状态、下一步建议、风险判断变化时，同步更新 `PLAN.md`。
 - 产品定位、MVP 范围或体验原则变化时，同步更新 `PRODUCT.md`。
+- Codex App-like 体验目标、能力分组或阶段拆分方向变化时，同步更新 `CODEX_APP_PARITY.md`。
 - 视觉系统、组件风格或设计 token 变化时，同步更新 `DESIGN.md`。
 - 目录职责、依赖方向或文件放置规则变化时，同步更新 `PROJECT_STRUCTURE.md`。
 - 调研结论变化时，同步更新 `QUESTIONS.md` 和相关 reference。

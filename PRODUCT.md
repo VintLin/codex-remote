@@ -10,12 +10,12 @@ Power users who run Codex across several macOS, Windows, and Linux machines. The
 
 ## Product Purpose
 
-Codex Remote is a self-hosted multi-device Codex control plane. It aggregates device status, remote projects, conversations, output streams, approvals, and manual task links without sharing OpenAI, ChatGPT, Codex, or provider secrets across devices. Success means the user can quickly switch devices, inspect live Codex work, send follow-up instructions, interrupt unsafe or stale turns, and associate conversations from different machines with one task board item.
+Codex Remote is a self-hosted multi-device Codex control plane and browser workbench. It should feel as close as practical to Codex App while adding remote-specific device, project, and task coordination. It aggregates device status, remote projects, conversations, output streams, approvals, local work tools, runtime state, and manual task links without sharing OpenAI, ChatGPT, Codex, or provider secrets across devices. Success means the user can quickly switch devices, inspect live Codex work, send follow-up instructions, interrupt unsafe or stale turns, use local Codex capabilities through the owning Worker, and associate conversations from different machines with one task board item.
 
 ## Core Scenarios
 
 - See all connected devices, their online state, active projects, running Codex conversations, models, sandbox mode, and approval posture in one Web workbench.
-- Open a device workspace to inspect projects, conversation list, current timeline, runtime state, terminal/output context, and available actions.
+- Open a device workspace to inspect projects, conversation list, current timeline, runtime state, files, terminal/output context, Git/review state, extension state, and available actions.
 - Use a task board to manually link Codex conversations from different devices or projects to the same task.
 - Start or resume deployment, packaging, or verification work on the device that owns the relevant local environment.
 
@@ -31,7 +31,7 @@ P0:
 
 P1:
 
-- Terminal output, Git diff, worktree state, model switching, and richer status filters.
+- Codex App parity surfaces: realtime timeline, conversation lifecycle, terminal output, filesystem, Git diff/review, fuzzy search, model switching, config, skills, plugins, MCP, account status, and richer status filters.
 
 P2:
 
@@ -43,7 +43,7 @@ Calm, technical, precise. The interface should feel like a trustworthy workstati
 
 ## Anti-references
 
-This should not look like a marketing SaaS landing page, a full Codex Desktop clone, a colorful multi-agent orchestration suite, a provider proxy console, or a decorative analytics dashboard. Avoid oversized hero sections, heavy gradients, novelty terminal themes, and visual patterns that make inactive state look urgent.
+This should not look like a marketing SaaS landing page, an unbounded raw app-server clone, a colorful multi-agent orchestration suite, a provider proxy console, or a decorative analytics dashboard. Avoid oversized hero sections, heavy gradients, novelty terminal themes, and visual patterns that make inactive state look urgent.
 
 Product non-goals:
 

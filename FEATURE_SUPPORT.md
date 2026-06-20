@@ -227,8 +227,10 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 
 ## Next Planning Implication
 
-Codex Remote should not try to expose all app-server methods at once. The next useful stage is permission and approval productionization:
+Codex Remote should not try to expose all app-server methods at once. The next planning step is Codex App parity mapping by product capability area:
 
-1. Define user-controlled permission modes as a small public contract.
-2. Prove approval decision with a safe decline/cancel path.
-3. Only then consider high-risk surfaces such as filesystem, shell, config writes, plugin install, MCP tool calls, and account login.
+1. Map app-server protocol methods to stable product capabilities, not raw pass-through APIs.
+2. Split future stages by experience surface: conversation workbench, local work tools, runtime management, extension management, advanced realtime/platform, and remote-specific hardening.
+3. Keep approval as a major gap inside that roadmap, but do not let approval alone define the next roadmap.
+
+See `CODEX_APP_PARITY.md` for the current capability target and stage split direction.
