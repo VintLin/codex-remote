@@ -141,7 +141,8 @@ The stage keeps the existing ownership boundaries:
 - Created conversations and tasks use a `codex-remote-calibration` prefix.
 - Test prompts must be low-risk and disposable.
 - Do not automatically delete Codex conversation history.
-- The final report lists created conversation ids, turn ids, and task ids.
+- The sanitized report stores only opaque refs, counts, statuses, durations, and reason codes. It must not list raw conversation ids, turn ids, task ids, prompts, private paths, raw JSON-RPC, command output, stack/cause, or full diffs.
+- While Stage 9 is in progress, the report may record `real-gap` entries until Worker stdio app-server lifecycle and safe real probes exist.
 
 ## Verification
 

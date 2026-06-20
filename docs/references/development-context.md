@@ -17,7 +17,7 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-All planned Stages 0-8 have completed local verifiable slices. New work should start from a fresh spec and should not assume installer, keychain, pairing, reverse WSS, external deployment, iOS, or production multi-tenant capabilities exist.
+Stages 0-8 have completed local verifiable slices. Stage 9 is in progress and currently records real local Codex calibration as `real-gap`, not ready. New work should not assume installer, keychain, pairing, reverse WSS, external deployment, iOS, production multi-tenant capabilities, output streaming, or real stdio app-server readiness exist.
 
 Stage 4 completed context:
 
@@ -127,6 +127,20 @@ Stage 8 remaining limitations:
 - Product readiness checks are static guardrails; they are not a substitute for runtime penetration testing, production threat modeling, installer testing, or OS keychain validation.
 - Loopback checks still use text sentinels over current config sources; future config refactors should move these checks to structured parser/fixture tests.
 - Local bearer token auth remains a development posture. Pairing, token rotation, revocation, sender-constrained device auth, OS keychain storage, audit log, reverse WSS, external deployment, iOS app, and auto-update remain post-MVP work.
+
+Stage 9 in-progress context:
+
+- Task 5/6 implemented the real calibration runner and smoke gate; fake Worker smoke no longer satisfies real readiness claims.
+- Latest commits are at `b6e3cf5`; Task 6 final re-review was clean.
+- The local real stack is intended to use Worker, Control Plane, Web, SQLite task DB, and Codex app-server on one Mac, but default startup is currently fail-closed.
+- `pnpm real:start` defaults to `stdio`, exits 1, and stops before services are ready because Worker stdio app-server lifecycle is not implemented. This is an explicit real-gap.
+- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=0 fixedPass=0 realGap=19`.
+- `pnpm real:status` currently reports Worker, Control Plane, and Web as stopped.
+- `pnpm web:e2e:smoke` must fail when the real stack is absent; it must not skip or pass via fake Worker evidence. Current Web real entrypoint is therefore not passed.
+- Q23/Q24 remain explicit gaps: `no_control_plane_cwd_scope_probe`, `no_control_plane_pagination_probe`, `no_all_workers_down_fixture`, and `no_invalid_worker_token_fixture`.
+- `debug-websocket` is an explicit local debug fallback only. `real:check` and readiness accept only `stdio` proof.
+- Tracked docs may contain only sanitized evidence summaries; raw ids, prompts, command output, raw JSON-RPC, tokens, private paths, stack/cause, and full diffs stay out of tracked files.
+- Output streaming remains a separate out-of-scope stage.
 
 ## App-Server Integration Notes
 

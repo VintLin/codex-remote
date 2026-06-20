@@ -77,6 +77,8 @@ Notes:
 
 ## Web
 
+Web must use the public Next.js environment variable names. Non-`NEXT_PUBLIC_` Control Plane variables are not available to client-side Web code.
+
 Start:
 
 ```bash
@@ -100,6 +102,7 @@ Start, inspect, and stop the repeatable local stack:
 
 ```bash
 pnpm real:start
+pnpm real:check
 pnpm real:status
 pnpm real:stop
 ```
@@ -114,13 +117,20 @@ Defaults:
 
 With the default transport, `pnpm real:start` exits before starting services because Worker stdio app-server lifecycle is not implemented yet. This is intentional fail-closed behavior.
 
+Current default evidence:
+
+- `pnpm real:start`: fail-closed with exit 1 because Worker stdio app-server lifecycle is missing.
+- `pnpm real:check`: writes ignored `logs/real-check/latest.json`; current summary is `total=19 realPass=0 fixedPass=0 realGap=19`.
+- `pnpm real:status`: Worker, Control Plane, and Web are stopped.
+- `pnpm web:e2e:smoke`: should fail when the real stack is missing; it must not skip or fake-pass as readiness.
+
 For local debugging only, run the current loopback WebSocket fallback explicitly:
 
 ```bash
 CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket pnpm real:start
 ```
 
-That fallback sets `CODEX_REMOTE_START_APP_SERVER=true` for the Worker and must be treated as debug evidence only, not product readiness.
+That fallback sets `CODEX_REMOTE_START_APP_SERVER=true` for the Worker and must be treated as debug evidence only, not product readiness. `pnpm real:check` and readiness claims accept only `stdio` proof.
 
 Status honors these port overrides:
 
@@ -138,6 +148,14 @@ Run the product readiness check before using the local stack:
 ```bash
 pnpm product:check
 ```
+
+Run the real calibration check only after the real stack is intentionally started:
+
+```bash
+pnpm real:check
+```
+
+The report is local and ignored under `logs/real-check/`. It may record `real-pass`, `fixed-pass`, and `real-gap`, but tracked docs should only cite sanitized counts, opaque refs, and statuses.
 
 Run the repository gate before committing:
 

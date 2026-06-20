@@ -55,6 +55,7 @@ flowchart LR
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 已完成本地可验证切片 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
+| 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 进行中 / real-gap |
 
 ```mermaid
 flowchart TB
@@ -67,9 +68,19 @@ flowchart TB
   P6["6. Multi-device Control Plane"]
   P7["7. DB + Task Board"]
   P8["8. Product Readiness + iOS Guardrails"]
+  P9["9. Real Local Codex Calibration - real-gap"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
 ```
+
+Stage 9 当前证据：
+
+- Fake smoke evidence：Stage 3-8 的 fake Worker smoke 覆盖过 Web/Control Plane/Worker-shaped flows，但它只能证明 contract/UI/fallback 行为；Task 5/6 已实现 real calibration runner 和 smoke gate 后，fake Worker smoke 不再能作为 real readiness。
+- Real app-server evidence：最新提交到 `b6e3cf5`，Task 6 final re-review clean；`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=0 fixedPass=0 realGap=19`。
+- Remaining real gaps：`pnpm real:start` 默认 `stdio` fail-closed，退出码为 1，原因是 Worker stdio app-server lifecycle 未实现；这是 explicit real-gap，不是 ready。`pnpm real:status` 当前显示 Worker、Control Plane、Web 均 stopped。`pnpm web:e2e:smoke` 在真实栈缺失时应失败，不再 skip 或 fake pass，因此当前不能算 Web real entrypoint passed。
+- Q23/Q24 仍是 explicit gap：`no_control_plane_cwd_scope_probe`、`no_control_plane_pagination_probe`、`no_all_workers_down_fixture`、`no_invalid_worker_token_fixture`。
+- Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
+- Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 
 ## 每阶段交付标准
 
@@ -129,8 +140,11 @@ flowchart LR
 | Q9-Q12 多设备/DB/iOS/产品化调研 | 已回答，Q11 只采纳 guardrails | 多设备采用 one-time pairing + device identity + reverse connection；DB 默认 SQLite + Drizzle；iOS 当前只固化 API guardrails；Worker 产品化 user-mode first |
 | Q13 E2E / Playwright | 已回答 | 第一个可交互用户纵切链路出现时引入 Playwright smoke；Node/API integration 仍是主验证层 |
 | Q14-Q17 DB driver / reverse connection / device auth / secret storage | 已回答，Q16 需 Stage 6 threat model 裁剪 | DB driver 默认 `better-sqlite3`；reverse connection 默认 WSS + 应用层 ack/lease/resume；device-bound token 长期方向为 DPoP-compatible sender-constrained token；Worker identity secret 默认 OS keyring |
+| Q18-Q20 Stage 9 app-server/session/project identity | 已回答 | Worker 使用 initialized long-lived app-server session；public project id 必须 opaque，路径/cwd 留在 Worker；Worker-owned app-server transport 目标为 stdio，loopback WebSocket 仅 debug fallback |
+| Q21-Q24 Stage 9 实机验证项 | partial，进入当前执行计划 | start/follow-up/interrupt/steer、active turn/approval、`thread/list(cwd)` scope/pagination、Control Plane degraded-vs-empty 必须由 `pnpm real:check` 和真实本机栈给出 real-pass/fixed-pass/real-gap |
+| Q25-Q28 Stage 9 readiness guardrails | 已回答 | Stage 9 需要最小 Web browser smoke；real-check 默认写 ignored `logs/real-check/`；task-link 必须验证资源/归属；self-hosted Web 不应运行时请求外部字体或静态资源 |
 
-当前不新增全网调研问题。剩余工作更适合放入阶段 spec 的本地验证清单。
+当前不新增全网调研问题。剩余 Stage 9 工作已整合进 `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`，重点是本机实证而不是继续扩大调研面。
 
 ## 当前技术栈
 
@@ -388,8 +402,10 @@ Stage 8 剩余限制：
 
 下一步建议：
 
-- 所有 PLAN 中规划的 Stage 0-8 均已完成本地可验证切片。
-- 后续只按明确新 spec 推进 post-MVP 能力；优先级建议为 real installer/keychain/pairing threat model、device-bound auth、reverse WSS relay、外部部署安全模型或 iOS client 之一，不要在没有产品决策时并行铺开。
+- Stage 0-8 已完成本地可验证切片；Stage 9 仍在进行中且当前是 real-gap。
+- 下一步先补 Worker stdio app-server lifecycle，使 `pnpm real:start` 默认路径能启动真实栈，再重跑 `pnpm real:check` 和 `pnpm web:e2e:smoke`。
+- Q23/Q24 的 cwd scope、pagination、all-workers-down、invalid-worker-token probes 需要真实 fixture 后才能从 explicit gap 移出。
+- 不要在 Stage 9 real readiness 之前并行铺 real installer/keychain/pairing threat model、device-bound auth、reverse WSS relay、外部部署安全模型或 iOS client。
 
 后续阶段默认设计输入：
 
