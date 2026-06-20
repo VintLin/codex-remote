@@ -2528,6 +2528,76 @@ Task 17 implementation notes:
 - Latest `logs/real-check/latest.json` records `total=19 realPass=18 fixedPass=0 realGap=1`; the only gap is `approval decision` with `reasonCode=no_safe_pending_approval`.
 - Full gates passed: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
+---
+
+### Task 18: Fix Chrome-Found Prompt Leakage In Conversation Metadata
+
+**Files:**
+- Modify: `apps/worker/src/http/projections.ts`
+- Modify: `apps/worker/src/http/projections.test.ts`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+
+**Interfaces:**
+- No API schema change.
+- `CodexConversation` continues to derive from `packages/api-contract/openapi.yaml`.
+- Worker remains the only app-server caller.
+- Public conversation metadata must not expose app-server `thread.name` or `thread.preview`, because the real app-server can derive those fields from raw prompt text.
+
+**Pre-fix evidence:**
+- Real Google Chrome verification against the local stack showed calibration prompt text in Web page text through public conversation title/summary.
+- The same Chrome check did not show private paths or raw Worker URLs, so the failure was narrowed to app-server-derived conversation metadata.
+
+Reviewer: `019ee644-279d-7e63-b54e-5b576abe97dc`
+
+Result: clean.
+
+Reviewer notes:
+
+- `CodexConversation` still derives from the API contract and Worker does not add a parallel DTO.
+- Web consumes public `CodexConversation` only; Control Plane does not regain direct app-server metadata access.
+- The fix blocks raw prompt, app-server preview/name, raw path, URL, and token leakage through conversation list metadata.
+- Non-blocking tradeoff: conversations in the same project now share the project fallback title. Future usability work must use non-sensitive metadata such as an opaque short id, timestamp, or explicit user-safe title; it must not return to `thread.name` / `thread.preview`.
+
+- [x] **Step 1: Reproduce and add failing projection test**
+
+Added a Worker projection regression test proving that prompt-shaped `thread.name` and `thread.preview` must not become public `title` or `summary`.
+
+Red verification:
+
+```bash
+pnpm --filter @codex-remote/worker exec node --test src/http/projections.test.ts
+```
+
+Expected failure before the fix: `actual` title was the `codex-remote-calibration` prompt.
+
+- [x] **Step 2: Sanitize public conversation metadata**
+
+Updated Worker projection so public conversation title uses the Worker-local allowed project basename fallback, and public summary is empty instead of app-server preview.
+
+- [x] **Step 3: Verify focused, real, Chrome, and full gates**
+
+Verification:
+
+```bash
+pnpm --filter @codex-remote/worker exec node --test src/http/projections.test.ts
+pnpm product:check
+pnpm real:start
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Real evidence:
+
+- `pnpm real:check` remained `total=19 real-pass=18 fixed-pass=0 real-gap=1`.
+- `pnpm web:e2e:smoke` passed against the real local stack.
+- Google Chrome via Playwright `channel=chrome` loaded `http://127.0.0.1:5173/` and showed Local Device, Start, and loaded source state with no calibration prompt, private path, raw Worker URL, fake readiness claim, or failed request.
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.

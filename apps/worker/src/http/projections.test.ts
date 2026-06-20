@@ -18,7 +18,7 @@ const defaultContext = {
 } as const;
 
 test("worker http projections when projecting conversations, should use safe title fallbacks and ISO updatedAt", async (t) => {
-  await t.test("when thread name is present, should prefer thread name", () => {
+  await t.test("when thread name and preview are present, should use project fallback and hide preview", () => {
     const conversation = projectThreadToConversation(
       createThread({
         name: "Named conversation",
@@ -30,18 +30,18 @@ test("worker http projections when projecting conversations, should use safe tit
 
     assert.deepEqual(conversation, {
       id: "thread-123",
-      title: "Named conversation",
+      title: "050_codex_remote",
       deviceId: "device-local",
       projectName: "050_codex_remote",
       status: "running",
       updatedAt: new Date(1_718_791_234 * 1000).toISOString(),
-      summary: "preview should not win",
+      summary: "",
       sandbox: "unknown",
       approval: "unknown",
     });
   });
 
-  await t.test("when thread name is empty, should fall back to preview, then project basename, then untitled", () => {
+  await t.test("when thread name is empty, should fall back to project basename, then untitled", () => {
     const previewConversation = projectThreadToConversation(
       createThread({
         name: "",
@@ -66,7 +66,8 @@ test("worker http projections when projecting conversations, should use safe tit
       { ...defaultContext, allowedProjectRoot: "/", projectName: "" },
     );
 
-    assert.equal(previewConversation.title, "Preview title");
+    assert.equal(previewConversation.title, "050_codex_remote");
+    assert.equal(previewConversation.summary, "");
     assert.equal(projectConversation.title, "050_codex_remote");
     assert.equal(untitledConversation.title, "Untitled conversation");
     assert.equal(untitledConversation.summary, "");
@@ -87,6 +88,19 @@ test("worker http projections when projecting conversations, should use safe tit
 
     assert.equal(conversation.title, "real-project-root");
     assert.equal(conversation.projectName, "Display Name That Must Not Be Used For Title");
+  });
+
+  await t.test("when app-server name and preview contain prompt text, should not expose them publicly", () => {
+    const conversation = projectThreadToConversation(
+      createThread({
+        name: "codex-remote-calibration start: reply with one short sentence.",
+        preview: "codex-remote-calibration start: reply with one short sentence.",
+      }),
+      defaultContext,
+    );
+
+    assert.equal(conversation.title, "050_codex_remote");
+    assert.equal(conversation.summary, "");
   });
 });
 

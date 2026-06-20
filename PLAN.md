@@ -86,6 +86,7 @@ Stage 9 当前证据：
 - Fixed in current slice：`steer` readiness is now guarded by public active-turn proof; without that proof, `real:check` records sanitized `active-turn-gap` instead of a generic Worker error or product-ready pass.
 - Fixed in current slice：Q23 cwd scope and pagination now use a Control Plane device-scoped Worker probe. `thread/list cwd scope` and `thread/list pagination` record `real-pass` with `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, and sanitized page/count evidence.
 - Fixed in current slice：`steer` now uses an independent safe steer-only sample and records `real-pass` with `activeTurnProven=true` plus accepted public steer status.
+- Fixed in current slice：Real Chrome verification found app-server-derived conversation name/preview could expose calibration prompt text; Worker conversation projection now uses project fallback title and empty summary instead of public `thread.name` / `thread.preview`.
 - Documented safety gap：approval decision has no safe pending approval in the current real project stack. Approval pending list is real, but approval decision is excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel; automatic accept, persistent policy amendment, and production approval safety model are out of Stage 9.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。

@@ -65,16 +65,6 @@ export function projectTurnToTimelineTurn(turn: v2.Turn): ConversationTimelineTu
 }
 
 function getConversationTitle(thread: v2.Thread, context: ConversationProjectionContext): string {
-  const normalizedName = normalizeText(thread.name);
-  if (normalizedName) {
-    return normalizedName;
-  }
-
-  const normalizedPreview = normalizeText(thread.preview);
-  if (normalizedPreview) {
-    return normalizedPreview;
-  }
-
   const allowedProjectBasename = normalizeText(basename(context.allowedProjectRoot));
   return allowedProjectBasename ?? "Untitled conversation";
 }
@@ -83,8 +73,8 @@ function getProjectName(context: ConversationProjectionContext): string {
   return normalizeText(context.projectName) ?? normalizeText(basename(context.allowedProjectRoot)) ?? "Allowed project";
 }
 
-function getSafePreview(preview: string): string {
-  return normalizeText(preview) ?? "";
+function getSafePreview(_preview: string): string {
+  return "";
 }
 
 function normalizeText(value: string | null | undefined): string | null {
