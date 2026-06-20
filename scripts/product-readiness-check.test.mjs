@@ -39,6 +39,23 @@ test("product readiness check when root script is missing should fail", () => {
   }
 });
 
+test("product readiness check when real local stack scripts are missing should fail", () => {
+  const root = createFixture();
+  try {
+    updateJson(join(root, "package.json"), (packageJson) => {
+      delete packageJson.scripts["real:start"];
+      delete packageJson.scripts["real:status"];
+      delete packageJson.scripts["real:stop"];
+    });
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /package\.json missing script real:start/);
+    assert.match(failures, /package\.json missing script real:status/);
+    assert.match(failures, /package\.json missing script real:stop/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("product readiness check when package script is missing should fail", () => {
   const root = createFixture();
   try {

@@ -28,7 +28,19 @@ function readJson(root, path) {
 function checkRootScripts(root) {
   const packageJson = readJson(root, "package.json");
   const scripts = packageJson.scripts ?? {};
-  const requiredScripts = ["web:start", "web:status", "web:stop", "lint", "typecheck", "test", "build", "product:check"];
+  const requiredScripts = [
+    "web:start",
+    "web:status",
+    "web:stop",
+    "real:start",
+    "real:status",
+    "real:stop",
+    "lint",
+    "typecheck",
+    "test",
+    "build",
+    "product:check",
+  ];
   const packageScriptChecks = [
     ["apps/web/package.json", ["dev", "start", "build", "typecheck", "test", "lint"]],
     ["apps/control-plane/package.json", ["serve", "build", "typecheck", "test", "lint"]],

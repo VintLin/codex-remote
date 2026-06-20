@@ -143,3 +143,86 @@ Additional checks:
 ## Commit
 
 This report is included in the Task 2 commit.
+
+---
+
+# Stage 9 Task 2 Report: Real Local Stack Lifecycle
+
+## Status
+
+DONE_WITH_CONCERNS
+
+Concern: runtime stack execution was intentionally not run because the task brief explicitly forbids `pnpm real:start` in this task. Script syntax and readiness gates were verified instead.
+
+## Scope
+
+Changed only the Stage 9 Task 2 files:
+
+- `scripts/start-real-local-stack.sh`
+- `scripts/status-real-local-stack.sh`
+- `scripts/stop-real-local-stack.sh`
+- `package.json`
+- `scripts/product-readiness-check.mjs`
+- `scripts/product-readiness-check.test.mjs`
+- `docs/references/local-self-hosting.md`
+- `.superpowers/sdd/task-2-report.md`
+
+No Worker command/control behavior, `real:check`, Web E2E smoke, app-server transport implementation, push, release, or production auth work was added.
+
+## TDD Evidence
+
+RED:
+
+- Added a fixture test proving missing `real:start`, `real:status`, and `real:stop` scripts must fail product readiness.
+- Ran `node --test scripts/product-readiness-check.test.mjs`.
+- Expected failure observed: assertion for `package.json missing script real:start` failed because readiness did not yet require the real lifecycle scripts.
+
+GREEN:
+
+- Added root package scripts for `real:start`, `real:status`, and `real:stop`.
+- Added the real lifecycle scripts to `requiredScripts`.
+- Created minimal local lifecycle shell scripts and updated the local self-hosting runbook.
+- Re-ran `node --test scripts/product-readiness-check.test.mjs` and `pnpm product:check`; both passed.
+
+## Implemented Behavior
+
+- `pnpm real:start` starts Worker and Control Plane in the background with local pid/log files, then starts Web through existing `pnpm web:start`.
+- Defaults are Worker `8787`, Control Plane `8786`, Web `5173`, and token placeholder `example-token`, with environment overrides.
+- Web startup receives `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL` and `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN`.
+- Worker startup sets `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` by default and does not silently fall back to WebSocket.
+- `pnpm real:status` reports pid-file process state and listening ports.
+- `pnpm real:stop` stops Web via existing lifecycle script, then stops Control Plane and Worker pid-file processes.
+
+## Design Decisions
+
+Conclusion: lifecycle scripts stay at the repository root under `scripts/`.
+
+Reason: the root package owns existing `web:start/status/stop`, and Stage 9 needs repeatable local orchestration across apps without moving service ownership.
+
+Risk: background service readiness for Worker and Control Plane is currently pid-based, not HTTP-probe based.
+
+Next step: Task 5 or a later runtime gate can add real stack execution and stronger readiness checks if required.
+
+Conclusion: `.gitignore` was not modified.
+
+Reason: `logs/` is already ignored, covering lifecycle pid/log/sqlite diagnostics.
+
+Risk: none for the files created in this task.
+
+Next step: Task 5 can add narrower ignore entries if its real-check artifacts need them.
+
+## Verification
+
+Commands run:
+
+```bash
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+bash -n scripts/start-real-local-stack.sh && bash -n scripts/status-real-local-stack.sh && bash -n scripts/stop-real-local-stack.sh
+```
+
+Results:
+
+- `node --test scripts/product-readiness-check.test.mjs`: 12 tests, 12 pass, 0 fail.
+- `pnpm product:check`: passed with `Product readiness checks passed.`
+- `bash -n`: passed for all three lifecycle scripts.

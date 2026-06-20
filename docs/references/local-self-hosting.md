@@ -77,8 +77,8 @@ Notes:
 Start:
 
 ```bash
-CODEX_REMOTE_CONTROL_PLANE_BASE_URL=http://127.0.0.1:8786 \
-CODEX_REMOTE_CONTROL_PLANE_TOKEN=example-token \
+NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL=http://127.0.0.1:8786 \
+NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN=example-token \
 pnpm web:start
 ```
 
@@ -90,6 +90,23 @@ pnpm web:stop
 ```
 
 Open the Web workbench at `http://127.0.0.1:5173`.
+
+## Local Stack Lifecycle
+
+Start, inspect, and stop the repeatable local stack:
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:stop
+```
+
+Defaults:
+
+- Worker: `http://127.0.0.1:8787`
+- Control Plane: `http://127.0.0.1:8786`
+- Web: `http://127.0.0.1:5173`
+- Local token placeholder: `example-token`
 
 ## Validation
 
