@@ -196,7 +196,7 @@ export function CodexRemoteApp() {
 
     setTaskStatus("submitting");
     try {
-      await workerClient.createTask({ title: taskTitle });
+      await workerClient.createTask({ title: taskTitle, clientRequestId: crypto.randomUUID() });
       await refreshWorkbenchData(conversation ? createConversationKey(conversation) : selectedConversationKey);
       setTaskStatus("idle");
     } catch {
@@ -205,14 +205,18 @@ export function CodexRemoteApp() {
   }, [conversation, refreshWorkbenchData, selectedConversationKey, workerClient]);
 
   const linkSelectedConversationToTask = useCallback(async (task: BoardTask) => {
-    if (!conversation || !controlPlaneToken) {
+    if (!conversation?.projectId || !controlPlaneToken) {
       setTaskStatus("failed");
       return;
     }
 
     setTaskStatus("submitting");
     try {
-      await workerClient.linkTaskConversation(task.id, { deviceId: conversation.deviceId, conversationId: conversation.id });
+      await workerClient.linkTaskConversation(task.id, {
+        deviceId: conversation.deviceId,
+        conversationId: conversation.id,
+        projectId: conversation.projectId,
+      });
       await refreshWorkbenchData(createConversationKey(conversation));
       setTaskStatus("idle");
     } catch {

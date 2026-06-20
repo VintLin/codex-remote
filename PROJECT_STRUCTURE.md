@@ -19,7 +19,7 @@ packages/
   codex-protocol/
   ui/
   shared/           # 暂不主动扩展；只有跨包纯工具且复用两次以上才放
-  db/               # Stage 7 再创建
+  db/
 
 docs/
   references/
@@ -76,7 +76,7 @@ Not allowed:
 
 - Expose raw app-server JSON-RPC to Web.
 - Store provider secrets in Control Plane-facing payloads.
-- Add DB ownership before the DB stage.
+- Own DB schema, migrations, or task persistence.
 
 ### `apps/control-plane`
 
@@ -91,13 +91,14 @@ Allowed:
 - Import public types from `packages/api-contract`.
 - Keep configured Worker upstream URLs and Worker bearer tokens only in runtime config/process memory.
 - Normalize configured `deviceId` at the Control Plane boundary for known public Worker shapes.
+- Import `packages/db` for task board persistence.
 
 Not allowed:
 
 - Directly call Codex app-server.
 - Store OpenAI / ChatGPT / provider secrets.
-- Persist device registry, DB state, token hashes, pairing state, revocation state, or audit log before the DB/productization stages.
-- Import `packages/codex-protocol`, Web code, Worker internals, or DB code.
+- Persist device registry, token hashes, pairing state, revocation state, or audit log before productization stages.
+- Import `packages/codex-protocol`, Web code, or Worker internals.
 
 ## Packages
 
@@ -157,19 +158,24 @@ Not allowed:
 
 ### `packages/db`
 
-Status: future Stage 7 directory. Do not create yet.
-
-Purpose when introduced:
+Purpose:
 
 - Database schema, migrations, and DB access helpers.
 - DB schema becomes the persistence source of truth.
+- Current Stage 7 scope owns task board persistence only.
 
-Rules when introduced:
+Rules:
 
 - Schema starts from `packages/db/src/schema`.
 - Migrations are generated and committed.
 - Driver details stay inside `packages/db`.
-- Default direction is SQLite + Drizzle + `better-sqlite3`, pending native install validation.
+- Current driver is SQLite + Drizzle + `better-sqlite3`.
+
+Not allowed:
+
+- Import Web components, Worker internals, Control Plane HTTP code, or `packages/codex-protocol`.
+- Store provider secrets, Codex auth, Worker bearer tokens, raw upstream URLs, raw JSON-RPC, prompts, command output, full diff, stack/cause, or private paths.
+- Own pairing, revocation, audit log, reverse WSS, or productized auth before a later stage spec.
 
 ### `packages/shared`
 
@@ -238,7 +244,7 @@ flowchart LR
   API["packages/api-contract"]
   Protocol["packages/codex-protocol"]
   UI["packages/ui"]
-  DB["packages/db<br/>future"]
+  DB["packages/db"]
   AppServer["Codex app-server"]
 
   Web --> API
@@ -248,7 +254,7 @@ flowchart LR
   Worker --> AppServer
   CP --> API
   CP --> Worker
-  CP -. Stage 7+ .-> DB
+  CP --> DB
 ```
 
 Rules:

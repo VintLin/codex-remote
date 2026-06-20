@@ -695,14 +695,48 @@ test("when task board routes are maintained, no unversioned public task paths sh
   );
 });
 
+test("when task board missing-task errors are maintained, only task link routes should use TaskNotFoundError", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const taskNotFoundOperations: string[] = [];
+
+  for (const path of extractVersionedPathLines(source)) {
+    const pathBlockLines = extractPathBlock(source, path);
+    for (const methodBlock of extractMethodBlocks(pathBlockLines)) {
+      const responseRefs = extractResponseRefs(methodBlock.lines);
+      const notFoundRefs = responseRefs.get("404")?.componentResponseRefs ?? [];
+      if (notFoundRefs.includes("TaskNotFoundError")) {
+        taskNotFoundOperations.push(`${path}${methodBlock.method}`);
+      }
+    }
+  }
+
+  const expectedTaskNotFoundOperations = [
+    "/v1/tasks/{taskId}/conversation-links:post",
+    "/v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:delete",
+  ].sort();
+
+  assert.deepEqual(taskNotFoundOperations.sort(), expectedTaskNotFoundOperations);
+});
+
 test("when task board schemas are maintained, BoardTask should use device scoped conversation links", () => {
   const source = readFileSync(openApiPath, "utf8");
   const boardTaskBlockLines = expectSchemaDisallowsAdditionalProperties(source, "BoardTask");
   const boardTaskSource = boardTaskBlockLines.join("\n");
+  const taskLinkSource = expectSchemaDisallowsAdditionalProperties(source, "TaskConversationLink").join("\n");
+  const createTaskInputSource = expectSchemaDisallowsAdditionalProperties(source, "CreateTaskInput").join("\n");
+  const linkTaskInputSource = expectSchemaDisallowsAdditionalProperties(source, "LinkTaskConversationInput").join("\n");
 
   assert.match(boardTaskSource, /^        linkedConversations:\s*$/m);
   assert.doesNotMatch(boardTaskSource, /^        linkedConversationIds:\s*$/m);
+  assert.match(boardTaskSource, /^        createdAt:\s*$/m);
+  assert.match(boardTaskSource, /^        updatedAt:\s*$/m);
   assert.match(boardTaskSource, /#\/components\/schemas\/TaskConversationLink/);
+  assert.match(taskLinkSource, /^        projectId:\s*$/m);
+  assert.match(taskLinkSource, /^        linkedAt:\s*$/m);
+  assert.match(createTaskInputSource, /^        clientRequestId:\s*$/m);
+  assert.match(linkTaskInputSource, /^        projectId:\s*$/m);
+  assert.match(source, /TaskNotFoundError:/);
+  assert.match(source, /#\/components\/responses\/TaskNotFoundError/);
 });
 
 test("when control plane api is maintained, device scoped routes should reuse existing public schemas", () => {

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { BoardTask, CreateTaskInput, LinkTaskConversationInput, TaskConversationLink } from "@codex-remote/api-contract";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 import { taskConversationLinks, tasks } from "./schema.ts";
@@ -22,10 +22,13 @@ export class TaskRepository {
 
   createTask(input: CreateTaskInput): BoardTask {
     const id = randomUUID();
+    const now = new Date().toISOString();
     this.database.insert(tasks).values({
       id,
       title: input.title,
       status: input.status ?? "in_progress",
+      createdAt: now,
+      updatedAt: now,
     }).run();
 
     return this.requireTask(id);
@@ -33,17 +36,22 @@ export class TaskRepository {
 
   linkConversation(taskId: string, input: LinkTaskConversationInput): BoardTask {
     this.requireTask(taskId);
+    const now = new Date().toISOString();
     this.database.insert(taskConversationLinks).values({
       taskId,
       deviceId: input.deviceId,
       conversationId: input.conversationId,
+      projectId: input.projectId,
+      linkedAt: now,
     }).onConflictDoNothing().run();
+    this.touchTask(taskId, now);
 
     return this.requireTask(taskId);
   }
 
   unlinkConversation(taskId: string, deviceId: string, conversationId: string): BoardTask {
     this.requireTask(taskId);
+    const now = new Date().toISOString();
     this.database
       .delete(taskConversationLinks)
       .where(
@@ -54,8 +62,13 @@ export class TaskRepository {
         ),
       )
       .run();
+    this.touchTask(taskId, now);
 
     return this.requireTask(taskId);
+  }
+
+  private touchTask(taskId: string, updatedAt: string): void {
+    this.database.update(tasks).set({ updatedAt }).where(eq(tasks.id, taskId)).run();
   }
 
   private requireTask(taskId: string): BoardTask {
@@ -72,12 +85,16 @@ export class TaskRepository {
         id: tasks.id,
         title: tasks.title,
         status: tasks.status,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
         deviceId: taskConversationLinks.deviceId,
         conversationId: taskConversationLinks.conversationId,
+        projectId: taskConversationLinks.projectId,
+        linkedAt: taskConversationLinks.linkedAt,
       })
       .from(tasks)
       .leftJoin(taskConversationLinks, eq(tasks.id, taskConversationLinks.taskId))
-      .orderBy(asc(tasks.id), asc(taskConversationLinks.deviceId), asc(taskConversationLinks.conversationId));
+      .orderBy(desc(tasks.updatedAt), asc(taskConversationLinks.deviceId), asc(taskConversationLinks.conversationId));
 
     if (taskId === undefined) {
       return query.all();
@@ -93,13 +110,17 @@ export class TaskRepository {
         id: row.id,
         title: row.title,
         status: row.status,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
         linkedConversations: [],
       };
 
-      if (row.deviceId !== null && row.conversationId !== null) {
+      if (row.deviceId !== null && row.conversationId !== null && row.projectId !== null && row.linkedAt !== null) {
         task.linkedConversations.push({
           deviceId: row.deviceId,
           conversationId: row.conversationId,
+          projectId: row.projectId,
+          linkedAt: row.linkedAt,
         });
       }
 
@@ -114,6 +135,10 @@ type TaskRow = {
   id: string;
   title: string;
   status: BoardTask["status"];
+  createdAt: BoardTask["createdAt"];
+  updatedAt: BoardTask["updatedAt"];
   deviceId: TaskConversationLink["deviceId"] | null;
   conversationId: TaskConversationLink["conversationId"] | null;
+  projectId: TaskConversationLink["projectId"] | null;
+  linkedAt: TaskConversationLink["linkedAt"] | null;
 };

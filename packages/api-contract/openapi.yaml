@@ -875,7 +875,7 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":
-          $ref: "#/components/responses/ConversationNotFoundError"
+          $ref: "#/components/responses/TaskNotFoundError"
         "409":
           $ref: "#/components/responses/ConflictError"
         "500":
@@ -909,7 +909,7 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
         "404":
-          $ref: "#/components/responses/ConversationNotFoundError"
+          $ref: "#/components/responses/TaskNotFoundError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
 components:
@@ -934,6 +934,12 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     ConversationNotFoundError:
       description: The requested conversation timeline could not be found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TaskNotFoundError:
+      description: The requested task could not be found.
       content:
         application/json:
           schema:
@@ -1432,6 +1438,8 @@ components:
         - id
         - title
         - status
+        - createdAt
+        - updatedAt
         - linkedConversations
       properties:
         id:
@@ -1441,6 +1449,10 @@ components:
           maxLength: 200
         status:
           $ref: "#/components/schemas/TaskStatus"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
         linkedConversations:
           type: array
           items:
@@ -1451,20 +1463,30 @@ components:
       required:
         - deviceId
         - conversationId
+        - projectId
+        - linkedAt
       properties:
         deviceId:
           type: string
         conversationId:
+          type: string
+        projectId:
+          type: string
+        linkedAt:
           type: string
     CreateTaskInput:
       type: object
       additionalProperties: false
       required:
         - title
+        - clientRequestId
       properties:
         title:
           type: string
           maxLength: 200
+        clientRequestId:
+          type: string
+          maxLength: 128
         status:
           $ref: "#/components/schemas/TaskStatus"
     LinkTaskConversationInput:
@@ -1473,10 +1495,13 @@ components:
       required:
         - deviceId
         - conversationId
+        - projectId
       properties:
         deviceId:
           type: string
         conversationId:
+          type: string
+        projectId:
           type: string
     DiffLine:
       type: object

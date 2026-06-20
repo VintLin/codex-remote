@@ -31,11 +31,11 @@ test("control plane config when task database path is configured, should accept 
   const config = loadControlPlaneConfig({
     CODEX_REMOTE_CONTROL_PLANE_CONFIG: JSON.stringify({
       ...validConfig,
-      taskDatabasePath: "/tmp/codex-remote-control-plane/tasks.sqlite",
+      taskDatabasePath: "example-task-store.sqlite",
     }),
   });
 
-  assert.equal(config.taskDatabasePath, "/tmp/codex-remote-control-plane/tasks.sqlite");
+  assert.equal(config.taskDatabasePath, "example-task-store.sqlite");
 });
 
 test("control plane config when required fields are invalid, should fail closed", () => {

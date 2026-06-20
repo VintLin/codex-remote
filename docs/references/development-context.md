@@ -17,7 +17,7 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-The next planned stage is Stage 7: persistence and task board.
+The next planned stage is Stage 8: productization and expansion.
 
 Stage 4 completed context:
 
@@ -92,6 +92,27 @@ Stage 6 remaining limitations:
 - Local Control Plane bearer auth is a development posture, not device-bound auth.
 - Device registry and Worker upstream tokens come from local runtime config; production secret storage belongs to productization.
 
+Stage 7 completed context:
+
+- `packages/db` is the local persistence boundary for the task board.
+- DB schema fields start in `packages/db/src/schema.ts`; migrations are generated under `packages/db/drizzle/`.
+- Stage 7 uses SQLite + Drizzle + `better-sqlite3`; driver details stay inside `packages/db`.
+- Public task API fields start in `packages/api-contract/openapi.yaml`; generated OpenAPI types flow to Control Plane and Web.
+- `BoardTask` includes `createdAt` and `updatedAt`; task lists order by `updatedAt desc`.
+- `TaskConversationLink` is device-scoped and includes required `deviceId`, `conversationId`, `projectId`, and `linkedAt`.
+- `apps/control-plane` imports `@codex-remote/db` for task persistence and still does not import `packages/codex-protocol`.
+- `apps/web` consumes Control Plane task routes only and still does not import DB or app-server protocol packages.
+- Web task linking requires a selected conversation with `projectId`; missing project identity fails closed instead of writing a partial link.
+- Task API failures render a task datasource failure state and do not fallback to mock persisted tasks.
+- Chrome verified empty task state, task creation, same `conversationId` linked from two `deviceId` values, refresh persistence, and no sensitive DOM hits.
+
+Stage 7 remaining limitations:
+
+- SQLite is local single-node persistence; no multi-writer, remote sync, PostgreSQL/libSQL, or cloud deployment support is promised.
+- Task board is manual only; no automatic task inference, automatic device choice, or task migration.
+- DB does not yet own device registry, token hashes, pairing, revocation, audit log, approval registry, or idempotency durable state.
+- Product/runtime native dependency support matrix remains a Stage 8/productization concern.
+
 ## App-Server Integration Notes
 
 `docs/references/codex-app-server.md` is an explanatory protocol reference. It is not the type source of truth; `packages/codex-protocol` generated artifacts are.
@@ -160,7 +181,7 @@ Boundary tests are more important than coverage numbers in the current architect
 
 ### DB / Persistence
 
-- Stage 7 default direction: SQLite + Drizzle + `better-sqlite3`.
+- Stage 7 implemented SQLite + Drizzle + `better-sqlite3` for task board persistence.
 - Driver details stay behind `packages/db`.
 - `@libsql/client` waits for real remote/sync/libSQL requirements.
 - Productization must validate native install/build matrix before committing support promises.

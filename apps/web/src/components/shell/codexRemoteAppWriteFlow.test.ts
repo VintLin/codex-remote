@@ -38,9 +38,10 @@ test("codex remote app when task board is wired, should create tasks and link th
   assert.match(mainPanelsSource, /aria-label="Task title"/);
   assert.match(mainPanelsSource, /onCreateTask/);
   assert.match(mainPanelsSource, /onLinkSelectedConversation/);
+  assert.match(mainPanelsSource, /\$\{title\} · \$\{link\.deviceId\}/);
   assert.match(shellSource, /tasks/);
-  assert.match(shellSource, /createTask\(\{ title: taskTitle \}\)/);
-  assert.match(shellSource, /linkTaskConversation\(task\.id, \{ deviceId: conversation\.deviceId, conversationId: conversation\.id \}\)/);
+  assert.match(shellSource, /createTask\(\{ title: taskTitle, clientRequestId: crypto\.randomUUID\(\) \}\)/);
+  assert.match(shellSource, /projectId: conversation\.projectId/);
   assert.match(shellSource, /unlinkTaskConversation\(task\.id, link\.deviceId, link\.conversationId\)/);
 });
 

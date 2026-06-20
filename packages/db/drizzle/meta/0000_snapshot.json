@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4250fd2f-8779-4409-a3aa-da0250273b05",
+  "id": "db7e1b8e-75af-4ca8-ac5f-fdf0797d9d8e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "task_conversation_links": {
@@ -23,6 +23,20 @@
         },
         "conversation_id": {
           "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "linked_at": {
+          "name": "linked_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -82,6 +96,20 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'in_progress'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},

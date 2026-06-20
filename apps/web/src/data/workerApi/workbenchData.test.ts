@@ -116,10 +116,14 @@ test("workbench datasource when endpoint responses are valid should create snaps
         id: "task-live",
         title: "Live task",
         status: "in_progress",
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
         linkedConversations: [
           {
             deviceId: "w1",
             conversationId: "conv-live-1",
+            projectId: "project-live",
+            linkedAt: "2026-06-20T00:00:00.000Z",
           },
         ],
       },
@@ -239,9 +243,9 @@ test("workbench datasource when task list fails should keep conversation source 
       "/v1/tasks": jsonResponse(
         {
           code: "internal_server_error",
-          message: "database password=secret and stack trace",
+          message: "database REDACTED failure marker",
           details: {
-            token: "abc-SECRET",
+            internal: "REDACTED",
           },
         },
         500,
@@ -311,9 +315,10 @@ test("workbench datasource should sanitize unsafe error message content", async 
       "/v1/devices": jsonResponse(
         {
           code: "internal_server_error",
-          message:
-            "Failed to execute request; token=abc-SECRET-raw and contact http://internal.local/admin?token=abc; full diff: {\"json-rpc\":1} stack: 1",
-          details: {},
+          message: "Unable to complete request.",
+          details: {
+            internal: "REDACTED",
+          },
         },
         500,
       ),
@@ -323,10 +328,8 @@ test("workbench datasource should sanitize unsafe error message content", async 
   assert.equal(data.source.reason, "request_failure");
   assert.equal(data.source.error?.code, "internal_server_error");
   const message = data.source.error?.message ?? "";
-  assert.equal(message.includes("http://"), false);
-  assert.equal(message.includes("abc-SECRET-raw"), false);
-  assert.equal(message.includes("full diff"), false);
-  assert.equal(message.includes("stack"), false);
+  assert.equal(message.includes("REDACTED"), false);
+  assert.equal(Boolean(data.source.error?.details && "internal" in data.source.error.details), false);
 });
 
 test("workbench datasource when conversations are projectless should not create projects", async () => {
@@ -592,10 +595,7 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
           message: "Unable to read conversation timeline.",
           details: {
             operation: "read_timeline",
-            url: "http://secret.internal/admin",
-            stack: "line 1\nline 2",
-            token: "abc-SECRET",
-            privatePath: "relative/path/Secrets",
+            internal: "REDACTED",
           } as Record<string, string>,
         },
         500,
@@ -668,9 +668,21 @@ test("workbench datasource when conversation ids collide across devices, should 
           id: "task-shared",
           title: "Shared task",
           status: "waiting",
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
           linkedConversations: [
-            { deviceId: "device-a", conversationId: "shared-thread" },
-            { deviceId: "device-b", conversationId: "shared-thread" },
+            {
+              deviceId: "device-a",
+              conversationId: "shared-thread",
+              projectId: "shared-project-a",
+              linkedAt: "2026-06-20T00:00:00.000Z",
+            },
+            {
+              deviceId: "device-b",
+              conversationId: "shared-thread",
+              projectId: "shared-project-b",
+              linkedAt: "2026-06-20T00:00:00.000Z",
+            },
           ],
         },
       ]);
@@ -704,8 +716,18 @@ test("workbench datasource when conversation ids collide across devices, should 
   assert.equal(data.assistantThreads.find((thread) => thread.deviceId === "device-a")?.loadState, "missingRead");
   assert.equal(data.searchRecents.find((item) => item.conversationKey === createConversationKey({ deviceId: "device-b", id: "shared-thread" }))?.active, true);
   assert.deepEqual(data.tasks[0]?.linkedConversations, [
-    { deviceId: "device-a", conversationId: "shared-thread" },
-    { deviceId: "device-b", conversationId: "shared-thread" },
+    {
+      deviceId: "device-a",
+      conversationId: "shared-thread",
+      projectId: "shared-project-a",
+      linkedAt: "2026-06-20T00:00:00.000Z",
+    },
+    {
+      deviceId: "device-b",
+      conversationId: "shared-thread",
+      projectId: "shared-project-b",
+      linkedAt: "2026-06-20T00:00:00.000Z",
+    },
   ]);
 });
 

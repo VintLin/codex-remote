@@ -40,12 +40,12 @@
   - `POST /v1/tasks/{taskId}/conversation-links`
   - `DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`
 
-- [ ] Add failing contract tests that assert the four versioned task routes exist, no unversioned task routes exist, and `BoardTask` contains `linkedConversations` rather than `linkedConversationIds`.
-- [ ] Update `openapi.yaml` with the task paths and schemas.
-- [ ] Export public aliases from `packages/api-contract/src/index.ts`.
-- [ ] Regenerate OpenAPI types with the package's existing generation command.
-- [ ] Run `pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build`.
-- [ ] Request task review for schema source-of-truth, route versioning, and device-scoped conversation links.
+- [x] Add failing contract tests that assert the four versioned task routes exist, no unversioned task routes exist, and `BoardTask` contains `linkedConversations` rather than `linkedConversationIds`.
+- [x] Update `openapi.yaml` with the task paths and schemas.
+- [x] Export public aliases from `packages/api-contract/src/index.ts`.
+- [x] Regenerate OpenAPI types with the package's existing generation command.
+- [x] Run `pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build`.
+- [x] Request task review for schema source-of-truth, route versioning, and device-scoped conversation links.
 
 ## Task 2: DB Package
 
@@ -70,14 +70,14 @@
   - `TaskRepository.linkConversation(taskId: string, input: LinkTaskConversationInput): BoardTask`
   - `TaskRepository.unlinkConversation(taskId: string, deviceId: string, conversationId: string): BoardTask`
 
-- [ ] Add `packages/db` workspace package with `drizzle-orm`, `better-sqlite3`, `drizzle-kit`, and `@types/better-sqlite3`.
-- [ ] Write failing repository tests using a temp SQLite file, including a task linked to the same `conversationId` from two different `deviceId` values.
-- [ ] Define Drizzle schema for `tasks` and `task_conversation_links`.
-- [ ] Generate and commit the first migration.
-- [ ] Implement the minimal repository.
-- [ ] Add a boundary test that `packages/db` does not import Web, Worker, Control Plane, or `codex-protocol`.
-- [ ] Run `pnpm --filter @codex-remote/db test && pnpm --filter @codex-remote/db build`.
-- [ ] Request task review for DB schema source-of-truth, migration, persistence behavior, and secret-free fields.
+- [x] Add `packages/db` workspace package with `drizzle-orm`, `better-sqlite3`, `drizzle-kit`, and `@types/better-sqlite3`.
+- [x] Write failing repository tests using a temp SQLite file, including a task linked to the same `conversationId` from two different `deviceId` values.
+- [x] Define Drizzle schema for `tasks` and `task_conversation_links`.
+- [x] Generate and commit the first migration.
+- [x] Implement the minimal repository.
+- [x] Add a boundary test that `packages/db` does not import Web, Worker, Control Plane, or `codex-protocol`.
+- [x] Run `pnpm --filter @codex-remote/db test && pnpm --filter @codex-remote/db build`.
+- [x] Request task review for DB schema source-of-truth, migration, persistence behavior, and secret-free fields.
 
 ## Task 3: Control Plane Task Routes
 
@@ -92,13 +92,13 @@
 - Consumes: `TaskRepository` from `@codex-remote/db`.
 - Produces: Control Plane task HTTP routes matching Task 1.
 
-- [ ] Add failing Control Plane tests for auth, task creation/list, file-backed persistence across reopen, duplicate link idempotency, same `conversationId` across two `deviceId` values, missing task errors, and sanitized failures that assert response bodies do not contain raw URL, stack/cause, or private path content.
-- [ ] Add DB path runtime config with `:memory:` default and file path support.
-- [ ] Wire `TaskRepository` into the HTTP app.
-- [ ] Implement `GET /v1/tasks`, `POST /v1/tasks`, `POST /v1/tasks/{taskId}/conversation-links`, and `DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`.
-- [ ] Update boundary tests so Control Plane may import `@codex-remote/db` but still must not import `codex-protocol`, Web code, or Worker internals.
-- [ ] Run `pnpm --filter @codex-remote/control-plane test && pnpm --filter @codex-remote/control-plane typecheck`.
-- [ ] Request task review for route contracts, DB ownership, sanitized errors, and package boundaries.
+- [x] Add failing Control Plane tests for auth, task creation/list, file-backed persistence across reopen, duplicate link idempotency, same `conversationId` across two `deviceId` values, missing task errors, and sanitized failures that assert response bodies do not contain raw URL, stack/cause, or private path content.
+- [x] Add DB path runtime config with `:memory:` default and file path support.
+- [x] Wire `TaskRepository` into the HTTP app.
+- [x] Implement `GET /v1/tasks`, `POST /v1/tasks`, `POST /v1/tasks/{taskId}/conversation-links`, and `DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`.
+- [x] Update boundary tests so Control Plane may import `@codex-remote/db` but still must not import `codex-protocol`, Web code, or Worker internals.
+- [x] Run `pnpm --filter @codex-remote/control-plane test && pnpm --filter @codex-remote/control-plane typecheck`.
+- [x] Request task review for route contracts, DB ownership, sanitized errors, and package boundaries.
 
 ## Task 4: Web Task Board
 
@@ -117,15 +117,15 @@
 - Consumes: Control Plane task API routes.
 - Produces: minimal Web task board and selected conversation link flow.
 
-- [ ] Add failing Web client tests for list/create/link/unlink task routes.
-- [ ] Add failing workbench datasource tests that tasks load from Control Plane, empty task API responses render explicit empty state, task API failure is not replaced with mock persisted tasks, and duplicate conversation ids link with `deviceId`.
-- [ ] Update Web client methods.
-- [ ] Add tasks to `WorkbenchData`.
-- [ ] Replace automations placeholder with a minimal task board view using existing compact panels/buttons.
-- [ ] Add one title input for task creation and a link button for the selected conversation.
-- [ ] Keep UI copy short and stateful; no marketing or decorative layout.
-- [ ] Run `pnpm --filter @codex-remote/web test && pnpm --filter @codex-remote/web typecheck`.
-- [ ] Request task review for task route usage, device-scoped links, fallback behavior, and UI scope.
+- [x] Add failing Web client tests for list/create/link/unlink task routes.
+- [x] Add failing workbench datasource tests that tasks load from Control Plane, empty task API responses render explicit empty state, task API failure is not replaced with mock persisted tasks, and duplicate conversation ids link with `deviceId`.
+- [x] Update Web client methods.
+- [x] Add tasks to `WorkbenchData`.
+- [x] Replace automations placeholder with a minimal task board view using existing compact panels/buttons.
+- [x] Add one title input for task creation and a link button for the selected conversation.
+- [x] Keep UI copy short and stateful; no marketing or decorative layout.
+- [x] Run `pnpm --filter @codex-remote/web test && pnpm --filter @codex-remote/web typecheck`.
+- [x] Request task review for task route usage, device-scoped links, fallback behavior, and UI scope.
 
 ## Task 5: Verification, Chrome Smoke, Docs, Commit
 
@@ -140,24 +140,31 @@
 - Consumes: completed Tasks 1-4.
 - Produces: Stage 7 evidence and commit.
 
-- [ ] Run focused package checks:
+- [x] Run focused package checks:
   - `pnpm --filter @codex-remote/api-contract test`
   - `pnpm --filter @codex-remote/db test`
   - `pnpm --filter @codex-remote/control-plane test`
   - `pnpm --filter @codex-remote/web test`
-- [ ] Run project gate:
+- [x] Run project gate:
   - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm test`
   - `pnpm build`
-- [ ] Start fake Worker, Control Plane with a temp file DB, and Web.
-- [ ] Use `chrome:control-chrome` with two fake Workers exposing the same `conversationId` under different `deviceId` values; create a task, link both device-scoped conversations, refresh, and verify the task shows two distinct links.
-- [ ] Start Chrome once with an empty DB and verify the task board shows an empty state, not mock tasks or an error.
-- [ ] Verify Chrome DOM does not show token, raw Worker URL, private path, raw JSON-RPC, prompt, command output, full diff, stack/cause.
-- [ ] Request final broad implementation review from architecture boundary, unique source of truth, DRY, modularity, security, tests, maintainability, and roadmap alignment.
-- [ ] Fix Critical/Important review findings and rerun affected tests.
-- [ ] Update Stage 7 docs and `PLAN.md`.
-- [ ] Commit Stage 7 on `main`; do not push.
+- [x] Start fake Worker, Control Plane with a temp file DB, and Web.
+- [x] Use `chrome:control-chrome` with two fake Workers exposing the same `conversationId` under different `deviceId` values; create a task, link both device-scoped conversations, refresh, and verify the task shows two distinct links.
+- [x] Start Chrome once with an empty DB and verify the task board shows an empty state, not mock tasks or an error.
+- [x] Verify Chrome DOM does not show token, raw Worker URL, private path, raw JSON-RPC, prompt, command output, full diff, stack/cause.
+- [x] Request final broad implementation review from architecture boundary, unique source of truth, DRY, modularity, security, tests, maintainability, and roadmap alignment.
+- [x] Fix Critical/Important review findings and rerun affected tests.
+- [x] Update Stage 7 docs and `PLAN.md`.
+- [x] Commit Stage 7 on `main`; do not push.
+
+## Completion Notes
+
+- Subagent plan review approved after same-`conversationId` cross-device and empty-state review fixes.
+- Task-level reviews approved for API contract, DB repository, Control Plane routes, and Web task board after fixing task datasource failure state.
+- Final broad review requested fixes for required timestamp/project/idempotency fields, task-specific 404 contract, and sensitive-shape fixture literals; fixes were applied and focused/full verification was rerun.
+- Chrome smoke verified empty DB state, task creation, linking the same `conversationId` from two `deviceId` values, persistence after refresh, and no sensitive DOM hits.
 
 ## Plan Self-Review
 

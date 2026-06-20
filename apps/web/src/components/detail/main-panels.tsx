@@ -545,7 +545,7 @@ export function TaskBoardPage({
                 <div className="device-card-actions">
                   <button
                     className="button secondary conversation-control-button"
-                    disabled={disabled || !selectedConversation || selectedLinked}
+                    disabled={disabled || !selectedConversation?.projectId || selectedLinked}
                     onClick={() => void onLinkSelectedConversation(task)}
                     type="button"
                   >
@@ -605,8 +605,10 @@ export function TaskDetailPane({
 }
 
 function formatTaskLink(link: TaskConversationLink, conversations: CodexConversation[]): string {
-  return conversations.find((conversation) => conversation.deviceId === link.deviceId && conversation.id === link.conversationId)?.title ??
-    `${link.deviceId}/${link.conversationId}`;
+  const title = conversations.find((conversation) => conversation.deviceId === link.deviceId && conversation.id === link.conversationId)?.title ??
+    link.conversationId;
+
+  return `${title} · ${link.deviceId}`;
 }
 
 export function SearchDialog({

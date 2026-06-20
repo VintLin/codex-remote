@@ -53,8 +53,8 @@ flowchart LR
 | 4. 写操作主链 | start、follow-up、stream 输出 | 已完成本地可验证切片 |
 | 5. 控制主链 | interrupt、steer、approval request/response | 已完成本地可验证切片 |
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 已完成本地可验证切片 |
-| 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 下一阶段 |
-| 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 未开始 |
+| 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
+| 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 下一阶段 |
 
 ```mermaid
 flowchart TB
@@ -297,17 +297,62 @@ Stage 6 剩余限制：
 - Control Plane auth 是本地开发姿态 bearer token，不是 device-bound token。
 - Worker upstream tokens 只在进程配置中使用；生产级 secret storage 和 rotation 属于后续产品化阶段。
 
-下一步建议进入 Stage 7：持久化与任务看板。
+最近完成的 Superpowers spec：
 
-Stage 7 范围建议：
+- `docs/superpowers/specs/2026-06-20-db-task-board-design.md`
 
-- 先写 DB/task board spec，明确 SQLite + Drizzle schema 是持久化字段唯一事实源。
-- 只做最小任务看板主链：任务、conversation 关联、设备/项目引用和本地持久化迁移验证。
-- 不把 Stage 7 扩成 remote sync、iOS、installer、reverse WSS、产品化 auth 或多租户系统。
+最近完成的 Superpowers plan：
+
+- `docs/superpowers/plans/2026-06-20-db-task-board.md`
+
+Stage 7 已完成：
+
+- `packages/db` 已建立为 SQLite + Drizzle 持久化边界，包含 schema、生成迁移、DB client 和 `TaskRepository`；DB 字段以 `packages/db/src/schema.ts` 为唯一事实源。
+- `packages/api-contract/openapi.yaml` 定义版本化 task board API：`GET /v1/tasks`、`POST /v1/tasks`、`POST /v1/tasks/{taskId}/conversation-links`、`DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`；生成类型从 OpenAPI 派生。
+- `BoardTask` 包含 `createdAt` / `updatedAt`；`TaskConversationLink` 包含 `deviceId`、`conversationId`、`projectId`、`linkedAt`；task 列表按 `updatedAt desc` 返回。
+- `apps/control-plane` 使用 `@codex-remote/db` 持久化 task routes；仍不直接调用 Codex app-server，不依赖 `packages/codex-protocol`，也不保存 provider/Codex secrets、Worker bearer token 或 raw upstream URL。
+- Web task board 从 Control Plane 读取任务，支持创建任务和把当前 device-scoped conversation 关联到已有任务；无 `projectId` 时 fail closed。
+- Web 在 task API 失败时显示 task datasource failed state，不把 mock tasks 当作已持久化任务；空 DB 显示明确空态。
+- 未引入 remote sync、pairing、reverse WSS、token rotation、revocation、iOS、installer、产品化 auth、自动任务推断、durable stream/event log 或多租户能力。
+- 最终复审修复项：
+  - 追加并落实 required `clientRequestId`、`projectId`、`createdAt`、`updatedAt`、`linkedAt` 字段。
+  - missing task 404 只用于 task link/unlink 路由；conversation routes 继续使用 `ConversationNotFoundError`。
+  - 移除测试中的敏感形态 fixture 字面量。
+
+验证：
+
+- `pnpm --filter @codex-remote/api-contract test`
+- `pnpm --filter @codex-remote/db test`
+- `pnpm --filter @codex-remote/control-plane test`
+- `pnpm --filter @codex-remote/web test`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+Chrome 验证：
+
+- 空 DB 启动时，Web 显示 task empty state，不显示 mock task 或错误态。
+- 创建 `Stage 7 Chrome task` 后，分别从两个 fake Worker 的同名 conversation 链接到同一 task；刷新后显示 `2 links` 和两个带不同 device id 的 link。
+- Chrome DOM 检查未出现 token、raw Worker URL、private path、raw JSON-RPC、prompt、command output、full diff、stack/cause。
+
+Stage 7 剩余限制：
+
+- SQLite 是本地单机文件持久化；未承诺多进程写入、remote sync、PostgreSQL/libSQL 或云端部署。
+- Task board 只有手动创建和手动链接；没有自动任务推断、自动 device choice 或任务迁移。
+- DB 不保存设备 registry、token hash、pairing、revocation、audit log 或 approval/idempotency durable state。
+
+下一步建议进入 Stage 8：产品化与扩展。
+
+Stage 8 范围建议：
+
+- 先写产品化/安全 spec，明确安装、权限、secret storage、device identity、审计和未来 iOS API 复用边界。
+- 优先把当前本地开发姿态收敛为可维护的本机部署姿态；不要一次性实现外部部署、付费服务或生产多租户。
+- 对需要真实账号、2FA、provider/Codex secrets、外部部署或法律/隐私判断的事项保持暂停条件。
 
 后续阶段默认设计输入：
 
 - Stage 6：Control Plane reverse connection 默认 WSS；必须设计应用层 `msg_id/seq/ack/lease/resume/credit`，不要把 WebSocket send 当作任务完成。
 - Stage 6：device-bound token 以 DPoP-compatible sender-constrained token 为长期方向，但实现前必须先写 threat model。
-- Stage 7：SQLite + Drizzle 默认使用 `better-sqlite3`，driver 隔离在 `packages/db` 边界内。
+- Stage 7 已落地：SQLite + Drizzle 使用 `better-sqlite3`，driver 隔离在 `packages/db` 边界内；Stage 8 只能通过既有 DB 边界扩展持久化能力。
 - Productization：Worker device identity secret 默认 OS keyring；Linux/headless file fallback 必须显式 opt-in。

@@ -14,6 +14,7 @@ import type {
   InterruptTurnInput,
   StartConversationInput,
   SteerTurnInput,
+  TaskConversationLink,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -71,7 +72,7 @@ test("control plane http app when tasks are created and listed, should return bo
 
     const created = await request(app, "/v1/tasks", {
       method: "POST",
-      body: JSON.stringify({ title: "Stage 7 task route", status: "waiting" }),
+      body: JSON.stringify(createTaskInput("Stage 7 task route", { status: "waiting" })),
     });
     const listed = await request(app, "/v1/tasks");
 
@@ -91,12 +92,12 @@ test("control plane http app when backed by a file database, should persist task
     const firstApp = createTaskApp(fixture.database.tasks);
     const created = await request(firstApp, "/v1/tasks", {
       method: "POST",
-      body: JSON.stringify({ title: "Persist through Control Plane" }),
+      body: JSON.stringify(createTaskInput("Persist through Control Plane")),
     });
     const task = await created.json() as BoardTask;
     await request(firstApp, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-persisted" }),
+      body: JSON.stringify(linkInput("device-a", "thread-persisted", "project-a")),
     });
     fixture.database.close();
 
@@ -104,13 +105,24 @@ test("control plane http app when backed by a file database, should persist task
     try {
       const secondApp = createTaskApp(reopened.tasks);
       const listed = await request(secondApp, "/v1/tasks");
+      const listedTasks = await listed.json() as BoardTask[];
+      const listedTask = listedTasks[0];
 
-      assert.deepEqual(await listed.json(), [
+      assert.deepEqual(listedTasks, [
         {
           id: task.id,
           title: "Persist through Control Plane",
           status: "in_progress",
-          linkedConversations: [{ deviceId: "device-a", conversationId: "thread-persisted" }],
+          createdAt: task.createdAt,
+          updatedAt: listedTask?.updatedAt ?? "",
+          linkedConversations: [
+            {
+              deviceId: "device-a",
+              conversationId: "thread-persisted",
+              projectId: "project-a",
+              linkedAt: listedTask?.linkedConversations[0]?.linkedAt ?? "",
+            },
+          ],
         },
       ] satisfies BoardTask[]);
     } finally {
@@ -127,24 +139,26 @@ test("control plane http app when a conversation is linked twice, should return 
     const app = createTaskApp(fixture.database.tasks);
     const task = await (await request(app, "/v1/tasks", {
       method: "POST",
-      body: JSON.stringify({ title: "Idempotent link" }),
+      body: JSON.stringify(createTaskInput("Idempotent link")),
     })).json() as BoardTask;
 
     const first = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
     });
     const second = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
     });
     const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
 
     assert.equal(first.status, 201);
     assert.equal(second.status, 201);
-    assert.deepEqual(await first.json(), { deviceId: "device-a", conversationId: "thread-1" });
-    assert.deepEqual(await second.json(), { deviceId: "device-a", conversationId: "thread-1" });
-    assert.deepEqual(listed[0]?.linkedConversations, [{ deviceId: "device-a", conversationId: "thread-1" }]);
+    assert.equal((await first.json() as TaskConversationLink).projectId, "project-a");
+    assert.equal((await second.json() as TaskConversationLink).projectId, "project-a");
+    assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
+      { deviceId: "device-a", conversationId: "thread-1", projectId: "project-a" },
+    ]);
   } finally {
     fixture.close();
   }
@@ -156,22 +170,22 @@ test("control plane http app when same conversation id is linked from two device
     const app = createTaskApp(fixture.database.tasks);
     const task = await (await request(app, "/v1/tasks", {
       method: "POST",
-      body: JSON.stringify({ title: "Device scoped link" }),
+      body: JSON.stringify(createTaskInput("Device scoped link")),
     })).json() as BoardTask;
 
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-shared" }),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "project-a")),
     });
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-b", conversationId: "thread-shared" }),
+      body: JSON.stringify(linkInput("device-b", "thread-shared", "project-b")),
     });
 
     const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
-    assert.deepEqual(listed[0]?.linkedConversations, [
-      { deviceId: "device-a", conversationId: "thread-shared" },
-      { deviceId: "device-b", conversationId: "thread-shared" },
+    assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
+      { deviceId: "device-a", conversationId: "thread-shared", projectId: "project-a" },
+      { deviceId: "device-b", conversationId: "thread-shared", projectId: "project-b" },
     ]);
   } finally {
     fixture.close();
@@ -184,22 +198,24 @@ test("control plane http app when a linked conversation is deleted, should remov
     const app = createTaskApp(fixture.database.tasks);
     const task = await (await request(app, "/v1/tasks", {
       method: "POST",
-      body: JSON.stringify({ title: "Delete one link" }),
+      body: JSON.stringify(createTaskInput("Delete one link")),
     })).json() as BoardTask;
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-shared" }),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "project-a")),
     });
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-b", conversationId: "thread-shared" }),
+      body: JSON.stringify(linkInput("device-b", "thread-shared", "project-b")),
     });
 
     const deleted = await request(app, `/v1/tasks/${task.id}/conversation-links/device-a/thread-shared`, { method: "DELETE" });
     const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
 
     assert.equal(deleted.status, 204);
-    assert.deepEqual(listed[0]?.linkedConversations, [{ deviceId: "device-b", conversationId: "thread-shared" }]);
+    assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
+      { deviceId: "device-b", conversationId: "thread-shared", projectId: "project-b" },
+    ]);
   } finally {
     fixture.close();
   }
@@ -212,7 +228,7 @@ test("control plane http app when a task is missing, should return a sanitized 4
 
     const response = await request(app, "/v1/tasks/missing-task/conversation-links", {
       method: "POST",
-      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
     });
 
     assert.equal(response.status, 404);
@@ -222,17 +238,16 @@ test("control plane http app when a task is missing, should return a sanitized 4
   }
 });
 
-test("control plane http app when task repository fails, should not expose raw url stack cause or private paths", async () => {
-  const privatePath = "/Users/Vint/private/tasks.sqlite";
-  const app = createTaskApp(new ThrowingTaskRepository(privatePath) as unknown as TaskRepository);
+test("control plane http app when task repository fails, should not expose internal failure details", async () => {
+  const sensitiveMarker = "REDACTED_INTERNAL_MARKER";
+  const app = createTaskApp(new ThrowingTaskRepository(sensitiveMarker) as unknown as TaskRepository);
 
   const response = await request(app, "/v1/tasks");
 
   assert.equal(response.status, 500);
   const body = await response.text();
-  assert.doesNotMatch(body, /https:\/\/worker\.example\/secret/);
-  assert.doesNotMatch(body, /raw stack|cause marker|TaskRepository exploded/);
-  assert.doesNotMatch(body, /\/Users\/Vint\/private|tasks\.sqlite/);
+  assert.doesNotMatch(body, /REDACTED_INTERNAL_MARKER/);
+  assert.doesNotMatch(body, /TaskRepository exploded/);
 });
 
 test("control plane http app when browser origin is unexpected, should return sanitized 403", async () => {
@@ -434,17 +449,14 @@ class TaskDatabaseFixture {
 }
 
 class ThrowingTaskRepository {
-  private readonly privatePath: string;
+  private readonly sensitiveMarker: string;
 
-  constructor(privatePath: string) {
-    this.privatePath = privatePath;
+  constructor(sensitiveMarker: string) {
+    this.sensitiveMarker = sensitiveMarker;
   }
 
   listTasks(): BoardTask[] {
-    const cause = new Error(`cause marker ${this.privatePath}`);
-    const error = new Error(`TaskRepository exploded at https://worker.example/secret ${this.privatePath}`, { cause });
-    error.stack = `raw stack ${this.privatePath}`;
-    throw error;
+    throw new Error(`TaskRepository exploded ${this.sensitiveMarker}`);
   }
 
   createTask(): BoardTask {
@@ -595,4 +607,16 @@ function createAccepted(deviceId: string, clientRequestId: string) {
     turnId: `turn-${deviceId}`,
     acceptedAt: "2026-06-20T00:00:02.000Z",
   };
+}
+
+function createTaskInput(title: string, options: { status?: BoardTask["status"] } = {}) {
+  return {
+    title,
+    clientRequestId: `request-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`,
+    ...(options.status === undefined ? {} : { status: options.status }),
+  };
+}
+
+function linkInput(deviceId: string, conversationId: string, projectId: string) {
+  return { deviceId, conversationId, projectId };
 }

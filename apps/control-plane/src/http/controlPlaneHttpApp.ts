@@ -319,20 +319,22 @@ async function readApprovalDecisionInputBody(c: Context<ControlPlaneHonoEnv>): P
 
 async function readCreateTaskInputBody(c: Context<ControlPlaneHonoEnv>): Promise<CreateTaskInput> {
   const body = await readBody(c);
-  assertKnownFields(body, ["title", "status"]);
+  assertKnownFields(body, ["title", "clientRequestId", "status"]);
   const status = getOptionalTaskStatusField(body, "status");
   return {
     title: getRequiredStringField(body, "title", taskTitleMaxLength),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
     ...(status === undefined ? {} : { status }),
   };
 }
 
 async function readLinkTaskConversationInputBody(c: Context<ControlPlaneHonoEnv>): Promise<LinkTaskConversationInput> {
   const body = await readBody(c);
-  assertKnownFields(body, ["deviceId", "conversationId"]);
+  assertKnownFields(body, ["deviceId", "conversationId", "projectId"]);
   return {
     deviceId: getRequiredStringField(body, "deviceId"),
     conversationId: getRequiredStringField(body, "conversationId"),
+    projectId: getRequiredStringField(body, "projectId"),
   };
 }
 

@@ -10,10 +10,12 @@ import { openTaskDatabase } from "./index.ts";
 test("TaskRepository > createTask > when called with a title, should persist a default in-progress task", () => {
   const fixture = TaskRepositoryFixture.create();
   try {
-    const task = fixture.database.tasks.createTask({ title: "Review Stage 7 DB" });
+    const task = fixture.database.tasks.createTask(createTaskInput("Review Stage 7 DB"));
 
     assert.equal(task.title, "Review Stage 7 DB");
     assert.equal(task.status, "in_progress");
+    assert.match(task.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(task.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.deepEqual(task.linkedConversations, []);
     assert.deepEqual(fixture.database.tasks.listTasks(), [task]);
   } finally {
@@ -24,20 +26,22 @@ test("TaskRepository > createTask > when called with a title, should persist a d
 test("TaskRepository > linkConversation > when same conversation id appears on two devices, should keep device-scoped links", () => {
   const fixture = TaskRepositoryFixture.create();
   try {
-    const task = fixture.database.tasks.createTask({ title: "Investigate shared thread", status: "waiting" });
+    const task = fixture.database.tasks.createTask(createTaskInput("Investigate shared thread", { status: "waiting" }));
 
-    fixture.database.tasks.linkConversation(task.id, { deviceId: "macbook", conversationId: "thread-1" });
-    const linked = fixture.database.tasks.linkConversation(task.id, { deviceId: "studio", conversationId: "thread-1" });
+    fixture.database.tasks.linkConversation(task.id, linkInput("macbook", "thread-1", "project-a"));
+    const linked = fixture.database.tasks.linkConversation(task.id, linkInput("studio", "thread-1", "project-b"));
 
-    assert.deepEqual(linked, {
-      id: task.id,
-      title: "Investigate shared thread",
-      status: "waiting",
-      linkedConversations: [
-        { deviceId: "macbook", conversationId: "thread-1" },
-        { deviceId: "studio", conversationId: "thread-1" },
-      ],
-    } satisfies BoardTask);
+    assert.equal(linked.id, task.id);
+    assert.equal(linked.title, "Investigate shared thread");
+    assert.equal(linked.status, "waiting");
+    assert.match(linked.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(linked.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(linked.linkedConversations.length, 2);
+    assert.deepEqual(linked.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
+      { deviceId: "macbook", conversationId: "thread-1", projectId: "project-a" },
+      { deviceId: "studio", conversationId: "thread-1", projectId: "project-b" },
+    ]);
+    assert.match(linked.linkedConversations[0]?.linkedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     fixture.close();
   }
@@ -46,13 +50,15 @@ test("TaskRepository > linkConversation > when same conversation id appears on t
 test("TaskRepository > unlinkConversation > when one device-scoped link is removed, should keep the other matching conversation id", () => {
   const fixture = TaskRepositoryFixture.create();
   try {
-    const task = fixture.database.tasks.createTask({ title: "Split linked work" });
-    fixture.database.tasks.linkConversation(task.id, { deviceId: "macbook", conversationId: "thread-1" });
-    fixture.database.tasks.linkConversation(task.id, { deviceId: "studio", conversationId: "thread-1" });
+    const task = fixture.database.tasks.createTask(createTaskInput("Split linked work"));
+    fixture.database.tasks.linkConversation(task.id, linkInput("macbook", "thread-1", "project-a"));
+    fixture.database.tasks.linkConversation(task.id, linkInput("studio", "thread-1", "project-b"));
 
     const unlinked = fixture.database.tasks.unlinkConversation(task.id, "macbook", "thread-1");
 
-    assert.deepEqual(unlinked.linkedConversations, [{ deviceId: "studio", conversationId: "thread-1" }]);
+    assert.deepEqual(unlinked.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
+      { deviceId: "studio", conversationId: "thread-1", projectId: "project-b" },
+    ]);
   } finally {
     fixture.close();
   }
@@ -61,8 +67,8 @@ test("TaskRepository > unlinkConversation > when one device-scoped link is remov
 test("TaskRepository > listTasks > when database is reopened, should read persisted tasks and links", () => {
   const fixture = TaskRepositoryFixture.create();
   try {
-    const task = fixture.database.tasks.createTask({ title: "Persist me", status: "done" });
-    fixture.database.tasks.linkConversation(task.id, { deviceId: "macbook", conversationId: "thread-2" });
+    const task = fixture.database.tasks.createTask(createTaskInput("Persist me", { status: "done" }));
+    fixture.database.tasks.linkConversation(task.id, linkInput("macbook", "thread-2", "project-a"));
     fixture.database.close();
 
     const reopened = openTaskDatabase(fixture.databasePath);
@@ -72,7 +78,16 @@ test("TaskRepository > listTasks > when database is reopened, should read persis
           id: task.id,
           title: "Persist me",
           status: "done",
-          linkedConversations: [{ deviceId: "macbook", conversationId: "thread-2" }],
+          createdAt: task.createdAt,
+          updatedAt: reopened.tasks.listTasks()[0]?.updatedAt ?? "",
+          linkedConversations: [
+            {
+              deviceId: "macbook",
+              conversationId: "thread-2",
+              projectId: "project-a",
+              linkedAt: reopened.tasks.listTasks()[0]?.linkedConversations[0]?.linkedAt ?? "",
+            },
+          ],
         },
       ] satisfies BoardTask[]);
     } finally {
@@ -82,6 +97,18 @@ test("TaskRepository > listTasks > when database is reopened, should read persis
     fixture.remove();
   }
 });
+
+function createTaskInput(title: string, options: { status?: BoardTask["status"] } = {}) {
+  return {
+    title,
+    clientRequestId: `request-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`,
+    ...(options.status === undefined ? {} : { status: options.status }),
+  };
+}
+
+function linkInput(deviceId: string, conversationId: string, projectId: string) {
+  return { deviceId, conversationId, projectId };
+}
 
 test("TaskRepository > package boundary > when source imports are inspected, should not depend on app or protocol packages", () => {
   const source = TaskRepositoryFixture.readSourceTree();

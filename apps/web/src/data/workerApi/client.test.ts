@@ -143,11 +143,15 @@ test("WorkerApiClient task methods when called, should use task board routes", a
     id: "task-1",
     title: "Task one",
     status: "in_progress",
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
     linkedConversations: [],
   };
   const link: TaskConversationLink = {
     deviceId: "device-a",
     conversationId: "thread-1",
+    projectId: "project-a",
+    linkedAt: "2026-06-20T00:00:00.000Z",
   };
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const fetchMock: typeof fetch = async (url, init) => {
@@ -180,8 +184,8 @@ test("WorkerApiClient task methods when called, should use task board routes", a
   });
 
   await client.listTasks();
-  await client.createTask({ title: "Task one", status: "in_progress" });
-  await client.linkTaskConversation("task-1", { deviceId: "device-a", conversationId: "thread-1" });
+  await client.createTask({ title: "Task one", clientRequestId: "request-task-one", status: "in_progress" });
+  await client.linkTaskConversation("task-1", { deviceId: "device-a", conversationId: "thread-1", projectId: "project-a" });
   await client.unlinkTaskConversation("task-1", "device-a", "thread-1");
 
   assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
@@ -196,6 +200,7 @@ test("WorkerApiClient task methods when called, should use task board routes", a
     JSON.stringify({
       deviceId: "device-a",
       conversationId: "thread-1",
+      projectId: "project-a",
     }),
   );
 });

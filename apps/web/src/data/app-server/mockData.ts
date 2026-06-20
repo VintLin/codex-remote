@@ -93,17 +93,26 @@ export const tasks: BoardTask[] = [
     id: "task-worker-probe",
     title: "codex-remote worker probe",
     status: "in_progress",
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
     linkedConversations: [
-      { deviceId: "macbook", conversationId: "demo-thread-running" },
-      { deviceId: "macbook", conversationId: "demo-thread-review" },
+      { deviceId: "macbook", conversationId: "demo-thread-running", projectId: "project-codex-remote", linkedAt: "2026-06-20T00:00:00.000Z" },
+      { deviceId: "macbook", conversationId: "demo-thread-review", projectId: "project-codex-remote", linkedAt: "2026-06-20T00:00:00.000Z" },
     ],
   },
   {
     id: "task-loose-notes",
     title: "independent planning notes",
     status: "done",
+    createdAt: "2026-06-20T00:01:00.000Z",
+    updatedAt: "2026-06-20T00:01:00.000Z",
     linkedConversations: [
-      { deviceId: "macbook", conversationId: "demo-thread-projectless" },
+      {
+        deviceId: "macbook",
+        conversationId: "demo-thread-projectless",
+        projectId: "project-planning",
+        linkedAt: "2026-06-20T00:01:00.000Z",
+      },
     ],
   },
 ];

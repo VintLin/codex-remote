@@ -70,15 +70,15 @@ Schemas:
 - `TaskConversationLink`
   - `deviceId`
   - `conversationId`
-  - optional `projectId`
+  - `projectId`
   - `linkedAt`
 - `CreateTaskInput`
   - `title`
-  - optional `clientRequestId`
+  - `clientRequestId`
 - `LinkTaskConversationInput`
   - `deviceId`
   - `conversationId`
-  - optional `projectId`
+  - `projectId`
 
 Decision: replace `linkedConversationIds` with device-scoped links.
 
@@ -100,7 +100,7 @@ Minimum tables:
   - `task_id text not null references tasks(id) on delete cascade`
   - `device_id text not null`
   - `conversation_id text not null`
-  - `project_id text`
+  - `project_id text not null`
   - `linked_at text not null`
   - primary key `(task_id, device_id, conversation_id)`
 
@@ -131,7 +131,7 @@ Reason: devices and conversations are still Worker-derived runtime state. Stage 
 
 - DB never stores provider secrets, Codex auth, Worker bearer tokens, raw upstream URLs, raw JSON-RPC, raw prompt, raw command output, full diff, stack/cause, or private paths.
 - Task titles are user input and must be length-limited.
-- Conversation links store opaque ids and optional `projectId`; no local filesystem path.
+- Conversation links store opaque ids and required `projectId`; no local filesystem path.
 
 ## Testing
 
@@ -184,3 +184,20 @@ Chrome smoke:
 - Web can create/list tasks and manually link the selected conversation.
 - Focused tests, repository gate, subagent reviews, and Chrome smoke pass.
 - `PLAN.md`, `PROJECT_STRUCTURE.md`, this spec, and the Stage 7 plan record status, verification, review findings, and remaining risks.
+
+## Completion Evidence
+
+- Implemented `packages/db` with Drizzle SQLite schema, generated migration, and `TaskRepository`.
+- Implemented Control Plane task routes backed by `packages/db`; `apps/control-plane` still does not import `packages/codex-protocol`.
+- Implemented Web task datasource, create flow, and selected-conversation linking; `apps/web` still does not import DB or protocol packages.
+- Final review fixes:
+  - `BoardTask.createdAt/updatedAt`, `TaskConversationLink.projectId/linkedAt`, `CreateTaskInput.clientRequestId`, and `LinkTaskConversationInput.projectId` are contract/schema-backed required fields.
+  - Missing task 404 uses `TaskNotFoundError` only for task link/unlink routes; conversation routes keep `ConversationNotFoundError`.
+  - Test fixtures no longer use reviewer-flagged sensitive-shape literals.
+- Focused verification passed:
+  - `pnpm --filter @codex-remote/api-contract test`
+  - `pnpm --filter @codex-remote/db test`
+  - `pnpm --filter @codex-remote/control-plane test`
+  - `pnpm --filter @codex-remote/web test`
+- Repository gate passed: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+- Chrome smoke passed with two fake Workers exposing the same `conversationId` under different `deviceId` values; Web created one task, linked both device-scoped conversations, refreshed, and showed two distinct links without sensitive DOM hits.

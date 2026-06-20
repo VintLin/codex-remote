@@ -592,19 +592,25 @@ export interface components {
             id: string;
             title: string;
             status: components["schemas"]["TaskStatus"];
+            createdAt: string;
+            updatedAt: string;
             linkedConversations: components["schemas"]["TaskConversationLink"][];
         };
         TaskConversationLink: {
             deviceId: string;
             conversationId: string;
+            projectId: string;
+            linkedAt: string;
         };
         CreateTaskInput: {
             title: string;
+            clientRequestId: string;
             status?: components["schemas"]["TaskStatus"];
         };
         LinkTaskConversationInput: {
             deviceId: string;
             conversationId: string;
+            projectId: string;
         };
         DiffLine: {
             line: number;
@@ -714,6 +720,15 @@ export interface components {
         };
         /** @description The requested conversation timeline could not be found. */
         ConversationNotFoundError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The requested task could not be found. */
+        TaskNotFoundError: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1603,7 +1618,7 @@ export interface operations {
             400: components["responses"]["BadRequestError"];
             401: components["responses"]["UnauthorizedError"];
             403: components["responses"]["ForbiddenError"];
-            404: components["responses"]["ConversationNotFoundError"];
+            404: components["responses"]["TaskNotFoundError"];
             409: components["responses"]["ConflictError"];
             500: components["responses"]["InternalWorkerError"];
         };
@@ -1631,7 +1646,7 @@ export interface operations {
             400: components["responses"]["BadRequestError"];
             401: components["responses"]["UnauthorizedError"];
             403: components["responses"]["ForbiddenError"];
-            404: components["responses"]["ConversationNotFoundError"];
+            404: components["responses"]["TaskNotFoundError"];
             500: components["responses"]["InternalWorkerError"];
         };
     };
