@@ -133,10 +133,11 @@ Stage 9 in-progress context:
 - Task 5/6 implemented the real calibration runner and smoke gate; fake Worker smoke no longer satisfies real readiness claims.
 - Worker-owned `stdio` app-server lifecycle is implemented and is the default `pnpm real:start` path.
 - The local real stack uses Worker, Control Plane, Web, SQLite task DB, and Codex app-server on one Mac; `pnpm real:start` starts all three HTTP surfaces and `pnpm real:status` reports them running.
-- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=8 fixedPass=0 realGap=11`.
+- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=9 fixedPass=0 realGap=10`.
 - Worker app-server readiness evidence requires `appServerConnected=true`, `transport=stdio`, and sanitized version metadata; `debug-websocket` does not satisfy readiness.
 - `pnpm web:e2e:smoke` now passes against the real stack and checks that Web does not make runtime external asset requests.
-- Remaining real gaps include start accepted but timeline/follow-up/approval/interrupt/steer not yet closing over a readable real conversation, task-link invalid ids not rejected, and Q23/Q24 probes/fixtures still absent.
+- Task link invalid ids are now rejected before persistence, and both `task link` and `task link invalid ids` record `real-pass`.
+- Remaining real gaps include start accepted but timeline/follow-up/approval/interrupt/steer not yet closing over a readable real conversation, and Q23/Q24 probes/fixtures still absent.
 - Q23/Q24 remain explicit gaps: `no_control_plane_cwd_scope_probe`, `no_control_plane_pagination_probe`, `no_all_workers_down_fixture`, and `no_invalid_worker_token_fixture`.
 - `debug-websocket` is an explicit local debug fallback only. `real:check` and readiness accept only `stdio` proof.
 - Tracked docs may contain only sanitized evidence summaries; raw ids, prompts, command output, raw JSON-RPC, tokens, private paths, stack/cause, and full diffs stay out of tracked files.

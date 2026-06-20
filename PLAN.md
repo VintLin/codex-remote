@@ -77,9 +77,10 @@ Stage 9 当前证据：
 
 - Fake smoke evidence：Stage 3-8 的 fake Worker smoke 覆盖过 Web/Control Plane/Worker-shaped flows，但它只能证明 contract/UI/fallback 行为；Task 5/6 已实现 real calibration runner 和 smoke gate 后，fake Worker smoke 不再能作为 real readiness。
 - Real app-server evidence：Worker-owned `stdio` app-server lifecycle 已实现为当前默认路径；`pnpm real:start` 可启动 Worker、Control Plane 和 Web，`pnpm real:status` 看到三项 running。
-- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=8 fixedPass=0 realGap=11`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
+- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=9 fixedPass=0 realGap=10`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
 - Web real entrypoint evidence：`pnpm web:e2e:smoke` 在真实栈上通过，覆盖 Web -> Control Plane -> Worker 的加载、start、任务创建/关联和无外部 runtime asset 请求检查。
-- Remaining real gaps：start conversation accepted 后 timeline/follow-up/approval/interrupt/steer 仍因真实 conversation lookup 未闭环而记录 `conversation_not_found` 或无 safe active turn / pending approval；task link invalid ids 仍未拒绝；Q23/Q24 仍是 explicit gap：`no_control_plane_cwd_scope_probe`、`no_control_plane_pagination_probe`、`no_all_workers_down_fixture`、`no_invalid_worker_token_fixture`。
+- Fixed in current slice：Control Plane task conversation links now reject arbitrary invalid ids before persisting; `task link` and `task link invalid ids` both record `real-pass`.
+- Remaining real gaps：start conversation accepted 后 timeline/follow-up/approval/interrupt/steer 仍因真实 conversation lookup 未闭环而记录 `conversation_not_found` 或无 safe active turn / pending approval；Q23/Q24 仍是 explicit gap：`no_control_plane_cwd_scope_probe`、`no_control_plane_pagination_probe`、`no_all_workers_down_fixture`、`no_invalid_worker_token_fixture`。
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 

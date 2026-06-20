@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-8 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=8 fixedPass=0 realGap=11`; the next vertical slice is Task 9, which fixes task-link invalid-id acceptance before moving to readable post-start conversations, follow-up/control/approval closure, and Q23/Q24 real probes.
+**Current gap:** Tasks 1-9 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=9 fixedPass=0 realGap=10`; remaining work is the next vertical slice for readable post-start conversations, follow-up/control/approval closure, and Q23/Q24 real probes.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -59,6 +59,10 @@ Residual risks retained for later Stage 9 slices:
 
 - `apps/web/e2e/real-local-smoke.spec.ts` covers real Web start/task flow, but follow-up remains conditional until the post-start readable conversation gap is closed.
 - Worker health proves readiness through `client.readyz()` and config-validated transport. Future session abstraction changes must avoid reporting `stdio` when the actual session is not stdio-backed.
+
+Reviewer: `019ee57f-16fb-7d30-a746-c1366f022ef5`
+
+Result: unavailable. The requested subagent review for Task 9 errored with an external usage-limit condition before returning findings. The slice stayed narrow and used existing Control Plane/API/DB boundaries only.
 
 ## Integrated Research Decisions
 
@@ -1596,7 +1600,7 @@ git commit -m "feat: add worker stdio app-server lifecycle"
 - No Web UI changes.
 - No real multi-device fixture.
 
-- [ ] **Step 1: Add failing Control Plane tests**
+- [x] **Step 1: Add failing Control Plane tests**
 
 In `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`, add focused tests:
 
@@ -1605,7 +1609,7 @@ In `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`, add focused tests:
 - known device/project with unknown `conversationId` returns sanitized 404/4xx and does not persist a link;
 - existing valid link still returns 201.
 
-- [ ] **Step 2: Implement minimal validation**
+- [x] **Step 2: Implement minimal validation**
 
 In `apps/control-plane/src/http/controlPlaneHttpApp.ts`, before `repository.linkConversation()`:
 
@@ -1615,7 +1619,7 @@ In `apps/control-plane/src/http/controlPlaneHttpApp.ts`, before `repository.link
 - require the conversation's `projectId` to equal `input.projectId`;
 - throw `ControlPlaneHttpError` with safe `project_not_found` / `conversation_not_found` style codes.
 
-- [ ] **Step 3: Run focused verification**
+- [x] **Step 3: Run focused verification**
 
 ```bash
 pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "conversation link"
@@ -1623,7 +1627,7 @@ node --test scripts/product-readiness-check.test.mjs
 pnpm product:check
 ```
 
-- [ ] **Step 4: Run real runtime verification**
+- [x] **Step 4: Run real runtime verification**
 
 ```bash
 pnpm real:start
@@ -1635,7 +1639,7 @@ pnpm real:stop
 
 Expected: `task link invalid ids` becomes `real-pass` or `fixed-pass`; no raw ids, URLs, paths, prompts, command output, stack/cause, or full diffs enter tracked docs.
 
-- [ ] **Step 5: Update docs and commit**
+- [x] **Step 5: Update docs and commit**
 
 Update `PLAN.md`, `docs/references/development-context.md`, and this plan with sanitized evidence counts, then commit:
 

@@ -103,6 +103,8 @@ function getSafeMessage(code: string): string {
       return "Origin is not allowed.";
     case "project_forbidden":
       return "Requested project is outside the allowed root.";
+    case "project_not_found":
+      return "Project was not found.";
     case "conversation_not_found":
       return "Conversation was not found.";
     case "turn_not_found":

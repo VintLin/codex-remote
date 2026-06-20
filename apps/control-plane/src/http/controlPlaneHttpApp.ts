@@ -132,6 +132,7 @@ export function createControlPlaneHttpApp(params: {
   app.post("/v1/tasks/:taskId/conversation-links", async (c) => {
     const taskId = c.req.param("taskId");
     const input = await readLinkTaskConversationInputBody(c);
+    await assertLinkTargetExists(registry, params.workerClient, input);
     const task = runTaskOperation(params.taskRepository, "task/link", (repository) => repository.linkConversation(taskId, input));
     return c.json(requireLinkedConversation(task, input), 201);
   });
@@ -251,6 +252,30 @@ async function readDeviceProjects(client: WorkerUpstreamClient, device: Configur
     return (await client.listProjects(device)).map((project) => normalizeProject(device, project));
   } catch (error) {
     throw mapUnknownError(error, "project/list", device.id);
+  }
+}
+
+async function assertLinkTargetExists(
+  registry: ReturnType<typeof createDeviceRegistry>,
+  client: WorkerUpstreamClient,
+  input: LinkTaskConversationInput,
+): Promise<void> {
+  const device = requireDevice(registry, input.deviceId);
+  const projects = await runForDevice(device, "task/link-project", () => readDeviceProjects(client, device));
+  if (!projects.some((project) => project.id === input.projectId)) {
+    throw new ControlPlaneHttpError(404, "project_not_found", "Project was not found.", {
+      operation: "task/link",
+      retryable: false,
+    });
+  }
+
+  const conversations = await runForDevice(device, "task/link-conversation", () => readDeviceConversations(client, device));
+  const conversation = conversations.find((candidate) => candidate.id === input.conversationId);
+  if (!conversation || (conversation.projectId !== undefined && conversation.projectId !== input.projectId)) {
+    throw new ControlPlaneHttpError(404, "conversation_not_found", "Conversation was not found.", {
+      operation: "task/link",
+      retryable: false,
+    });
   }
 }
 

@@ -90,7 +90,8 @@ async function main() {
 
   const conversations = await request("/v1/conversations");
   const conversationList = Array.isArray(conversations.value) ? conversations.value : [];
-  let conversationId = firstString(conversationList[0]?.id);
+  const listedConversationId = firstString(conversationList[0]?.id);
+  let conversationId = listedConversationId;
   record("conversations", conversations.ok && Array.isArray(conversations.value) ? "real-pass" : "real-gap", {
     ...detailFromResponse(conversations),
     count: conversationList.length,
@@ -222,15 +223,16 @@ async function main() {
     reasonCode: task.status === 201 ? undefined : "task_not_created",
   });
 
-  if (workerEvidence.proven && taskId && deviceId && projectId && conversationId) {
+  const taskLinkConversationId = listedConversationId ?? conversationId;
+  if (workerEvidence.proven && taskId && deviceId && projectId && taskLinkConversationId) {
     const link = await request(`/v1/tasks/${encodeURIComponent(taskId)}/conversation-links`, {
       method: "POST",
-      json: { deviceId, projectId, conversationId },
+      json: { deviceId, projectId, conversationId: taskLinkConversationId },
     });
     record("task link", operationStatus("task link", link.status === 201, workerEvidence), {
       ...detailFromResponse(link),
       taskRef: refOf(taskId),
-      conversationRef: refOf(conversationId),
+      conversationRef: refOf(taskLinkConversationId),
       reasonCode: operationReasonCode(link.status === 201, workerEvidence, "task_link_not_created"),
     });
   } else {

@@ -109,7 +109,7 @@ test("control plane http app when backed by a file database, should persist task
     const task = await created.json() as BoardTask;
     await request(firstApp, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-persisted", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "local-project")),
     });
     fixture.database.close();
 
@@ -130,8 +130,8 @@ test("control plane http app when backed by a file database, should persist task
           linkedConversations: [
             {
               deviceId: "device-a",
-              conversationId: "thread-persisted",
-              projectId: "project-a",
+              conversationId: "thread-shared",
+              projectId: "local-project",
               linkedAt: listedTask?.linkedConversations[0]?.linkedAt ?? "",
             },
           ],
@@ -156,20 +156,20 @@ test("control plane http app when a conversation is linked twice, should return 
 
     const first = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-device-a", "local-project")),
     });
     const second = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-device-a", "local-project")),
     });
     const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
 
     assert.equal(first.status, 201);
     assert.equal(second.status, 201);
-    assert.equal((await first.json() as TaskConversationLink).projectId, "project-a");
-    assert.equal((await second.json() as TaskConversationLink).projectId, "project-a");
+    assert.equal((await first.json() as TaskConversationLink).projectId, "local-project");
+    assert.equal((await second.json() as TaskConversationLink).projectId, "local-project");
     assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
-      { deviceId: "device-a", conversationId: "thread-1", projectId: "project-a" },
+      { deviceId: "device-a", conversationId: "thread-device-a", projectId: "local-project" },
     ]);
   } finally {
     fixture.close();
@@ -187,18 +187,50 @@ test("control plane http app when same conversation id is linked from two device
 
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-shared", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "local-project")),
     });
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-b", "thread-shared", "project-b")),
+      body: JSON.stringify(linkInput("device-b", "thread-shared", "local-project")),
     });
 
     const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
     assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
-      { deviceId: "device-a", conversationId: "thread-shared", projectId: "project-a" },
-      { deviceId: "device-b", conversationId: "thread-shared", projectId: "project-b" },
+      { deviceId: "device-a", conversationId: "thread-shared", projectId: "local-project" },
+      { deviceId: "device-b", conversationId: "thread-shared", projectId: "local-project" },
     ]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when conversation link uses unknown resources, should reject without persisting", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+    const task = await (await request(app, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify(createTaskInput("Reject invalid link")),
+    })).json() as BoardTask;
+
+    const unknownDevice = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify(linkInput("missing-device", "thread-shared", "local-project")),
+    });
+    const unknownProject = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "missing-project")),
+    });
+    const unknownConversation = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify(linkInput("device-a", "missing-thread", "local-project")),
+    });
+    const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
+
+    assert.equal(unknownDevice.status, 404);
+    assert.equal(unknownProject.status, 404);
+    assert.equal(unknownConversation.status, 404);
+    assert.deepEqual(listed[0]?.linkedConversations, []);
   } finally {
     fixture.close();
   }
@@ -214,11 +246,11 @@ test("control plane http app when a linked conversation is deleted, should remov
     })).json() as BoardTask;
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-shared", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "local-project")),
     });
     await request(app, `/v1/tasks/${task.id}/conversation-links`, {
       method: "POST",
-      body: JSON.stringify(linkInput("device-b", "thread-shared", "project-b")),
+      body: JSON.stringify(linkInput("device-b", "thread-shared", "local-project")),
     });
 
     const deleted = await request(app, `/v1/tasks/${task.id}/conversation-links/device-a/thread-shared`, { method: "DELETE" });
@@ -226,7 +258,7 @@ test("control plane http app when a linked conversation is deleted, should remov
 
     assert.equal(deleted.status, 204);
     assert.deepEqual(listed[0]?.linkedConversations.map(({ deviceId, conversationId, projectId }) => ({ deviceId, conversationId, projectId })), [
-      { deviceId: "device-b", conversationId: "thread-shared", projectId: "project-b" },
+      { deviceId: "device-b", conversationId: "thread-shared", projectId: "local-project" },
     ]);
   } finally {
     fixture.close();
@@ -240,7 +272,7 @@ test("control plane http app when a task is missing, should return a sanitized 4
 
     const response = await request(app, "/v1/tasks/missing-task/conversation-links", {
       method: "POST",
-      body: JSON.stringify(linkInput("device-a", "thread-1", "project-a")),
+      body: JSON.stringify(linkInput("device-a", "thread-shared", "local-project")),
     });
 
     assert.equal(response.status, 404);
@@ -560,7 +592,10 @@ class FakeWorkerClient implements WorkerUpstreamClient {
   async listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]> {
     this.record(device, "listConversations");
     this.throwIfUnavailable(device);
-    return [createConversation(this.upstreamDeviceId ?? device.id, `thread-${device.id}`)];
+    return [
+      createConversation(this.upstreamDeviceId ?? device.id, `thread-${device.id}`),
+      createConversation(this.upstreamDeviceId ?? device.id, "thread-shared"),
+    ];
   }
 
   async listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]> {
@@ -655,7 +690,7 @@ function createConversation(deviceId: string, id: string): CodexConversation {
     id,
     title: id,
     deviceId,
-    projectId: "project-a",
+    projectId: "local-project",
     projectName: "Project A",
     status: "running",
     updatedAt: id.endsWith("a") ? "2026-06-20T00:00:02.000Z" : "2026-06-20T00:00:01.000Z",
