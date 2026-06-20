@@ -1,180 +1,145 @@
-# Task 2 Report: Reconcile OpenAPI As The Public Source Of Truth
+# Task 2 Report: DB Package
 
-## 结论
+## Status
 
-Task 2 的 OpenAPI 合同更新已完成，`packages/api-contract/openapi.yaml` 与生成物 `packages/api-contract/src/generated/openapi.ts` 已对齐 Stage 2 `/v1` read-only Worker API 的公共事实源要求。
+DONE_WITH_CONCERNS
 
-## 已完成内容
+Concern: the requested task review could not be dispatched to an external reviewer because this session does not expose a subagent dispatch tool. I left the review request and scope below for the coordinator/reviewer.
 
-- 在 `packages/api-contract/openapi.yaml` 新增 5 个 versioned Stage 2 GET 路由：
-  - `/v1/worker/health`
-  - `/v1/worker/capabilities`
-  - `/v1/worker/probe`
-  - `/v1/conversations`
-  - `/v1/conversations/{conversationId}/timeline`
-- 保留既有 unversioned 路由作为 legacy contract surface，未删除。
-- 复用既有公共 schema：
-  - `WorkerHealth`
-  - `WorkerCapabilities`
-  - `WorkerProbeSummary`
-  - `CodexConversation`
-  - `ConversationTimeline`
-  - `ErrorEnvelope`
-- 新增 `components.responses` 共享错误响应定义，并为所有 versioned Stage 2 路由补齐：
-  - `400`
-  - `401`
-  - `403`
-  - `408`
-  - `424`
-  - `500`
-- 仅在 `GET /v1/conversations/{conversationId}/timeline` 增加 `404` `ErrorEnvelope` 响应。
-- 收紧 `ErrorEnvelope.details`：
-  - `additionalProperties: false`
-  - allowlist keys:
-    - `operation`
-    - `retryable`
-    - `diagnosticId`
-    - `reason`
-    - `field`
-    - `limit`
-- 重新生成 `packages/api-contract/src/generated/openapi.ts`
+## Scope
 
-## 关键决策
+Changed only the DB package, dependency metadata, lockfile, and this required report:
 
-### 决策 1
+- `packages/db/package.json`
+- `packages/db/tsconfig.json`
+- `packages/db/drizzle.config.ts`
+- `packages/db/src/schema.ts`
+- `packages/db/src/client.ts`
+- `packages/db/src/taskRepository.ts`
+- `packages/db/src/index.ts`
+- `packages/db/src/taskRepository.test.ts`
+- `packages/db/drizzle/0000_lumpy_dark_beast.sql`
+- `packages/db/drizzle/meta/0000_snapshot.json`
+- `packages/db/drizzle/meta/_journal.json`
+- `pnpm-lock.yaml`
+- `.superpowers/sdd/task-2-report.md`
 
-- 结论：仅在 `packages/api-contract` 范围内改动 `openapi.yaml` 与生成物，不触碰 worker/web 实现。
-- 原因：任务所有权明确限定在公共 contract 与生成类型，Stage 2 当前目标是让合同成为唯一事实源并让 Task 1 的 guard tests 变绿。
-- 风险：运行时实现尚未消费这些新增 `/v1` 路由时，合同会先于实现存在。
-- 下一步：后续任务在 worker HTTP 层按这些 `operationId` 和 schema 落地实现。
+No Control Plane, Web, Worker, API contract, protocol package, or product docs were modified.
 
-### 决策 2
+## TDD Evidence
 
-- 结论：错误响应统一抽到 `components.responses`，各 path 用 block-style `$ref` 引用。
-- 原因：任务 brief 明确要求共享 `ErrorEnvelope` 响应组件，且现有测试依赖 block-style status entry 解析。
-- 风险：未来若错误语义分化更细，需要在不破坏 ErrorEnvelope 统一形态前提下扩展 description 或 response 名称。
-- 下一步：保持后续新增 Worker API 路由沿用同一错误响应组件模式。
+RED:
 
-### 决策 3
+- Added repository and boundary tests before implementation.
+- Ran `pnpm --filter @codex-remote/db test`.
+- Expected red state observed after making the test file runnable: failure was `ERR_MODULE_NOT_FOUND` for missing `packages/db/src/index.ts`.
 
-- 结论：不扩展 `ConversationEvent` 与 `ConversationTimelinePage`。
-- 原因：task brief 明确禁止在本任务内实现或扩展这两个 schema。
-- 风险：后续 timeline 增量分页或事件流需求需要单独任务处理。
-- 下一步：等对应阶段任务再引入分页或事件 contract 约束。
+GREEN:
 
-## 验证结果
+- Added Drizzle schema, SQLite client, migration, and minimal `TaskRepository`.
+- Ran `pnpm --filter @codex-remote/db test`.
+- The unlink test first caught an implementation bug where chained `.where()` calls did not combine the task/device/conversation predicates.
+- Fixed that by using one `and(...)` predicate.
 
-### 1. `pnpm --filter @codex-remote/api-contract generate`
+## Implemented Behavior
 
-- 结果：通过
+- `openTaskDatabase(path: string): TaskDatabase`
+  - opens a `better-sqlite3` database
+  - enables foreign keys
+  - applies committed Drizzle migrations
+  - exposes `tasks: TaskRepository`
+  - closes the underlying connection via `close()`
+- `TaskRepository.listTasks(): BoardTask[]`
+- `TaskRepository.createTask(input: CreateTaskInput): BoardTask`
+  - generates task IDs with `crypto.randomUUID()`
+  - defaults missing status to `in_progress`
+- `TaskRepository.linkConversation(taskId, input): BoardTask`
+  - persists `(taskId, deviceId, conversationId)`
+  - allows the same `conversationId` for different `deviceId` values
+  - ignores duplicate identical links
+- `TaskRepository.unlinkConversation(taskId, deviceId, conversationId): BoardTask`
+  - removes only the exact device-scoped link
 
-### 2. `pnpm --filter @codex-remote/api-contract test`
+All public task shapes consume generated aliases from `@codex-remote/api-contract`; no parallel DTOs were introduced.
 
-- 结果：通过
-- 结果摘要：8 tests, 8 pass, 0 fail
+## Schema And Migration
 
-### 3. `pnpm --filter @codex-remote/api-contract typecheck`
+Drizzle schema source:
 
-- 结果：失败
-- 原因：失败点全部位于 `packages/api-contract/src/contractGeneration.test.ts`，即 Task 1 新增测试文件中的严格类型错误。
-- 说明：本任务明确要求“不要编辑 Task 1 tests；若遇到 true test bug，停止并报告 NEEDS_CONTEXT”。因此这里按约束停止，没有继续修改测试文件。
+- `tasks`
+  - `id text primary key not null`
+  - `title text(200) not null`
+  - `status text default 'in_progress' not null`
+- `task_conversation_links`
+  - `task_id text not null references tasks(id) on delete cascade`
+  - `device_id text not null`
+  - `conversation_id text not null`
+  - primary key: `(task_id, device_id, conversation_id)`
 
-## 阻塞 / 风险
+Generated migration:
 
-- `typecheck` 当前不能通过，不是因为本次 OpenAPI 变更，而是因为 `contractGeneration.test.ts` 本身存在多处 `string | undefined` / array index strictness 问题。
-- 若要完成 brief 中的第三项验证通过，需要显式允许修复 Task 1 测试文件，或由 Task 1 所属改动先修正该测试类型问题。
+- `packages/db/drizzle/0000_lumpy_dark_beast.sql`
 
-## 建议下一步
+## Design Decisions
 
-1. 先确认是否允许修复 `packages/api-contract/src/contractGeneration.test.ts` 的严格类型错误。
-2. 若允许，我会单独提交一个 focused test-fix commit，把 `typecheck` 拉绿。
-3. 若不允许，本任务应以 contract 变更已完成、`typecheck` 被 Task 1 test bug 阻塞的状态结案。
+Conclusion: DB stores task conversation links with a composite primary key on `(task_id, device_id, conversation_id)`.
 
-## 验证清理补充
+Reason: Stage 7 task links are device-scoped; Task 1 contract requires `TaskConversationLink` objects with both `deviceId` and `conversationId`.
 
-在获得额外授权后，本任务继续修复了 `packages/api-contract/src/contractGeneration.test.ts` 中由 Task 1 guard helper 引入的 strict TypeScript 报错。
+Risk: no separate ordering column exists yet, so repository output orders tasks and links by stable persisted identifiers. If board ordering becomes product behavior, it should start with contract/schema changes.
 
-### 修复内容
+Next step: reviewer should confirm the composite key and absence of global conversation uniqueness.
 
-- 新增本地断言辅助：
-  - `expectDefined`
-  - `expectCapturedGroup`
-- 将 helper 中所有“按逻辑必须存在”的数组索引访问改为显式断言后再使用。
-- 将 `match()` / `exec()` 的第一捕获组访问改为显式断言，避免 `string | undefined`。
-- 保持原有 guard 语义不变：
-  - 仍然依赖相同的路径匹配、状态码匹配、响应组件匹配与 allowlist 断言
-  - 没有放宽测试条件，也没有删除任何断言
+Conclusion: DB package applies committed migrations on `openTaskDatabase`.
 
-### 再次验证结果
+Reason: focused repository tests use temp SQLite files and need the package to initialize its own persistence boundary.
 
-#### 1. `pnpm --filter @codex-remote/api-contract generate`
+Risk: later service startup may need explicit migration control or observability, but that is outside this task's minimal package boundary.
 
-- 结果：通过
+Next step: later Control Plane integration can decide whether to call `openTaskDatabase` directly or wrap migration startup.
 
-#### 2. `pnpm --filter @codex-remote/api-contract test`
+Conclusion: repository does not persist prompts, command output, raw JSON-RPC frames, diffs, URLs, tokens, provider secrets, or auth material.
 
-- 结果：通过
-- 结果摘要：8 tests, 8 pass, 0 fail
+Reason: current `BoardTask` contract only requires task title/status and device-scoped conversation links.
 
-#### 3. `pnpm --filter @codex-remote/api-contract typecheck`
+Risk: future task metadata must be reviewed for secret-free persistence before schema expansion.
 
-- 结果：通过
-- 说明：`tsc --noEmit --pretty false` 退出码为 `0`，无额外错误输出
+Next step: reviewer should inspect schema/migration for secret-free fields.
 
-## Review Fix 补充
+## Review Request
 
-根据 Task 2 review 的重要问题，本任务对 versioned `GET /v1/conversations` 做了一个收口修复。
+Please review this task specifically for:
 
-### 修复内容
+- DB schema source-of-truth: Drizzle schema is the only persisted field definition, and migration was generated from it.
+- Migration correctness: initial SQL matches the schema and includes the composite link primary key plus `on delete cascade`.
+- Persistence behavior: temp SQLite tests cover create/list, reopen persistence, duplicate conversation IDs across devices, and exact unlink semantics.
+- Secret-free fields: no prompt, command output, raw protocol frame, diff, token, provider secret, auth file, or raw URL is persisted.
+- Package boundary: `packages/db` imports `@codex-remote/api-contract` and does not import Web, Worker, Control Plane, or `codex-protocol`.
 
-- 从 `packages/api-contract/openapi.yaml` 中移除了 versioned `GET /v1/conversations` 的 query 参数：
-  - `deviceId`
-  - `projectId`
-- 保留 unversioned legacy `/conversations` 上原有的 query 参数定义，不做改动。
-- 重新生成了 `packages/api-contract/src/generated/openapi.ts`，使 `listWorkerConversations.parameters.query` 从带字段对象收紧为 `never`。
+Local review notes:
 
-### 原因
+- `git diff --check` passed.
+- Boundary test passed against current `packages/db/src/*.ts` sources.
 
-- Stage 2 的 versioned `/v1/conversations` 公共 contract 不应暴露这两个筛选参数。
-- legacy unversioned `/conversations` 仍保留既有 fixture contract surface，因此只修正 versioned 路由。
+## Verification
 
-### 风险
+Focused command required by brief:
 
-- 低风险。此次变更只影响 `packages/api-contract` 公共合同和生成类型，不触碰 worker/web 实现。
+```bash
+pnpm --filter @codex-remote/db test && pnpm --filter @codex-remote/db build
+```
 
-### 本轮验证结果
+Result:
 
-#### 1. `pnpm --filter @codex-remote/api-contract generate`
+- `@codex-remote/db test`: 5 tests, 5 pass, 0 fail.
+- `@codex-remote/db build`: `tsc --noEmit --pretty false` passed.
 
-- 结果：通过
+Additional checks:
 
-#### 2. `pnpm --filter @codex-remote/api-contract test`
+- `pnpm install`
+- `pnpm --filter @codex-remote/db generate`
+- `git diff --check`
 
-- 结果：通过
-- 结果摘要：8 tests, 8 pass, 0 fail
+## Commit
 
-#### 3. `pnpm --filter @codex-remote/api-contract typecheck`
-
-- 结果：通过
-- 说明：`tsc --noEmit --pretty false` 退出码为 `0`
-
-## Task 3: Review Fix 回溯补充（2026-06-20）
-
-### 本轮修复摘要
-
-- `apps/web/src/data/workerApi/workbenchData.ts`
-  - 将 `WorkbenchData.source.reason` 增加 `"loaded"`。
-  - 成功路径返回 `source.reason = "loaded"`。
-  - 成功加载 health/capabilities/conversations 后，timeline 读取失败不再整体 fallback：仍保留已加载快照（设备、项目、会话）。
-  - timeline 读取失败时将目标会话的 `assistantThread.loadState` 标记为 `"readError"` 并将其 timeline 置空。
-  - 将 `WorkerApiRequestError` 的 sanitized envelope（`code`、`message`、允许的 `details`、`requestId`）透传到 `source.error`。
-
-- `apps/web/src/data/workerApi/workbenchData.test.ts`
-  - 新增成功路径断言：`source.reason` 为 `"loaded"`。
-  - 新增 timeline 读取失败测试，验证已加载快照保留与目标线程 `readError`。
-  - 新增错误 `ErrorEnvelope` 清洗断言：校验 `source.error.code/message` 和仅保留允许的 detail 字段。
-
-### 验证命令
-
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "workbench datasource"`
-- `pnpm --filter @codex-remote/web typecheck`
+This report is included in the Task 2 commit.

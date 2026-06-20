@@ -1,0 +1,27 @@
+{
+  "name": "@codex-remote/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit --pretty false && mkdir -p dist && touch dist/.build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "node --test",
+    "lint": "tsc --noEmit --pretty false",
+    "generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@codex-remote/api-contract": "workspace:*",
+    "better-sqlite3": "^12.4.1",
+    "drizzle-orm": "^0.45.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.3",
+    "drizzle-kit": "^0.31.8",
+    "typescript": "^5.8.3"
+  }
+}
