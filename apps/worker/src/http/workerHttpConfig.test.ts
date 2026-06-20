@@ -209,6 +209,14 @@ test("worker http config when app-server transport is explicit should expose the
     assert.equal(config.appServerUrl, null);
   });
 
+  await t.test("when stdio is requested with Worker app-server startup", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "stdio";
+    env.CODEX_REMOTE_START_APP_SERVER = "true";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
   await t.test("when debug websocket is requested", async () => {
     const env = createBaseEnv(fixtureRoot);
     env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "debug-websocket";

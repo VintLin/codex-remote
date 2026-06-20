@@ -65,7 +65,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
   const requestTimeoutMs = parsePositiveBoundedInteger(input.requestTimeoutMs, 5_000);
   const appServerUrl = parseAppServerUrl(input.appServerUrl);
   const startAppServer = parseBooleanFlag(input.startAppServer);
-  const appServerTransport = parseAppServerTransport(input.appServerTransport, appServerUrl);
+  const appServerTransport = parseAppServerTransport(input.appServerTransport, appServerUrl, startAppServer);
 
   return {
     deviceId: input.deviceId?.trim() || "local-device",
@@ -191,14 +191,14 @@ function parseAppServerUrl(value: string | undefined): string | null {
   }
 }
 
-function parseAppServerTransport(value: string | undefined, appServerUrl: string | null): AppServerTransport {
+function parseAppServerTransport(value: string | undefined, appServerUrl: string | null, startAppServer: boolean): AppServerTransport {
   if (!value || !value.trim()) {
     return appServerUrl ? "loopbackWebSocket" : "stdio";
   }
 
   const transport = value.trim();
   if (transport === "stdio") {
-    if (appServerUrl) {
+    if (appServerUrl || startAppServer) {
       throw new Error("worker_config_invalid");
     }
 
