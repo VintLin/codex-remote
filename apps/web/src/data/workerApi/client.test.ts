@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { BoardTask, CommandAccepted, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
+import type { BoardTask, CommandAccepted, RemoteProject, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
 
 import { WorkerApiClient } from "./client.ts";
 
@@ -94,6 +94,41 @@ test("WorkerApiClient follow-up when called, should POST contract body with bear
       expectedConversationId: "thread-1",
     }),
   );
+});
+
+test("WorkerApiClient project discovery when called, should GET versioned projects route", async () => {
+  const projects: RemoteProject[] = [
+    {
+      id: "local-project",
+      name: "local",
+      deviceId: "device-a",
+      path: "",
+      branch: "unknown",
+      hasChanges: false,
+      pinned: false,
+      expanded: true,
+    },
+  ];
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(projects), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  const response = await client.listProjects();
+
+  assert.deepEqual(response, projects);
+  assert.equal(requests[0]?.url, "http://127.0.0.1:8787/v1/projects");
+  assert.equal(requests[0]?.init.method, "GET");
+  assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
 });
 
 test("WorkerApiClient control methods when called, should use versioned control routes", async () => {

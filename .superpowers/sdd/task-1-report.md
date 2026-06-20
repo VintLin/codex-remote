@@ -1,121 +1,61 @@
-# Task 1 Report: Contract First Task API
+# Task 1 Report: Versioned Project Discovery
 
-## Status
+## 实现内容
 
-DONE_WITH_CONCERNS
+- 在 `packages/api-contract/openapi.yaml` 增加 `GET /v1/projects` 和 `GET /v1/devices/{deviceId}/projects`，复用既有 `RemoteProject` schema，并通过 `pnpm --filter @codex-remote/api-contract generate` 更新生成类型。
+- Worker 新增 `listProjects()` 与 `GET /v1/projects`，只公开一个安全项目：`id: "local-project"`、`path: ""`；内部 start conversation 仍使用 `allowedProjectRoot` 作为 app-server `cwd`。
+- Worker start conversation 只接受 public opaque id `local-project`，拒绝 basename public id。
+- Control Plane 新增 `WorkerUpstreamClient.listProjects()`、全局 `/v1/projects` 聚合和 `/v1/devices/:deviceId/projects` 路由，并在 Control Plane 边界规范 `deviceId`。
+- Web client 新增 `listProjects()`；Workbench datasource 在 loaded path 直接使用 `/v1/projects`，不再从 conversations 反推 projects。
+- 在允许修改的 `controlPlaneHttpApp.test.ts` 增加 `RemoteProject` schema-key guard，避免本任务的手写 projector 字段列表静默漂移。
 
-Concern: the requested code-review dispatch could not be performed as an external subagent review because this session does not expose a subagent dispatch tool. I still performed the requested local review scope below and left an explicit review request for the coordinator/reviewer.
+## TDD RED 证据
 
-## Scope
+- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：先失败，缺少 `/v1/projects` 和 `/v1/devices/{deviceId}/projects` route。
+- `pnpm --filter @codex-remote/worker test -- --test-name-pattern "projects|starting a conversation"`：先失败，`listProjects` 未导出、route 未实现、`local-project` 被旧 basename 校验拒绝。
+- `pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "projects|project fields"`：先失败，project routes 返回 404。
+- `pnpm --filter @codex-remote/web test -- --test-name-pattern "project discovery|conversations are empty and projects exist"`：先失败，`client.listProjects` 不存在，projects 仍从 empty conversations 推导为 `[]`。
 
-Modified only the Task 1 contract files plus this required report:
+## GREEN / Verification
+
+- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：PASS，1/1。
+- `pnpm --filter @codex-remote/worker test -- --test-name-pattern "projects|starting a conversation"`：PASS，18/18。
+- `pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "projects|project fields"`：PASS，8/8。
+- `pnpm --filter @codex-remote/web test -- --test-name-pattern "project discovery|conversations are empty and projects exist"`：PASS，17/17。
+- `pnpm --filter @codex-remote/api-contract generate`：PASS，更新生成物。
+- `pnpm --filter @codex-remote/api-contract test`：PASS，26/26。
+- `pnpm --filter @codex-remote/api-contract build`：PASS。
+- `pnpm --filter @codex-remote/worker test`：PASS，146/146。
+- `pnpm --filter @codex-remote/control-plane test`：PASS，35/35。
+- `pnpm --filter @codex-remote/web test`：PASS，89/89。
+
+## 改动文件
 
 - `packages/api-contract/openapi.yaml`
-- `packages/api-contract/src/index.ts`
-- `packages/api-contract/src/contractGeneration.test.ts`
 - `packages/api-contract/src/generated/openapi.ts`
+- `packages/api-contract/src/contractGeneration.test.ts`
+- `apps/worker/src/http/readOnlyHandlers.ts`
+- `apps/worker/src/http/writeHandlers.ts`
+- `apps/worker/src/http/workerHttpApp.ts`
+- `apps/worker/src/http/readOnlyHandlers.test.ts`
+- `apps/worker/src/http/writeHandlers.test.ts`
+- `apps/worker/src/http/workerHttpApp.test.ts`
+- `apps/control-plane/src/client/workerClient.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
+- `apps/web/src/data/workerApi/client.ts`
+- `apps/web/src/data/workerApi/client.test.ts`
+- `apps/web/src/data/workerApi/workbenchData.ts`
+- `apps/web/src/data/workerApi/workbenchData.test.ts`
 - `.superpowers/sdd/task-1-report.md`
 
-No DB, Control Plane, Web implementation, Worker, or docs outside the required report were changed.
+## 自审发现
 
-## TDD Evidence
+- `allowedProjectRoot` / `cwd` 没有进入 public id/path；public project id 固定为 `local-project`，public path 固定为空字符串。
+- Control Plane conversations 聚合继续保留旧的 degraded-to-empty 行为；projects 聚合按任务要求不吞掉 Worker failure。
+- Web loaded path 现在以 project API 为权威来源；旧的 conversations-to-projects 推导已删除，避免第二事实源。
 
-RED:
+## 疑虑
 
-- Added contract tests first for:
-  - the four Task API operations across versioned `/v1/tasks` routes
-  - absence of unversioned task routes
-  - `BoardTask.linkedConversations` replacing `linkedConversationIds`
-  - public aliases deriving from generated schemas
-- Ran `pnpm --filter @codex-remote/api-contract test`
-- Expected failure observed: 5 failing tests covering missing task write route whitelist entries, missing `/v1/tasks` paths, old `linkedConversationIds`, and missing public aliases.
-
-GREEN:
-
-- Updated `openapi.yaml` as the source of truth.
-- Exported public aliases from `src/index.ts`.
-- Regenerated `src/generated/openapi.ts` with `pnpm --filter @codex-remote/api-contract generate`.
-- Re-ran focused verification successfully.
-
-## Implemented Contract
-
-Schemas produced:
-
-- `BoardTask`
-  - Required: `id`, `title`, `status`, `linkedConversations`
-  - `linkedConversations` is an array of `TaskConversationLink`
-  - `linkedConversationIds` is no longer part of the schema
-- `TaskConversationLink`
-  - Required: `deviceId`, `conversationId`
-- `CreateTaskInput`
-  - Required: `title`
-  - Optional: `status`
-- `LinkTaskConversationInput`
-  - Required: `deviceId`, `conversationId`
-
-Routes produced:
-
-- `GET /v1/tasks`
-- `POST /v1/tasks`
-- `POST /v1/tasks/{taskId}/conversation-links`
-- `DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`
-
-Public aliases exported:
-
-- `TaskConversationLink`
-- `CreateTaskInput`
-- `LinkTaskConversationInput`
-
-## Design Decisions
-
-Conclusion: task conversation links are device-scoped objects, not bare conversation IDs.
-
-Reason: Stage 6 introduced multi-device routing; conversation identity is not globally safe without `deviceId`.
-
-Risk: later DB implementation must preserve `(taskId, deviceId, conversationId)` uniqueness rather than relying on conversation ID alone.
-
-Next step: DB/Control Plane/Web implementation tasks should consume these generated aliases instead of redefining parallel DTOs.
-
-Conclusion: task write routes use normal resource semantics: `201` for create/link and `204` for unlink.
-
-Reason: unlike Worker command routes returning `CommandAccepted`, these contract paths describe Control Plane task-board resources and do not execute app-server commands.
-
-Risk: if a later implementation chooses asynchronous task persistence, this response shape would need an intentional contract change.
-
-Next step: reviewers should confirm synchronous resource semantics before downstream implementation starts.
-
-## Review Request
-
-Please review this task specifically for:
-
-- Schema source-of-truth: `openapi.yaml` is the only place defining Task API fields, and aliases/generated types derive from it.
-- Route versioning: all new task routes are under `/v1`; no unversioned task routes exist.
-- Device-scoped conversation links: task links carry both `deviceId` and `conversationId`, and unlink identifies both in the path.
-
-Local review notes:
-
-- `rg` found no production/generated `linkedConversationIds`; it remains only in the negative contract assertion.
-- `git diff --check` passed with no whitespace errors.
-- Diff was limited to the Task 1 contract files and this required report.
-
-## Verification
-
-Focused command required by brief:
-
-```bash
-pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build
-```
-
-Result:
-
-- `@codex-remote/api-contract test`: 22 tests, 22 pass, 0 fail.
-- `@codex-remote/api-contract build`: `check:generated` passed, `tsc --noEmit --pretty false` passed.
-
-Additional checks:
-
-- `pnpm --filter @codex-remote/api-contract generate`
-- `git diff --check`
-
-## Commit
-
-This report is included in the Task 1 commit.
+- `RemoteProject.expanded` 在 OpenAPI schema 中不是 required，但当前 Worker 和 Control Plane projector 都要求 Worker 响应包含该字段；这与现有 UI 期望和 task brief 一致，未在本任务中调整 schema required 集合。
+- 本任务没有实现 streaming、多设备实机、installer/keychain/pairing/reverse WSS/iOS/生产 auth 等 Stage 9 non-goals。

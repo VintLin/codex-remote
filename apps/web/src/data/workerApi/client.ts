@@ -11,6 +11,7 @@ import type {
   InterruptTurnInput,
   LinkTaskConversationInput,
   PendingApproval,
+  RemoteProject,
   StartConversationInput,
   SteerTurnInput,
   TaskConversationLink,
@@ -28,6 +29,7 @@ export interface WorkerApiClientLike {
   getHealth(deviceId: string): Promise<WorkerHealth>;
   getCapabilities(deviceId: string): Promise<WorkerCapabilities>;
   listDevices(): Promise<Device[]>;
+  listProjects(): Promise<RemoteProject[]>;
   listConversations(): Promise<CodexConversation[]>;
   listTasks(): Promise<BoardTask[]>;
   createTask(input: CreateTaskInput): Promise<BoardTask>;
@@ -99,6 +101,11 @@ export class WorkerApiClient implements WorkerApiClientLike {
 
   public async listDevices(): Promise<Device[]> {
     const response = await this.request<Device[]>("/v1/devices");
+    return response;
+  }
+
+  public async listProjects(): Promise<RemoteProject[]> {
+    const response = await this.request<RemoteProject[]>("/v1/projects");
     return response;
   }
 

@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import type {
   CodexConversation,
   ConversationTimeline,
+  RemoteProject,
   WorkerCapabilities,
   WorkerHealth,
   WorkerProbeSummary,
@@ -122,6 +123,21 @@ export async function listConversations(context: WorkerReadOnlyHandlerContext): 
     const threads = await listAllowedThreads(client, context.config.allowedProjectRoot);
     return threads.map((thread) => projectThreadToConversation(thread, createProjectionContext(context)));
   });
+}
+
+export function listProjects(context: WorkerReadOnlyHandlerContext): RemoteProject[] {
+  return [
+    {
+      id: "local-project",
+      name: basename(context.config.allowedProjectRoot),
+      deviceId: context.config.deviceId,
+      path: "",
+      branch: "unknown",
+      hasChanges: false,
+      pinned: false,
+      expanded: true,
+    },
+  ];
 }
 
 export async function readConversationTimeline(

@@ -10,7 +10,6 @@ import type {
 
 import type { AssistantTimelineTurn, AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline.ts";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
-import { createProjectKey } from "../../domain/sidebar/sidebarModel.ts";
 
 import {
   conversations as mockConversations,
@@ -194,37 +193,6 @@ function createAssistantThreadsFromConversations(
   });
 }
 
-function createProjectsFromConversations(conversations: readonly CodexConversation[]): RemoteProject[] {
-  const seenProjects = new Set<string>();
-
-  return conversations.flatMap((conversation) => {
-    if (!conversation.projectId) {
-      return [];
-    }
-
-    const projectKey = createProjectKey({ deviceId: conversation.deviceId, id: conversation.projectId });
-
-    if (seenProjects.has(projectKey)) {
-      return [];
-    }
-
-    seenProjects.add(projectKey);
-
-    return [
-      {
-        id: conversation.projectId,
-        name: conversation.projectName,
-        deviceId: conversation.deviceId,
-        path: "",
-        branch: "unknown",
-        hasChanges: false,
-        pinned: false,
-        expanded: seenProjects.size === 1,
-      },
-    ];
-  });
-}
-
 function mapSourceReasonFromError(error: unknown): LoadReason {
   if (error instanceof WorkerApiRequestError) {
     if (error.status === 401 || error.envelope.code === "unauthorized") {
@@ -311,6 +279,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
   try {
     const devices = await client.listDevices();
     const conversations = await client.listConversations();
+    const projects = await client.listProjects();
     let tasks: BoardTask[] = [];
     let taskError: unknown = null;
     try {
@@ -346,7 +315,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         source: createSourceFromError(timelineError),
         taskSource: taskError ? { status: "failed" } : { status: "loaded" },
         devices,
-        projects: createProjectsFromConversations(conversations),
+        projects,
         conversations,
         tasks,
         assistantThreads,
@@ -359,7 +328,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         source: createWorkbenchSource("loaded"),
         taskSource: { status: "failed" },
         devices,
-        projects: createProjectsFromConversations(conversations),
+        projects,
         conversations,
         tasks: [],
         assistantThreads,
@@ -371,7 +340,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       source: createWorkbenchSource("loaded"),
       taskSource: { status: "loaded" },
       devices,
-      projects: createProjectsFromConversations(conversations),
+      projects,
       conversations,
       tasks,
       assistantThreads,

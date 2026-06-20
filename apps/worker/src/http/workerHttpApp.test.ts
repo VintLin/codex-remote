@@ -94,6 +94,28 @@ test("worker http app when timeline is requested, should return ConversationTime
   ]);
 });
 
+test("worker http app when projects are requested, should return the safe local project", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+
+  const response = await app.request("/v1/projects", { headers: authHeaders });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, [
+    {
+      id: "local-project",
+      name: context.projectName,
+      deviceId: "device-local",
+      path: "",
+      branch: "unknown",
+      hasChanges: false,
+      pinned: false,
+      expanded: true,
+    },
+  ]);
+});
+
 test("worker http app when route is outside stage 2 allowlist, should not implement behavior", async () => {
   const app = createWorkerHttpApp(await createContext());
 
@@ -354,7 +376,7 @@ test("worker http app when handler fails, should return sanitized ErrorEnvelope"
   }
 });
 
-async function createContext(options: { client?: WorkerControlAppServerClient } = {}): Promise<WorkerControlHandlerContext & { projectId: string }> {
+async function createContext(options: { client?: WorkerControlAppServerClient } = {}): Promise<WorkerControlHandlerContext & { projectId: string; projectName: string }> {
   const allowedProjectRoot = await mkdtemp(join(tmpdir(), "worker-http-app-"));
   const project = join(allowedProjectRoot, "project");
   await mkdir(project);
@@ -379,7 +401,8 @@ async function createContext(options: { client?: WorkerControlAppServerClient } 
     openClient: async () => client,
     approvalRegistry: createWorkerApprovalRegistry(),
     writeState: createWorkerWriteHandlerState(),
-    projectId: allowedProjectRoot.split("/").at(-1) ?? "project",
+    projectId: "local-project",
+    projectName: allowedProjectRoot.split("/").at(-1) ?? "project",
   };
 }
 

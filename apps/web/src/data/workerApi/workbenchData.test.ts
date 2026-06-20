@@ -34,6 +34,19 @@ function createFetchMock(endpointMap: Record<string, Response>): typeof fetch {
   };
 }
 
+function project(id: string, name: string, deviceId: string) {
+  return {
+    id,
+    name,
+    deviceId,
+    path: "",
+    branch: "unknown",
+    hasChanges: false,
+    pinned: false,
+    expanded: true,
+  };
+}
+
 test("workbench datasource when endpoint responses are valid should create snapshot from contract payloads", async () => {
   const responses: Record<string, Response> = {
     "/v1/devices": jsonResponse([
@@ -92,6 +105,7 @@ test("workbench datasource when endpoint responses are valid should create snaps
         approval: "never",
       },
     ]),
+    "/v1/projects": jsonResponse([project("p-live", "project-live", "w1")]),
     "/v1/devices/w1/conversations/conv-live-1/timeline": jsonResponse({
       deviceId: "w1",
       conversationId: "conv-live-1",
@@ -194,6 +208,7 @@ test("workbench datasource when remote conversations are empty should keep remot
         },
       ]),
       "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([]),
       "/v1/tasks": jsonResponse([]),
     }),
   });
@@ -207,6 +222,35 @@ test("workbench datasource when remote conversations are empty should keep remot
   assert.equal(data.assistantThreads.length, 0);
   assert.equal(data.searchRecents.length, 0);
   assert.notDeepEqual(data.conversations, mockConversations);
+});
+
+test("workbench datasource when conversations are empty and projects exist should keep loaded source", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-projects",
+          icon: "laptop",
+          name: "Projects worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "local",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("local-project", "local", "w-projects")]),
+      "/v1/tasks": jsonResponse([]),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.projects.length, 1);
+  assert.equal(data.projects[0]?.id, "local-project");
+  assert.equal(data.conversations.length, 0);
 });
 
 test("workbench datasource when task list fails should keep conversation source loaded and expose task failure", async () => {
@@ -240,6 +284,7 @@ test("workbench datasource when task list fails should keep conversation source 
           approval: "never",
         },
       ]),
+      "/v1/projects": jsonResponse([project("task-failure-project", "task-failure", "w-task-fail")]),
       "/v1/tasks": jsonResponse(
         {
           code: "internal_server_error",
@@ -393,6 +438,7 @@ test("workbench datasource when conversations are projectless should not create 
           approval: "never",
         },
       ]),
+      "/v1/projects": jsonResponse([project("p2", "alpha", "w2")]),
       "/v1/tasks": jsonResponse([]),
       "/v1/devices/w2/conversations/p-less/timeline": jsonResponse({
         deviceId: "w2",
@@ -463,6 +509,7 @@ test("workbench datasource when timeline loads should create metadata-only nodes
           approval: "never",
         },
       ]),
+      "/v1/projects": jsonResponse([project("p-timeline", "timeline", "w3")]),
       "/v1/tasks": jsonResponse([]),
       "/v1/devices/w3/conversations/timeline/timeline": jsonResponse({
         deviceId: "w3",
@@ -588,6 +635,7 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
           approval: "never",
         },
       ]),
+      "/v1/projects": jsonResponse([project("p4", "project-four", "w4"), project("p5", "project-five", "w4")]),
       "/v1/tasks": jsonResponse([]),
       "/v1/devices/w4/conversations/timeline-error/timeline": jsonResponse(
         {
@@ -661,6 +709,9 @@ test("workbench datasource when conversation ids collide across devices, should 
     }
     if (requestUrl.pathname === "/v1/conversations") {
       return jsonResponse(conversations);
+    }
+    if (requestUrl.pathname === "/v1/projects") {
+      return jsonResponse([project("project-a", "A", "device-a"), project("project-b", "B", "device-b")]);
     }
     if (requestUrl.pathname === "/v1/tasks") {
       return jsonResponse([
@@ -768,6 +819,10 @@ test("workbench datasource when project ids collide across devices, should keep 
         { id: "device-b", icon: "laptop", name: "B", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Shared B", model: "Codex" },
       ]),
       "/v1/conversations": jsonResponse(conversations),
+      "/v1/projects": jsonResponse([
+        project("shared-project", "Shared A", "device-a"),
+        project("shared-project", "Shared B", "device-b"),
+      ]),
       "/v1/tasks": jsonResponse([]),
       "/v1/devices/device-a/conversations/conversation-a/timeline": jsonResponse({
         deviceId: "device-a",
@@ -844,6 +899,7 @@ test("workbench datasource search recents should be derived from conversations",
         supportedSourceKinds: ["cli", "vscode", "appServer"],
       }),
       "/v1/conversations": jsonResponse(conversations),
+      "/v1/projects": jsonResponse([project("search-project", "search", "w-search")]),
       "/v1/tasks": jsonResponse([]),
       "/v1/devices/w-search/conversations/search-1/timeline": jsonResponse({
         deviceId: "w-search",
@@ -891,6 +947,7 @@ test("workbench datasource when task API fails should not replace tasks with per
         },
       ]),
       "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("local-project", "tasks", "task-device")]),
       "/v1/tasks": jsonResponse(
         {
           code: "task_store_unavailable",

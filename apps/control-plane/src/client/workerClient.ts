@@ -8,6 +8,7 @@ import type {
   FollowUpInput,
   InterruptTurnInput,
   PendingApproval,
+  RemoteProject,
   StartConversationInput,
   SteerTurnInput,
   WorkerCapabilities,
@@ -20,6 +21,7 @@ import { ControlPlaneHttpError } from "../http/errors.ts";
 export interface WorkerUpstreamClient {
   getHealth(device: ConfiguredWorkerDevice): Promise<WorkerHealth>;
   getCapabilities(device: ConfiguredWorkerDevice): Promise<WorkerCapabilities>;
+  listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
   listApprovals(device: ConfiguredWorkerDevice, conversationId: string): Promise<PendingApproval[]>;
@@ -95,6 +97,7 @@ export function createWorkerUpstreamClient(options: {
   return {
     getHealth: (device) => request<WorkerHealth>(device, "/v1/worker/health", { method: "GET", project: projectWorkerHealth }),
     getCapabilities: (device) => request<WorkerCapabilities>(device, "/v1/worker/capabilities", { method: "GET", project: projectWorkerCapabilities }),
+    listProjects: (device) => request<RemoteProject[]>(device, "/v1/projects", { method: "GET", project: projectProjectList }),
     listConversations: (device) => request<CodexConversation[]>(device, "/v1/conversations", { method: "GET", project: projectConversationList }),
     readTimeline: (device, conversationId) =>
       request<ConversationTimeline>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/timeline`, {
@@ -237,6 +240,25 @@ function projectWorkerCapabilities(value: unknown): WorkerCapabilities {
 
 function projectConversationList(value: unknown): CodexConversation[] {
   return requireArray(value).map(projectConversation);
+}
+
+function projectProjectList(value: unknown): RemoteProject[] {
+  return requireArray(value).map(projectRemoteProject);
+}
+
+function projectRemoteProject(value: unknown): RemoteProject {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "name", "deviceId", "path", "branch", "hasChanges", "pinned", "expanded"]);
+  return {
+    id: readString(body, "id"),
+    name: readString(body, "name"),
+    deviceId: readString(body, "deviceId"),
+    path: readString(body, "path"),
+    branch: readString(body, "branch"),
+    hasChanges: readBoolean(body, "hasChanges"),
+    pinned: readBoolean(body, "pinned"),
+    expanded: readBoolean(body, "expanded"),
+  };
 }
 
 function projectConversation(value: unknown): CodexConversation {

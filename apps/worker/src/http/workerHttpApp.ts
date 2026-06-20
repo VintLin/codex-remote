@@ -15,6 +15,7 @@ import {
   getCapabilities,
   getHealth,
   listConversations,
+  listProjects,
   readConversationTimeline,
   runProbe,
 } from "./readOnlyHandlers.ts";
@@ -78,6 +79,7 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
   app.get("/v1/worker/health", async (c) => c.json(await getHealth(context)));
   app.get("/v1/worker/capabilities", (c) => c.json(getCapabilities(context)));
   app.get("/v1/worker/probe", async (c) => c.json(await runProbe(context)));
+  app.get("/v1/projects", (c) => c.json(listProjects(context)));
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
   app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));
   app.get("/v1/conversations/:conversationId/timeline", async (c) =>

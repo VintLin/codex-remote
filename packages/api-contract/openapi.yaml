@@ -162,6 +162,58 @@ paths:
           $ref: "#/components/responses/ForbiddenError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/projects:
+    get:
+      operationId: listControlPlaneProjects
+      responses:
+        "200":
+          description: Projects visible through the Control Plane.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemoteProject"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects:
+    get:
+      operationId: listControlPlaneDeviceProjects
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Projects for a configured device.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemoteProject"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/devices/{deviceId}/worker/health:
     get:
       operationId: getControlPlaneDeviceWorkerHealth

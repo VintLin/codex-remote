@@ -25,7 +25,7 @@ test("worker write handlers when starting a conversation, should map public inpu
   });
   const context = createContext(paths.allowedRoot, client);
   const input: StartConversationInput = {
-    projectId: basename(paths.allowedRoot),
+    projectId: "local-project",
     message: "Run the focused checks",
     clientRequestId: "client-start-1",
   };
@@ -44,6 +44,25 @@ test("worker write handlers when starting a conversation, should map public inpu
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-started");
   assert.equal(accepted.turnId, "turn-started");
+});
+
+test("worker write handlers when starting with project basename, should reject before app-server write", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeWriteClient({
+    threads: [createThread({ cwd: paths.allowedRoot, id: "thread-started", turns: [] })],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await assert.rejects(
+    startConversation(context, {
+      projectId: basename(paths.allowedRoot),
+      message: "Do not accept basename identity",
+      clientRequestId: "client-start-basename-1",
+    }),
+    (error) => error instanceof WorkerHttpError && error.status === 403 && error.code === "project_forbidden",
+  );
+  assert.equal(client.startThreadCalls.length, 0);
+  assert.equal(client.startTurnCalls.length, 0);
 });
 
 test("worker write handlers when following up, should prove conversation is allowed before turn/start", async () => {
@@ -186,7 +205,7 @@ test("worker write handlers when start idempotency key is repeated, should retur
   });
   const context = createContext(paths.allowedRoot, client);
   const input: StartConversationInput = {
-    projectId: basename(paths.allowedRoot),
+    projectId: "local-project",
     message: "Start once",
     clientRequestId: "client-start-repeat-1",
   };
@@ -208,13 +227,13 @@ test("worker write handlers when start idempotency key has a different fingerpri
   const context = createContext(paths.allowedRoot, client);
 
   await startConversation(context, {
-    projectId: basename(paths.allowedRoot),
+    projectId: "local-project",
     message: "Start first",
     clientRequestId: "client-start-conflict-1",
   });
   await assert.rejects(
     startConversation(context, {
-      projectId: basename(paths.allowedRoot),
+      projectId: "local-project",
       message: "Start changed",
       clientRequestId: "client-start-conflict-1",
     }),
@@ -361,7 +380,7 @@ test("worker write handlers when app-server start fails, should not leak message
 
   await assert.rejects(
     startConversation(context, {
-      projectId: basename(paths.allowedRoot),
+      projectId: "local-project",
       message: privateMessage,
       clientRequestId: "client-start-error-1",
     }),

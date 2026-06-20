@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,6 +12,7 @@ import type {
   ConversationTimeline,
   FollowUpInput,
   InterruptTurnInput,
+  RemoteProject,
   StartConversationInput,
   SteerTurnInput,
   TaskConversationLink,
@@ -37,9 +38,20 @@ const config: ControlPlaneConfig = {
 };
 
 const sharedTaskDatabase = openTaskDatabase(":memory:");
+const remoteProjectProjectorFields = ["id", "name", "deviceId", "path", "branch", "hasChanges", "pinned", "expanded"] as const;
 
 test.after(() => {
   sharedTaskDatabase.close();
+});
+
+test("control plane http app when project fields are projected, should match RemoteProject schema keys", () => {
+  const source = readFileSync(new URL("../../../../packages/api-contract/openapi.yaml", import.meta.url), "utf8");
+  const schema = source.match(/^    RemoteProject:\n(?<body>(?: {6}.+\n| {8}.+\n| {10}.+\n| {12}.+\n)+)/m);
+  assert.ok(schema?.groups?.body);
+
+  const keys = [...schema.groups.body.matchAll(/^        ([A-Za-z][A-Za-z0-9]*):$/gm)].map((match) => match[1]);
+
+  assert.deepEqual(keys, [...remoteProjectProjectorFields]);
 });
 
 test("control plane http app when auth is missing or invalid, should return sanitized 401", async () => {
@@ -301,6 +313,43 @@ test("control plane http app when conversations are listed, should normalize con
   assert.deepEqual(new Set(conversations.map((conversation) => conversation.deviceId)), new Set(["device-a", "device-b"]));
 });
 
+test("control plane http app when projects are listed, should aggregate and normalize configured device ids", async () => {
+  const app = createApp(new FakeWorkerClient({ upstreamDeviceId: "other-device" }));
+
+  const response = await request(app, "/v1/projects");
+
+  assert.equal(response.status, 200);
+  const projects = await response.json() as RemoteProject[];
+  assert.deepEqual(projects.map((project) => ({ id: project.id, deviceId: project.deviceId, path: project.path })), [
+    { id: "local-project", deviceId: "device-a", path: "" },
+    { id: "local-project", deviceId: "device-b", path: "" },
+  ]);
+});
+
+test("control plane http app when device projects are listed, should proxy selected device only", async () => {
+  const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/devices/device-a/projects");
+
+  assert.equal(response.status, 200);
+  const projects = await response.json() as RemoteProject[];
+  assert.deepEqual(projects.map((project) => ({ id: project.id, deviceId: project.deviceId, path: project.path })), [
+    { id: "local-project", deviceId: "device-a", path: "" },
+  ]);
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["listProjects:device-a"]);
+});
+
+test("control plane http app when required project upstream fails, should return error instead of empty list", async () => {
+  const app = createApp(new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) }));
+
+  const response = await request(app, "/v1/projects");
+  const body = await response.text();
+
+  assert.equal(response.status, 424);
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device/);
+});
+
 test("control plane http app when device scoped routes are used, should call selected upstream and normalize identity", async () => {
   const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
   const app = createApp(client);
@@ -512,6 +561,23 @@ class FakeWorkerClient implements WorkerUpstreamClient {
     this.record(device, "listConversations");
     this.throwIfUnavailable(device);
     return [createConversation(this.upstreamDeviceId ?? device.id, `thread-${device.id}`)];
+  }
+
+  async listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]> {
+    this.record(device, "listProjects");
+    this.throwIfUnavailable(device);
+    return [
+      {
+        id: "local-project",
+        name: `Project ${device.id}`,
+        deviceId: this.upstreamDeviceId ?? device.id,
+        path: "",
+        branch: "unknown",
+        hasChanges: false,
+        pinned: false,
+        expanded: true,
+      },
+    ];
   }
 
   async readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline> {

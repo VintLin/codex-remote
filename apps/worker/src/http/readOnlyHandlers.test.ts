@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, symlink } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
@@ -11,12 +11,33 @@ import {
   getCapabilities,
   getHealth,
   listConversations,
+  listProjects,
   readConversationTimeline,
   runProbe,
   type WorkerReadOnlyAppServerClient,
   type WorkerReadOnlyHandlerContext,
 } from "./readOnlyHandlers.ts";
 import type { WorkerHttpConfig } from "./workerHttpConfig.ts";
+
+test("worker read-only handlers when listing projects, should expose the allowed project root as one safe project", async () => {
+  const allowedRoot = await mkdtemp(join(tmpdir(), "codex-remote-project-"));
+  const context = createContext(allowedRoot, new FakeClient());
+
+  const projects = listProjects(context);
+
+  assert.deepEqual(projects, [
+    {
+      id: "local-project",
+      name: basename(allowedRoot),
+      deviceId: "device-local",
+      path: "",
+      branch: "unknown",
+      hasChanges: false,
+      pinned: false,
+      expanded: true,
+    },
+  ]);
+});
 
 test("worker read-only handlers when listing conversations, should pass explicit params and filter by realpath", async () => {
   const paths = await createTempProjectPaths();

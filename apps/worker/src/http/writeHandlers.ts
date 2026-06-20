@@ -1,5 +1,3 @@
-import { basename } from "node:path";
-
 import type {
   CommandAccepted,
   FollowUpInput,
@@ -162,7 +160,7 @@ function validateMessage(message: string): void {
 }
 
 function validateProjectId(context: WorkerWriteHandlerContext, projectId: string): void {
-  if (projectId !== basename(context.config.allowedProjectRoot)) {
+  if (projectId !== "local-project") {
     throw new WorkerHttpError(403, "project_forbidden", "Requested project is outside the allowed root.", {
       operation: "thread/start",
       retryable: false,

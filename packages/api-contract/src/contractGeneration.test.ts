@@ -76,7 +76,9 @@ const stage5WriteControlPaths = [
 const stage6ControlPlanePaths = [
   "/v1/control-plane/health:",
   "/v1/devices:",
+  "/v1/projects:",
   "/v1/conversations:",
+  "/v1/devices/{deviceId}/projects:",
   "/v1/devices/{deviceId}/worker/health:",
   "/v1/devices/{deviceId}/worker/capabilities:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/timeline:",
@@ -480,6 +482,13 @@ test("when public api operations are maintained, every versioned operation shoul
   assert.deepEqual(missingOperationIds, []);
 });
 
+test("contract generation: when product Web needs project discovery, should expose versioned project routes", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  assert.match(source, /^  \/v1\/projects:\n {4}get:\n {6}operationId: listControlPlaneProjects/m);
+  assert.match(source, /^  \/v1\/devices\/\{deviceId\}\/projects:\n {4}get:\n {6}operationId: listControlPlaneDeviceProjects/m);
+});
+
 test("when public object schemas are maintained, component schemas should stay closed", () => {
   const source = readFileSync(openApiPath, "utf8");
   const schemasBlock = extractBlockLines(source, /^  schemas:\s*$/);
@@ -659,7 +668,9 @@ test("when control plane http api is maintained, openapi should define versioned
   const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "get" | "post">([
     ["/v1/control-plane/health:", "get"],
     ["/v1/devices:", "get"],
+    ["/v1/projects:", "get"],
     ["/v1/conversations:", "get"],
+    ["/v1/devices/{deviceId}/projects:", "get"],
     ["/v1/devices/{deviceId}/worker/health:", "get"],
     ["/v1/devices/{deviceId}/worker/capabilities:", "get"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/timeline:", "get"],
@@ -790,7 +801,9 @@ test("when control plane api is maintained, device scoped routes should reuse ex
   const schemaRefsByPath = new Map<(typeof stage6ControlPlanePaths)[number], readonly string[]>([
     ["/v1/control-plane/health:", ["ControlPlaneHealth"]],
     ["/v1/devices:", ["Device"]],
+    ["/v1/projects:", ["RemoteProject"]],
     ["/v1/conversations:", ["CodexConversation"]],
+    ["/v1/devices/{deviceId}/projects:", ["RemoteProject"]],
     ["/v1/devices/{deviceId}/worker/health:", ["WorkerHealth"]],
     ["/v1/devices/{deviceId}/worker/capabilities:", ["WorkerCapabilities"]],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/timeline:", ["ConversationTimeline"]],

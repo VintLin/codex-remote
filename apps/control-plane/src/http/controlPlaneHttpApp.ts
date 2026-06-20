@@ -12,6 +12,7 @@ import type {
   InterruptTurnInput,
   LinkTaskConversationInput,
   StartConversationInput,
+  RemoteProject,
   SteerTurnInput,
   TaskConversationLink,
   TaskStatus,
@@ -113,6 +114,13 @@ export function createControlPlaneHttpApp(params: {
     return c.json(conversations);
   });
 
+  app.get("/v1/projects", async (c) => {
+    const projects = (await Promise.all(
+      params.config.devices.map((device) => readDeviceProjects(params.workerClient, device)),
+    )).flat();
+    return c.json(projects);
+  });
+
   app.get("/v1/tasks", (c) => c.json(runTaskOperation(params.taskRepository, "task/list", (repository) => repository.listTasks())));
 
   app.post("/v1/tasks", async (c) => {
@@ -144,6 +152,11 @@ export function createControlPlaneHttpApp(params: {
   app.get("/v1/devices/:deviceId/worker/capabilities", async (c) => {
     const device = requireDevice(registry, c.req.param("deviceId"));
     return c.json(normalizeWorkerCapabilities(device, await runForDevice(device, "worker/capabilities", () => params.workerClient.getCapabilities(device))));
+  });
+
+  app.get("/v1/devices/:deviceId/projects", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    return c.json(await runForDevice(device, "project/list", () => readDeviceProjects(params.workerClient, device)));
   });
 
   app.post("/v1/devices/:deviceId/conversations", async (c) => {
@@ -233,6 +246,14 @@ async function readDeviceConversations(client: WorkerUpstreamClient, device: Con
   }
 }
 
+async function readDeviceProjects(client: WorkerUpstreamClient, device: ConfiguredWorkerDevice): Promise<RemoteProject[]> {
+  try {
+    return (await client.listProjects(device)).map((project) => normalizeProject(device, project));
+  } catch (error) {
+    throw mapUnknownError(error, "project/list", device.id);
+  }
+}
+
 function requireDevice(registry: ReturnType<typeof createDeviceRegistry>, deviceId: string): ConfiguredWorkerDevice {
   try {
     return registry.require(deviceId);
@@ -259,6 +280,10 @@ function normalizeWorkerCapabilities(device: ConfiguredWorkerDevice, capabilitie
 
 function normalizeConversation(device: ConfiguredWorkerDevice, conversation: CodexConversation): CodexConversation {
   return { ...conversation, deviceId: device.id };
+}
+
+function normalizeProject(device: ConfiguredWorkerDevice, project: RemoteProject): RemoteProject {
+  return { ...project, deviceId: device.id };
 }
 
 function normalizeConversationTimeline(device: ConfiguredWorkerDevice, timeline: ConversationTimeline): ConversationTimeline {
