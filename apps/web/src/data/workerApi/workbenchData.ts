@@ -43,6 +43,9 @@ export interface WorkbenchData {
       | "request_failure";
     error?: SourceErrorEnvelope;
   };
+  taskSource: {
+    status: "failed" | "loaded";
+  };
   devices: Device[];
   projects: RemoteProject[];
   conversations: CodexConversation[];
@@ -69,6 +72,7 @@ export function createFallbackWorkbenchData(
 
   return {
     source: createWorkbenchSource(reason, sourceError),
+    taskSource: { status: "loaded" },
     devices: [...mockDevices],
     projects: [...mockProjects],
     conversations,
@@ -340,6 +344,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     if (timelineError) {
       return {
         source: createSourceFromError(timelineError),
+        taskSource: taskError ? { status: "failed" } : { status: "loaded" },
         devices,
         projects: createProjectsFromConversations(conversations),
         conversations,
@@ -351,7 +356,8 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
 
     if (taskError) {
       return {
-        source: createSourceFromError(taskError),
+        source: createWorkbenchSource("loaded"),
+        taskSource: { status: "failed" },
         devices,
         projects: createProjectsFromConversations(conversations),
         conversations,
@@ -363,6 +369,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
 
     return {
       source: createWorkbenchSource("loaded"),
+      taskSource: { status: "loaded" },
       devices,
       projects: createProjectsFromConversations(conversations),
       conversations,

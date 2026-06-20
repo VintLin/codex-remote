@@ -43,3 +43,16 @@ test("codex remote app when task board is wired, should create tasks and link th
   assert.match(shellSource, /linkTaskConversation\(task\.id, \{ deviceId: conversation\.deviceId, conversationId: conversation\.id \}\)/);
   assert.match(shellSource, /unlinkTaskConversation\(task\.id, link\.deviceId, link\.conversationId\)/);
 });
+
+test("codex remote app when task loading fails, should render task failure separately from empty task success", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+
+  assert.match(shellSource, /taskSource/);
+  assert.match(mainPanelsSource, /taskLoadState/);
+  assert.match(mainPanelsSource, /无法加载任务/);
+  assert.match(mainPanelsSource, /稍后刷新或重试任务操作。/);
+  assert.match(mainPanelsSource, /暂无任务/);
+  assert.match(mainPanelsSource, /taskLoadState === "failed"/);
+  assert.doesNotMatch(mainPanelsSource, /taskSource\.error|taskLoadError|taskError/);
+});

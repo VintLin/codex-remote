@@ -205,6 +205,77 @@ test("workbench datasource when remote conversations are empty should keep remot
   assert.notDeepEqual(data.conversations, mockConversations);
 });
 
+test("workbench datasource when task list fails should keep conversation source loaded and expose task failure", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-task-fail",
+          icon: "laptop",
+          name: "Task failure worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "task-failure",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([
+        {
+          id: "conversation-task-fail",
+          title: "Conversation stays enabled",
+          deviceId: "w-task-fail",
+          projectId: "task-failure-project",
+          projectName: "task-failure",
+          status: "running",
+          updatedAt: "刚刚",
+          summary: "task api failed",
+          sandbox: "workspace-write",
+          approval: "never",
+        },
+      ]),
+      "/v1/tasks": jsonResponse(
+        {
+          code: "internal_server_error",
+          message: "database password=secret and stack trace",
+          details: {
+            token: "abc-SECRET",
+          },
+        },
+        500,
+      ),
+      "/v1/devices/w-task-fail/conversations/conversation-task-fail/timeline": jsonResponse({
+        deviceId: "w-task-fail",
+        conversationId: "conversation-task-fail",
+        projectId: "task-failure-project",
+        readStartedAt: "2026-06-20T00:00:00.000Z",
+        readCompletedAt: "2026-06-20T00:00:01.000Z",
+        snapshotRevision: "r-task-fail",
+        runtimeStatus: "running",
+        latestTurnStatus: "in_progress",
+        turns: [
+          {
+            id: "turn-active",
+            status: "in_progress",
+            startedAt: 1,
+            completedAt: null,
+            durationMs: null,
+          },
+        ],
+      }),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.source.error, undefined);
+  assert.equal(data.conversations[0]?.id, "conversation-task-fail");
+  assert.equal(data.assistantThreads[0]?.loadState, "loaded");
+  assert.equal(data.tasks.length, 0);
+  assert.equal(data.taskSource.status, "failed");
+});
+
 for (const [status, reason] of [
   [401, "unauthorized"],
   [403, "forbidden"],
@@ -808,7 +879,8 @@ test("workbench datasource when task API fails should not replace tasks with per
     }),
   });
 
-  assert.equal(data.source.reason, "request_failure");
-  assert.equal(data.source.error?.code, "task_store_unavailable");
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.source.error, undefined);
+  assert.equal(data.taskSource.status, "failed");
   assert.deepEqual(data.tasks, []);
 });

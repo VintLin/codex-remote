@@ -71,6 +71,7 @@ interface TaskBoardPageProps {
   onLinkSelectedConversation: (task: BoardTask) => Promise<void>;
   onUnlinkConversation: (task: BoardTask, link: TaskConversationLink) => Promise<void>;
   selectedConversation: CodexConversation | null;
+  taskLoadState: WorkbenchData["taskSource"]["status"];
   taskStatus: "failed" | "idle" | "submitting";
   tasks: BoardTask[];
 }
@@ -456,6 +457,7 @@ export function TaskBoardPage({
   onLinkSelectedConversation,
   onUnlinkConversation,
   selectedConversation,
+  taskLoadState,
   taskStatus,
   tasks,
 }: TaskBoardPageProps) {
@@ -512,7 +514,12 @@ export function TaskBoardPage({
           </div>
         </form>
         <section aria-label="Task board" className="device-grid">
-          {tasks.length === 0 ? (
+          {taskLoadState === "failed" ? (
+            <article className="empty-state">
+              <h2>无法加载任务</h2>
+              <p>稍后刷新或重试任务操作。</p>
+            </article>
+          ) : tasks.length === 0 ? (
             <article className="empty-state">
               <h2>暂无任务</h2>
               <p>创建任务后可链接当前对话。</p>

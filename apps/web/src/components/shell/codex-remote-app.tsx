@@ -69,7 +69,7 @@ export function CodexRemoteApp() {
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, tasks, assistantThreads, searchRecents, source } = workbenchData;
+  const { devices, projects, conversations, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
     findConversationByKey(conversations, selectedConversationKey) ??
@@ -448,6 +448,7 @@ export function CodexRemoteApp() {
             onLinkSelectedConversation={linkSelectedConversationToTask}
             onUnlinkConversation={unlinkConversationFromTask}
             selectedConversation={conversation}
+            taskLoadState={taskSource.status}
             taskStatus={taskStatus}
             tasks={tasks}
           />
