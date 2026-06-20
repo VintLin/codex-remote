@@ -1,54 +1,121 @@
-# Task 1 Report: Add Web Datasource Tests
+# Task 1 Report: Contract First Task API
 
-## 本次改动
-- 新增 `apps/web/src/data/workerApi/client.ts`
-  - 新增 `WorkerApiClientConfig` 与 `WorkerApiClientLike`
-  - 提供 `WorkerApiClient` 占位实现（方法抛出 placeholder 错误）
-- 新增 `apps/web/src/data/workerApi/workbenchData.ts`
-  - 新增 `WorkbenchData`/`LoadWorkbenchDataOptions`/`SearchRecent`
-  - 新增 `createFallbackWorkbenchData`
-  - 新增 `loadWorkbenchData`（当前为 task-1 占位返回逻辑）
-- 新增 `apps/web/src/data/workerApi/workbenchData.test.ts`
-  - 覆盖 9 条 `workbench datasource` 场景
-  - 包含成功快照构建、token 缺失回退、401/403/424 回退、项目缺失不建项目、timeline 元数据化、
-    fallback 不复用 rich assistant 线程、searchRecents 来自会话列表
+## Status
 
-## 执行的命令
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "workbench datasource"`
+DONE_WITH_CONCERNS
 
-## 本地结果
-- 总计测试：`19`
-- 通过：`11`
-- 失败：`8`
-- 失败原因：在 Task 1 约定的“占位实现”阶段，`loadWorkbenchData` 与 `WorkerApiClient` 还未实现真实行为（按设计，这些场景应由 Task 2 解决）。
+Concern: the requested code-review dispatch could not be performed as an external subagent review because this session does not expose a subagent dispatch tool. I still performed the requested local review scope below and left an explicit review request for the coordinator/reviewer.
 
-## 主要失败断言（截图要点）
-- 成功路径场景下快照不匹配（仍返回回退 mock）。
-- 401/403/424 分支仍返回 `request_failure`，未按错误码映射 `unauthorized/forbidden/app_server_unavailable`。
-- `projectless` 会话未按投影规则过滤。
-- timeline 节点仍是现网 mock 的富文本/工具节点。
-- fallback 的 timeline 未脱离 `mockData` 的 rich 内容。
-- searchRecents 未与实时加载会话列表对齐。
+## Scope
 
-## 自检与边界说明
-- 范围严格限定为用户要求的 3 个文件。
-- 没有改动 `web` 以外模块/文件。
-- Web 侧现阶段未引入 `@codex-remote/codex-protocol`。
-- 下一步建议：进入 Task 2 实现 `WorkerApiClient` 与 `loadWorkbenchData` 的真正投影逻辑并复测。
+Modified only the Task 1 contract files plus this required report:
 
-## 关注项
-- Task 1 的目标是红/绿切换前的测试护栏；请在 Task 2 中补齐行为后再次执行同一命令，确保上述 8 条场景通过。
+- `packages/api-contract/openapi.yaml`
+- `packages/api-contract/src/index.ts`
+- `packages/api-contract/src/contractGeneration.test.ts`
+- `packages/api-contract/src/generated/openapi.ts`
+- `.superpowers/sdd/task-1-report.md`
 
-## 评审发现修复回填（本次）
-- 变更文件：
-  - `apps/web/src/data/workerApi/client.ts`
-  - `apps/web/src/data/workerApi/workbenchData.ts`
-  - `apps/web/src/data/workerApi/workbenchData.test.ts`
-  - `apps/web/src/data/app-server/mockData.ts`（可选最小改动：`SearchRecent` 类型改为从 workbenchData 共享来源）
-- 执行命令：
-  - `pnpm --filter @codex-remote/web test -- --test-name-pattern "workbench datasource"`
-- 本次测试输出：
-  - 总计测试：`19`
-  - 通过：`12`
-  - 失败：`7`
-- 失败仍为 Task 2 占位行为缺失相关（success、错误码映射、projectless 投影、timeline 投影、实时 search recents 派生），不属于本次修复范围。
+No DB, Control Plane, Web implementation, Worker, or docs outside the required report were changed.
+
+## TDD Evidence
+
+RED:
+
+- Added contract tests first for:
+  - the four Task API operations across versioned `/v1/tasks` routes
+  - absence of unversioned task routes
+  - `BoardTask.linkedConversations` replacing `linkedConversationIds`
+  - public aliases deriving from generated schemas
+- Ran `pnpm --filter @codex-remote/api-contract test`
+- Expected failure observed: 5 failing tests covering missing task write route whitelist entries, missing `/v1/tasks` paths, old `linkedConversationIds`, and missing public aliases.
+
+GREEN:
+
+- Updated `openapi.yaml` as the source of truth.
+- Exported public aliases from `src/index.ts`.
+- Regenerated `src/generated/openapi.ts` with `pnpm --filter @codex-remote/api-contract generate`.
+- Re-ran focused verification successfully.
+
+## Implemented Contract
+
+Schemas produced:
+
+- `BoardTask`
+  - Required: `id`, `title`, `status`, `linkedConversations`
+  - `linkedConversations` is an array of `TaskConversationLink`
+  - `linkedConversationIds` is no longer part of the schema
+- `TaskConversationLink`
+  - Required: `deviceId`, `conversationId`
+- `CreateTaskInput`
+  - Required: `title`
+  - Optional: `status`
+- `LinkTaskConversationInput`
+  - Required: `deviceId`, `conversationId`
+
+Routes produced:
+
+- `GET /v1/tasks`
+- `POST /v1/tasks`
+- `POST /v1/tasks/{taskId}/conversation-links`
+- `DELETE /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}`
+
+Public aliases exported:
+
+- `TaskConversationLink`
+- `CreateTaskInput`
+- `LinkTaskConversationInput`
+
+## Design Decisions
+
+Conclusion: task conversation links are device-scoped objects, not bare conversation IDs.
+
+Reason: Stage 6 introduced multi-device routing; conversation identity is not globally safe without `deviceId`.
+
+Risk: later DB implementation must preserve `(taskId, deviceId, conversationId)` uniqueness rather than relying on conversation ID alone.
+
+Next step: DB/Control Plane/Web implementation tasks should consume these generated aliases instead of redefining parallel DTOs.
+
+Conclusion: task write routes use normal resource semantics: `201` for create/link and `204` for unlink.
+
+Reason: unlike Worker command routes returning `CommandAccepted`, these contract paths describe Control Plane task-board resources and do not execute app-server commands.
+
+Risk: if a later implementation chooses asynchronous task persistence, this response shape would need an intentional contract change.
+
+Next step: reviewers should confirm synchronous resource semantics before downstream implementation starts.
+
+## Review Request
+
+Please review this task specifically for:
+
+- Schema source-of-truth: `openapi.yaml` is the only place defining Task API fields, and aliases/generated types derive from it.
+- Route versioning: all new task routes are under `/v1`; no unversioned task routes exist.
+- Device-scoped conversation links: task links carry both `deviceId` and `conversationId`, and unlink identifies both in the path.
+
+Local review notes:
+
+- `rg` found no production/generated `linkedConversationIds`; it remains only in the negative contract assertion.
+- `git diff --check` passed with no whitespace errors.
+- Diff was limited to the Task 1 contract files and this required report.
+
+## Verification
+
+Focused command required by brief:
+
+```bash
+pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build
+```
+
+Result:
+
+- `@codex-remote/api-contract test`: 22 tests, 22 pass, 0 fail.
+- `@codex-remote/api-contract build`: `check:generated` passed, `tsc --noEmit --pretty false` passed.
+
+Additional checks:
+
+- `pnpm --filter @codex-remote/api-contract generate`
+- `git diff --check`
+
+## Commit
+
+This report is included in the Task 1 commit.

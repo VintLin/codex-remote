@@ -17,8 +17,11 @@ const schemaTypeNames = [
   "RemoteProject",
   "CodexConversation",
   "BoardTask",
+  "TaskConversationLink",
   "DiffLine",
   "ConversationInputItem",
+  "CreateTaskInput",
+  "LinkTaskConversationInput",
   "StartConversationInput",
   "FollowUpInput",
   "InterruptTurnInput",
@@ -90,6 +93,16 @@ const stage6ControlPlaneWritePaths = [
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
+] as const;
+const stage7TaskPaths = [
+  "/v1/tasks:",
+  "/v1/tasks/{taskId}/conversation-links:",
+  "/v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:",
+] as const;
+const stage7TaskWritePathMethodPairs = [
+  "/v1/tasks:post",
+  "/v1/tasks/{taskId}/conversation-links:post",
+  "/v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:delete",
 ] as const;
 const stage4WriteErrorStatuses = {
   "/v1/conversations:": ["400", "401", "403", "408", "409", "424", "500"],
@@ -530,9 +543,12 @@ test("when worker write http api is maintained, openapi should define only versi
     const method = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
     return writeMethods.some((writeMethod) => writeMethod === method);
   });
-  const expectedWritePathMethodPairs = [...stage4WritePaths, ...stage5WriteControlPaths, ...stage6ControlPlaneWritePaths].map(
-    (path) => `${path.slice(0, -1)}:post`,
-  );
+  const expectedWritePathMethodPairs = [
+    ...[...stage4WritePaths, ...stage5WriteControlPaths, ...stage6ControlPlaneWritePaths].map(
+      (path) => `${path.slice(0, -1)}:post`,
+    ),
+    ...stage7TaskWritePathMethodPairs,
+  ];
 
   assert.deepEqual(writePathMethodPairs.sort(), expectedWritePathMethodPairs.sort());
   for (const pathMethodPair of writePathMethodPairs) {
@@ -642,6 +658,53 @@ test("when control plane routes are maintained, no unversioned public control pl
   );
 });
 
+test("when task board api is maintained, openapi should define versioned stage 7 task paths", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  for (const path of stage7TaskPaths) {
+    assert.equal(versionedPathLines.includes(path), true);
+  }
+
+  const expectedMethods = new Map<(typeof stage7TaskPaths)[number], readonly string[]>([
+    ["/v1/tasks:", ["get", "post"]],
+    ["/v1/tasks/{taskId}/conversation-links:", ["post"]],
+    ["/v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:", ["delete"]],
+  ]);
+
+  for (const path of stage7TaskPaths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    assert.equal(pathBlockLines.length > 0, true);
+    const methodNames = extractMethodBlocks(pathBlockLines).map((methodBlock) => methodBlock.method);
+    const expectedMethodNames = expectDefined(expectedMethods.get(path), `${path} should have expected methods`);
+    assert.deepEqual(methodNames.sort(), [...expectedMethodNames].sort());
+  }
+});
+
+test("when task board routes are maintained, no unversioned public task paths should exist", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const taskPathLines = source
+    .split("\n")
+    .filter((line) => /^  \/.+:\s*$/.test(line))
+    .filter((line) => /\/tasks/i.test(line));
+
+  assert.equal(taskPathLines.length > 0, true);
+  assert.deepEqual(
+    taskPathLines.filter((line) => !/^  \/v1\//.test(line)),
+    [],
+  );
+});
+
+test("when task board schemas are maintained, BoardTask should use device scoped conversation links", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const boardTaskBlockLines = expectSchemaDisallowsAdditionalProperties(source, "BoardTask");
+  const boardTaskSource = boardTaskBlockLines.join("\n");
+
+  assert.match(boardTaskSource, /^        linkedConversations:\s*$/m);
+  assert.doesNotMatch(boardTaskSource, /^        linkedConversationIds:\s*$/m);
+  assert.match(boardTaskSource, /#\/components\/schemas\/TaskConversationLink/);
+});
+
 test("when control plane api is maintained, device scoped routes should reuse existing public schemas", () => {
   const source = readFileSync(openApiPath, "utf8");
   const forbiddenParallelSchemas = [
@@ -706,10 +769,19 @@ test("when worker approval schemas are maintained, public approval shape should 
   expectPropertyEnum(approvalDecisionInputBlockLines, "decision", ["accept", "decline", "cancel"]);
 });
 
-test("when worker control and control plane api types are exported, public aliases should derive from generated schemas", () => {
+test("when control plane and task board api types are exported, public aliases should derive from generated schemas", () => {
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
 
-  for (const aliasName of ["InterruptTurnInput", "SteerTurnInput", "PendingApproval", "ApprovalDecisionInput", "ControlPlaneHealth"]) {
+  for (const aliasName of [
+    "InterruptTurnInput",
+    "SteerTurnInput",
+    "PendingApproval",
+    "ApprovalDecisionInput",
+    "ControlPlaneHealth",
+    "TaskConversationLink",
+    "CreateTaskInput",
+    "LinkTaskConversationInput",
+  ]) {
     assert.match(
       publicExportSource,
       new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`),

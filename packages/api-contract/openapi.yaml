@@ -801,6 +801,117 @@ paths:
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/tasks:
+    get:
+      operationId: listTasks
+      responses:
+        "200":
+          description: Task board items visible to the current actor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardTask"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+    post:
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInput"
+      responses:
+        "201":
+          description: Task created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardTask"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/tasks/{taskId}/conversation-links:
+    post:
+      operationId: linkTaskConversation
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkTaskConversationInput"
+      responses:
+        "201":
+          description: Conversation link created for the task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskConversationLink"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:
+    delete:
+      operationId: unlinkTaskConversation
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Conversation link removed from the task.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
   responses:
     BadRequestError:
@@ -1321,18 +1432,52 @@ components:
         - id
         - title
         - status
-        - linkedConversationIds
+        - linkedConversations
       properties:
         id:
           type: string
         title:
           type: string
+          maxLength: 200
         status:
           $ref: "#/components/schemas/TaskStatus"
-        linkedConversationIds:
+        linkedConversations:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/TaskConversationLink"
+    TaskConversationLink:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - conversationId
+      properties:
+        deviceId:
+          type: string
+        conversationId:
+          type: string
+    CreateTaskInput:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+    LinkTaskConversationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - conversationId
+      properties:
+        deviceId:
+          type: string
+        conversationId:
+          type: string
     DiffLine:
       type: object
       additionalProperties: false
