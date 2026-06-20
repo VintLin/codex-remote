@@ -3,13 +3,17 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
+  ApprovalDecisionInput,
   CommandAccepted,
   CodexConversation,
   ConversationTimeline,
   ConversationTimelineTurn,
   ErrorEnvelope,
   FollowUpInput,
+  InterruptTurnInput,
+  PendingApproval,
   StartConversationInput,
+  SteerTurnInput,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -78,14 +82,14 @@ const initialTimelines: Record<string, ConversationTimeline> = {
     readCompletedAt: "2026-06-20T00:02:01.000Z",
     snapshotRevision: "smoke-thread-1:2026-06-20T00:02:01.000Z",
     runtimeStatus: "running",
-    latestTurnStatus: "completed",
+    latestTurnStatus: "unknown",
     turns: [
       {
         id: "smoke-turn-1",
-        status: "completed",
+        status: "in_progress",
         startedAt: 1,
-        completedAt: 2,
-        durationMs: 1_000,
+        completedAt: null,
+        durationMs: null,
       },
     ],
   },
@@ -110,6 +114,20 @@ const initialTimelines: Record<string, ConversationTimeline> = {
   },
 };
 
+const initialApprovals: PendingApproval[] = [
+  {
+    id: "smoke-approval-1",
+    conversationId: "smoke-thread-1",
+    turnId: "smoke-turn-1",
+    itemId: "smoke-item-1",
+    kind: "command_execution",
+    status: "pending",
+    startedAt: "2026-06-20T00:02:01.000Z",
+    summary: "Run smoke command",
+    risk: "medium",
+  },
+];
+
 export interface FakeWorkerSmokeServerOptions {
   host?: string;
   port?: number;
@@ -120,6 +138,7 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
   const token = options.token ?? defaultToken;
   const conversations = cloneConversations(initialConversations);
   const timelines = cloneTimelines(initialTimelines);
+  const approvals = cloneApprovals(initialApprovals);
   let commandSequence = 0;
 
   return createServer((request, response) => {
@@ -143,6 +162,7 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
     if (request.method === "POST") {
       void handleWriteRequest({
         conversations,
+        approvals,
         timelines,
         nextSequence: () => {
           commandSequence += 1;
@@ -175,6 +195,12 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
       return;
     }
 
+    const approvalsConversationId = path.match(/^\/v1\/conversations\/([^/]+)\/approvals$/)?.[1];
+    if (approvalsConversationId) {
+      writeJson(response, 200, approvals.filter((approval) => approval.conversationId === approvalsConversationId));
+      return;
+    }
+
     const timelineConversationId = path.match(/^\/v1\/conversations\/([^/]+)\/timeline$/)?.[1];
     if (timelineConversationId && timelines[timelineConversationId]) {
       writeJson(response, 200, timelines[timelineConversationId]);
@@ -186,6 +212,7 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
 }
 
 async function handleWriteRequest(params: {
+  approvals: PendingApproval[];
   conversations: CodexConversation[];
   timelines: Record<string, ConversationTimeline>;
   nextSequence: () => number;
@@ -224,6 +251,28 @@ async function handleWriteRequest(params: {
     params.conversations.unshift(conversation);
     params.timelines[conversationId] = createStartedTimeline(conversationId, input.projectId, turnId, acceptedAt);
     writeJson(params.response, 202, createAcceptedCommand("start", conversationId, input.clientRequestId, turnId, acceptedAt));
+    return;
+  }
+
+  const interruptMatch = params.path.match(/^\/v1\/conversations\/([^/]+)\/turns\/([^/]+)\/interrupt$/);
+  if (interruptMatch) {
+    await handleInterruptRequest({ ...params, conversationId: interruptMatch[1]!, turnId: interruptMatch[2]! });
+    return;
+  }
+
+  const steerMatch = params.path.match(/^\/v1\/conversations\/([^/]+)\/turns\/([^/]+)\/steer$/);
+  if (steerMatch) {
+    await handleSteerRequest({ ...params, conversationId: steerMatch[1]!, turnId: steerMatch[2]! });
+    return;
+  }
+
+  const approvalDecisionMatch = params.path.match(/^\/v1\/conversations\/([^/]+)\/approvals\/([^/]+)\/decision$/);
+  if (approvalDecisionMatch) {
+    await handleApprovalDecisionRequest({
+      ...params,
+      approvalRequestId: approvalDecisionMatch[2]!,
+      conversationId: approvalDecisionMatch[1]!,
+    });
     return;
   }
 
@@ -277,6 +326,134 @@ async function handleWriteRequest(params: {
   writeJson(params.response, 202, createAcceptedCommand("follow-up", followUpConversationId, input.clientRequestId, turnId, acceptedAt));
 }
 
+async function handleInterruptRequest(params: {
+  conversationId: string;
+  conversations: CodexConversation[];
+  nextSequence: () => number;
+  request: IncomingMessage;
+  response: ServerResponse;
+  timelines: Record<string, ConversationTimeline>;
+  turnId: string;
+}): Promise<void> {
+  const input = await readInterruptInput(params.request);
+  const timeline = params.timelines[params.conversationId];
+  const conversation = params.conversations.find((item) => item.id === params.conversationId);
+  if (!input) {
+    writeError(params.response, 400, "invalid_request", "Request validation failed.");
+    return;
+  }
+
+  if (!timeline || !conversation) {
+    writeError(params.response, 404, "conversation_not_found", "Conversation was not found.");
+    return;
+  }
+
+  if (input.expectedTurnId !== params.turnId) {
+    writeError(params.response, 409, "conflict", "Turn guard did not match.");
+    return;
+  }
+
+  const turn = timeline.turns.find((item) => item.id === params.turnId);
+  if (!turn) {
+    writeError(params.response, 404, "turn_not_found", "Turn was not found.");
+    return;
+  }
+
+  const sequence = params.nextSequence();
+  const acceptedAt = createAcceptedAt(sequence);
+  turn.status = "completed";
+  turn.completedAt = sequence;
+  turn.durationMs = Math.max(0, sequence - (turn.startedAt ?? sequence));
+  timeline.latestTurnStatus = "completed";
+  timeline.runtimeStatus = "idle";
+  timeline.readCompletedAt = acceptedAt;
+  timeline.snapshotRevision = `${params.conversationId}:${acceptedAt}`;
+  conversation.status = "done";
+  conversation.updatedAt = acceptedAt;
+  conversation.summary = "Accepted fake Worker interrupt";
+  writeJson(params.response, 202, createAcceptedCommand("interrupt", params.conversationId, input.clientRequestId, params.turnId, acceptedAt));
+}
+
+async function handleSteerRequest(params: {
+  conversationId: string;
+  conversations: CodexConversation[];
+  nextSequence: () => number;
+  request: IncomingMessage;
+  response: ServerResponse;
+  timelines: Record<string, ConversationTimeline>;
+  turnId: string;
+}): Promise<void> {
+  const input = await readSteerInput(params.request);
+  const timeline = params.timelines[params.conversationId];
+  const conversation = params.conversations.find((item) => item.id === params.conversationId);
+  if (!input) {
+    writeError(params.response, 400, "invalid_request", "Request validation failed.");
+    return;
+  }
+
+  if (!timeline || !conversation) {
+    writeError(params.response, 404, "conversation_not_found", "Conversation was not found.");
+    return;
+  }
+
+  if (input.expectedTurnId !== params.turnId) {
+    writeError(params.response, 409, "conflict", "Turn guard did not match.");
+    return;
+  }
+
+  if (!timeline.turns.some((item) => item.id === params.turnId)) {
+    writeError(params.response, 404, "turn_not_found", "Turn was not found.");
+    return;
+  }
+
+  const sequence = params.nextSequence();
+  const acceptedAt = createAcceptedAt(sequence);
+  timeline.latestTurnStatus = "unknown";
+  timeline.runtimeStatus = "running";
+  timeline.readCompletedAt = acceptedAt;
+  timeline.snapshotRevision = `${params.conversationId}:${acceptedAt}`;
+  conversation.status = "running";
+  conversation.updatedAt = acceptedAt;
+  conversation.summary = "Accepted fake Worker steering";
+  writeJson(params.response, 202, createAcceptedCommand("steer", params.conversationId, input.clientRequestId, params.turnId, acceptedAt));
+}
+
+async function handleApprovalDecisionRequest(params: {
+  approvalRequestId: string;
+  approvals: PendingApproval[];
+  conversationId: string;
+  nextSequence: () => number;
+  request: IncomingMessage;
+  response: ServerResponse;
+}): Promise<void> {
+  const input = await readApprovalDecisionInput(params.request);
+  if (!input) {
+    writeError(params.response, 400, "invalid_request", "Request validation failed.");
+    return;
+  }
+
+  const approvalIndex = params.approvals.findIndex((approval) => approval.id === params.approvalRequestId);
+  const approval = approvalIndex === -1 ? undefined : params.approvals[approvalIndex];
+  if (!approval || approval.conversationId !== params.conversationId) {
+    writeError(params.response, 404, "approval_not_found", "Approval request was not found.");
+    return;
+  }
+
+  if (
+    input.expectedConversationId !== params.conversationId ||
+    input.expectedTurnId !== approval.turnId ||
+    input.expectedApprovalRequestId !== approval.id
+  ) {
+    writeError(params.response, 409, "conflict", "Approval guard did not match.");
+    return;
+  }
+
+  params.approvals.splice(approvalIndex, 1);
+  const sequence = params.nextSequence();
+  const acceptedAt = createAcceptedAt(sequence);
+  writeJson(params.response, 202, createAcceptedCommand(`approval-${input.decision}`, params.conversationId, input.clientRequestId, approval.turnId, acceptedAt));
+}
+
 function createStartedTimeline(
   conversationId: string,
   projectId: string,
@@ -305,7 +482,7 @@ function createStartedTimeline(
 }
 
 function createAcceptedCommand(
-  operation: "follow-up" | "start",
+  operation: "approval-accept" | "approval-cancel" | "approval-decline" | "follow-up" | "interrupt" | "start" | "steer",
   conversationId: string,
   clientRequestId: string,
   turnId: string,
@@ -360,6 +537,64 @@ async function readFollowUpInput(request: IncomingMessage): Promise<FollowUpInpu
   };
 }
 
+async function readInterruptInput(request: IncomingMessage): Promise<InterruptTurnInput | null> {
+  const body = await readJsonObject(request);
+  if (!body || hasUnknownFields(body, ["clientRequestId", "expectedTurnId"])) {
+    return null;
+  }
+
+  const clientRequestId = readRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength);
+  const expectedTurnId = readRequiredStringField(body, "expectedTurnId");
+  if (clientRequestId === null || expectedTurnId === null) {
+    return null;
+  }
+
+  return { clientRequestId, expectedTurnId };
+}
+
+async function readSteerInput(request: IncomingMessage): Promise<SteerTurnInput | null> {
+  const body = await readJsonObject(request);
+  if (!body || hasUnknownFields(body, ["message", "clientRequestId", "expectedTurnId"])) {
+    return null;
+  }
+
+  const message = readRequiredStringField(body, "message", messageMaxLength);
+  const clientRequestId = readRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength);
+  const expectedTurnId = readRequiredStringField(body, "expectedTurnId");
+  if (message === null || clientRequestId === null || expectedTurnId === null) {
+    return null;
+  }
+
+  return { message, clientRequestId, expectedTurnId };
+}
+
+async function readApprovalDecisionInput(request: IncomingMessage): Promise<ApprovalDecisionInput | null> {
+  const body = await readJsonObject(request);
+  if (
+    !body ||
+    hasUnknownFields(body, ["decision", "clientRequestId", "expectedConversationId", "expectedTurnId", "expectedApprovalRequestId"])
+  ) {
+    return null;
+  }
+
+  const decision = body.decision;
+  const clientRequestId = readRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength);
+  const expectedConversationId = readRequiredStringField(body, "expectedConversationId");
+  const expectedTurnId = readRequiredStringField(body, "expectedTurnId");
+  const expectedApprovalRequestId = readRequiredStringField(body, "expectedApprovalRequestId");
+  if (
+    (decision !== "accept" && decision !== "decline" && decision !== "cancel") ||
+    clientRequestId === null ||
+    expectedConversationId === null ||
+    expectedTurnId === null ||
+    expectedApprovalRequestId === null
+  ) {
+    return null;
+  }
+
+  return { decision, clientRequestId, expectedConversationId, expectedTurnId, expectedApprovalRequestId };
+}
+
 async function readJsonObject(request: IncomingMessage): Promise<Record<string, unknown> | null> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
@@ -402,6 +637,10 @@ function readOptionalStringField(body: Record<string, unknown>, field: string): 
   }
 
   return readRequiredStringField(body, field);
+}
+
+function cloneApprovals(source: readonly PendingApproval[]): PendingApproval[] {
+  return source.map((approval) => ({ ...approval }));
 }
 
 function cloneConversations(source: readonly CodexConversation[]): CodexConversation[] {

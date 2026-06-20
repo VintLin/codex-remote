@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { Hono, type Context } from "hono";
-import type { FollowUpInput, StartConversationInput } from "@codex-remote/api-contract";
+import type {
+  ApprovalDecisionInput,
+  FollowUpInput,
+  InterruptTurnInput,
+  StartConversationInput,
+  SteerTurnInput,
+} from "@codex-remote/api-contract";
 
 import { isBearerTokenAuthorized, isOriginAllowed } from "../security/workerSecurity.ts";
 import { toErrorEnvelope, WorkerHttpError } from "./errors.ts";
@@ -15,8 +21,14 @@ import {
 import {
   followUpConversation,
   startConversation,
-  type WorkerWriteHandlerContext,
 } from "./writeHandlers.ts";
+import {
+  decideApproval,
+  interruptTurn,
+  listApprovals,
+  steerTurn,
+  type WorkerControlHandlerContext,
+} from "./controlHandlers.ts";
 
 type WorkerHonoEnv = {
   Variables: {
@@ -30,7 +42,7 @@ const corsAllowMethods = "GET, POST, OPTIONS";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 
-export function createWorkerHttpApp(context: WorkerWriteHandlerContext): Hono<WorkerHonoEnv> {
+export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<WorkerHonoEnv> {
   const app = new Hono<WorkerHonoEnv>();
 
   app.onError((error, c) => {
@@ -74,6 +86,29 @@ export function createWorkerHttpApp(context: WorkerWriteHandlerContext): Hono<Wo
   app.post("/v1/conversations/:conversationId/follow-up", async (c) =>
     c.json(await followUpConversation(context, c.req.param("conversationId"), await readFollowUpInput(c)), 202),
   );
+  app.post("/v1/conversations/:conversationId/turns/:turnId/interrupt", async (c) =>
+    c.json(
+      await interruptTurn(context, c.req.param("conversationId"), c.req.param("turnId"), await readInterruptInput(c)),
+      202,
+    ),
+  );
+  app.post("/v1/conversations/:conversationId/turns/:turnId/steer", async (c) =>
+    c.json(await steerTurn(context, c.req.param("conversationId"), c.req.param("turnId"), await readSteerInput(c)), 202),
+  );
+  app.get("/v1/conversations/:conversationId/approvals", async (c) =>
+    c.json(await listApprovals(context, c.req.param("conversationId"))),
+  );
+  app.post("/v1/conversations/:conversationId/approvals/:approvalRequestId/decision", async (c) =>
+    c.json(
+      await decideApproval(
+        context,
+        c.req.param("conversationId"),
+        c.req.param("approvalRequestId"),
+        await readApprovalDecisionInput(c),
+      ),
+      202,
+    ),
+  );
 
   return app;
 }
@@ -98,6 +133,46 @@ async function readFollowUpInput(c: Context<WorkerHonoEnv>): Promise<FollowUpInp
     message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
     clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
     ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readInterruptInput(c: Context<WorkerHonoEnv>): Promise<InterruptTurnInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["clientRequestId", "expectedTurnId"]);
+
+  return {
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+    expectedTurnId: getRequiredStringField(body, "expectedTurnId"),
+  };
+}
+
+async function readSteerInput(c: Context<WorkerHonoEnv>): Promise<SteerTurnInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["message", "clientRequestId", "expectedTurnId"]);
+
+  return {
+    message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+    expectedTurnId: getRequiredStringField(body, "expectedTurnId"),
+  };
+}
+
+async function readApprovalDecisionInput(c: Context<WorkerHonoEnv>): Promise<ApprovalDecisionInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, [
+    "decision",
+    "clientRequestId",
+    "expectedConversationId",
+    "expectedTurnId",
+    "expectedApprovalRequestId",
+  ]);
+
+  return {
+    decision: getApprovalDecisionField(body, "decision"),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+    expectedConversationId: getRequiredStringField(body, "expectedConversationId"),
+    expectedTurnId: getRequiredStringField(body, "expectedTurnId"),
+    expectedApprovalRequestId: getRequiredStringField(body, "expectedApprovalRequestId"),
   };
 }
 
@@ -143,6 +218,15 @@ function getOptionalStringField(body: Record<string, unknown>, field: string): s
   }
 
   return getRequiredStringField(body, field);
+}
+
+function getApprovalDecisionField(body: Record<string, unknown>, field: string): ApprovalDecisionInput["decision"] {
+  const value = getRequiredStringField(body, field);
+  if (value !== "accept" && value !== "decline" && value !== "cancel") {
+    throwInvalidBody();
+  }
+
+  return value;
 }
 
 function throwInvalidBody(): never {

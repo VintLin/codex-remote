@@ -8,6 +8,7 @@ import {
   type AppServerProcessHandle,
 } from "./appServerProcessService.ts";
 import { connectAppServerRpcClient } from "./appServerRpcClient.ts";
+import type { ServerRequest, v2 } from "@codex-remote/codex-protocol";
 import {
   AppServerReadOnlyProbeClient,
   AppServerWorkerClient,
@@ -18,6 +19,8 @@ export interface OpenReadOnlyAppServerSessionOptions {
   startAppServer: boolean;
   allowedProjectRoot: string;
   connectTimeoutMs?: number;
+  onServerRequest?(request: ServerRequest): void;
+  onServerRequestResolved?(notification: v2.ServerRequestResolvedNotification): void;
   requestTimeoutMs?: number;
   readyzTimeoutMs?: number;
 }
@@ -109,6 +112,8 @@ async function openAppServerSession<TClient extends AppServerReadOnlyProbeClient
     const readyzUrl = appServer?.readyzUrl ?? toReadyzUrl(appServerUrl);
     const rpc = await connectAppServerRpcClient(appServerUrl, {
       ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
+      ...(options.onServerRequest === undefined ? {} : { onServerRequest: options.onServerRequest }),
+      ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
       ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
     });
 

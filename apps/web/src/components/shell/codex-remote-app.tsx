@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
+import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient } from "../../data/workerApi/client";
+import type { PendingApproval } from "@codex-remote/api-contract";
 import {
   createDefaultSidebarSectionState,
   createSidebarModel,
@@ -12,6 +13,12 @@ import {
   toggleSidebarSection,
 } from "../../domain/sidebar/sidebarModel";
 import { submitConversationFollowUp, type FollowUpSubmitStatus } from "./followUpSubmitController";
+import {
+  submitApprovalDecision,
+  submitInterrupt,
+  submitSteer,
+  type ControlSubmitStatus,
+} from "./controlSubmitController";
 import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
 import {
   AutomationDetailPane,
@@ -48,6 +55,8 @@ export function CodexRemoteApp() {
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
   const [followUpStatus, setFollowUpStatus] = useState<FollowUpSubmitStatus>("idle");
+  const [controlStatus, setControlStatus] = useState<ControlSubmitStatus>("idle");
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +80,7 @@ export function CodexRemoteApp() {
     [selectedConversationId, sidebarModel],
   );
   const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(workerToken);
+  const activeTurnId = getActiveTurnId(assistantThread);
 
   const refreshWorkbenchData = useCallback(async (conversationId: string | null) => {
     const nextWorkbenchData = await loadWorkbenchData({
@@ -80,6 +90,23 @@ export function CodexRemoteApp() {
     });
     setWorkbenchData(nextWorkbenchData);
   }, []);
+
+  const refreshApprovals = useCallback(async (conversationId: string | null) => {
+    if (!conversationId || source.reason !== "loaded" || !workerToken) {
+      setPendingApprovals([]);
+      return;
+    }
+
+    try {
+      const approvals = await new WorkerApiClient({
+        baseUrl: workerBaseUrl,
+        token: workerToken,
+      }).listApprovals(conversationId);
+      setPendingApprovals(approvals);
+    } catch {
+      setPendingApprovals([]);
+    }
+  }, [source.reason]);
 
   const submitFollowUp = useCallback(async (message: string) => {
     return submitConversationFollowUp({
@@ -94,6 +121,53 @@ export function CodexRemoteApp() {
       }),
     });
   }, [conversation, refreshWorkbenchData]);
+
+  const workerClient = useMemo(() => new WorkerApiClient({
+    baseUrl: workerBaseUrl,
+    token: workerToken,
+  }), []);
+
+  const submitInterruptControl = useCallback(async () => {
+    await submitInterrupt({
+      conversationId: conversation?.id ?? null,
+      createClientRequestId: () => crypto.randomUUID(),
+      refreshWorkbenchData: async (conversationId) => {
+        await refreshWorkbenchData(conversationId);
+        await refreshApprovals(conversationId);
+      },
+      setStatus: setControlStatus,
+      turnId: activeTurnId,
+      workerClient,
+    });
+  }, [activeTurnId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
+
+  const submitSteerControl = useCallback(async (message: string) => submitSteer({
+    conversationId: conversation?.id ?? null,
+    createClientRequestId: () => crypto.randomUUID(),
+    message,
+    refreshWorkbenchData: async (conversationId) => {
+      await refreshWorkbenchData(conversationId);
+      await refreshApprovals(conversationId);
+    },
+    setStatus: setControlStatus,
+    turnId: activeTurnId,
+    workerClient,
+  }), [activeTurnId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
+
+  const submitApprovalControl = useCallback(async (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => {
+    await submitApprovalDecision({
+      approval,
+      conversationId: conversation?.id ?? null,
+      createClientRequestId: () => crypto.randomUUID(),
+      decision,
+      refreshWorkbenchData: async (conversationId) => {
+        await refreshWorkbenchData(conversationId);
+        await refreshApprovals(conversationId);
+      },
+      setStatus: setControlStatus,
+      workerClient,
+    });
+  }, [conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -112,6 +186,10 @@ export function CodexRemoteApp() {
       shouldIgnore = true;
     };
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    void refreshApprovals(conversation?.id ?? null);
+  }, [conversation?.id, refreshApprovals]);
 
   useEffect(() => {
     if (selectedDeviceId !== "" && !devices.some((deviceItem) => deviceItem.id === selectedDeviceId)) {
@@ -174,6 +252,7 @@ export function CodexRemoteApp() {
   useEffect(() => {
     setSelectedDetailTarget(null);
     setFollowUpStatus("idle");
+    setControlStatus("idle");
   }, [assistantThread?.id, conversation?.id]);
 
   useEffect(() => {
@@ -318,6 +397,8 @@ export function CodexRemoteApp() {
           <ConversationMain
             assistantThread={null}
             canSubmitFollowUp={false}
+            activeTurnId={null}
+            controlStatus={controlStatus}
             conversation={null}
             followUpStatus={followUpStatus}
             isDetailCollapsed={isDetailCollapsed}
@@ -334,7 +415,11 @@ export function CodexRemoteApp() {
               }
             }}
             onSelectAdjacentConversation={selectConversation}
+            onSubmitApprovalDecision={submitApprovalControl}
             onSubmitFollowUp={submitFollowUp}
+            onSubmitInterrupt={submitInterruptControl}
+            onSubmitSteer={submitSteerControl}
+            pendingApprovals={[]}
             previousConversationId={conversationNavigator.previousConversationId}
             source={source}
           />
@@ -357,6 +442,8 @@ export function CodexRemoteApp() {
         <ConversationMain
           assistantThread={assistantThread}
           canSubmitFollowUp={canSubmitFollowUp}
+          activeTurnId={activeTurnId}
+          controlStatus={controlStatus}
           conversation={conversation}
           followUpStatus={followUpStatus}
           isDetailCollapsed={isDetailCollapsed}
@@ -373,7 +460,11 @@ export function CodexRemoteApp() {
             }
           }}
           onSelectAdjacentConversation={selectConversation}
+          onSubmitApprovalDecision={submitApprovalControl}
           onSubmitFollowUp={submitFollowUp}
+          onSubmitInterrupt={submitInterruptControl}
+          onSubmitSteer={submitSteerControl}
+          pendingApprovals={pendingApprovals}
           previousConversationId={conversationNavigator.previousConversationId}
           source={source}
         />
@@ -431,6 +522,21 @@ export function CodexRemoteApp() {
       />
     </>
   );
+}
+
+function getActiveTurnId(thread: AssistantThreadSnapshot | null): string | null {
+  if (!thread) {
+    return null;
+  }
+
+  for (let index = thread.timeline.turns.length - 1; index >= 0; index -= 1) {
+    const turn = thread.timeline.turns[index];
+    if (turn?.status === "in_progress") {
+      return turn.id;
+    }
+  }
+
+  return null;
 }
 
 function getSidebarInteractionSelector(item: { kind: "project" | "conversation"; id: string }): string {

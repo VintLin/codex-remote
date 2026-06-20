@@ -51,8 +51,8 @@ flowchart LR
 | 2. Worker HTTP API Read-only | 把 probe 能力变成 Web 可调用 API | 已完成本地可验证切片 |
 | 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 已完成本地可验证切片 |
 | 4. 写操作主链 | start、follow-up、stream 输出 | 已完成本地可验证切片 |
-| 5. 控制主链 | interrupt、steer、approval request/response | 下一阶段 |
-| 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 未开始 |
+| 5. 控制主链 | interrupt、steer、approval request/response | 已完成本地可验证切片 |
+| 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 下一阶段 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 未开始 |
 | 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 未开始 |
 
@@ -193,22 +193,70 @@ Chrome 验证：
 - 失败路径：输入 `smoke-fail` 后显示 `发送失败`，composer 文本保留，Chrome console 无 error。
 - 泄漏检查：UI 不显示 token、raw Worker URL、prompt echo on success、command output、full diff、stack/cause 或 raw JSON-RPC。
 
-下一步建议进入 Stage 5：控制主链。
+最近完成的 Superpowers spec：
 
-Stage 5 范围建议：
+- `docs/superpowers/specs/2026-06-20-control-main-chain-design.md`
 
-- 先设计 interrupt、steer、approval request/response 的最小 API contract；字段仍以 `packages/api-contract/openapi.yaml` 为唯一事实源。
-- Worker 仍是唯一 app-server 调用者；Web 只能调用 Worker/Control Plane-shaped HTTP API。
-- interrupt/steer 必须要求 `expectedTurnId` 或等价并发 guard；approval response 必须有 pending approval identity、CAS/idempotency 和显式用户决策。
-- 不把 steer 当 follow-up，不把 approval 当普通错误，不自动接受 approval。
-- 不做 Control Plane 多设备、DB、iOS、pairing、reverse WSS、产品化 auth 或任务看板。
-- 控制路径失败必须返回 sanitized `ErrorEnvelope`。
+最近完成的 Superpowers plan：
 
-Stage 5 风险：
+- `docs/superpowers/plans/2026-06-20-control-main-chain.md`
 
-- interrupt/steer 与 follow-up 的 app-server 语义不同，错误合并会导致误操作或状态错乱；spec 必须先验证生成协议类型。
-- approval response 是安全边界，必须避免自动接受、重复提交、过期 approval 或不匹配 turn 被执行。
-- 控制操作更容易泄漏 raw app-server state、command output、stack/cause 或私密路径；日志、UI、测试 fixture 继续保持白名单。
+Stage 5 已完成：
+
+- `packages/api-contract/openapi.yaml` 定义版本化控制接口：interrupt、steer、pending approval list、approval decision；生成类型和 public aliases 从该 schema 派生。
+- `apps/worker` 是唯一 app-server 控制调用和 JSON-RPC approval response 边界，使用生成的 `packages/codex-protocol` 类型映射 `turn/interrupt`、`turn/steer` 和 approval response。
+- Worker control/approval 路径实现 allowed-project proof、`expectedTurnId`/expected approval identity guard、process-local bounded idempotency、same-key different-fingerprint conflict、sanitized `ErrorEnvelope`。
+- Approval registry 只公开 command/file/legacy exec/legacy apply-patch 的 sanitized metadata；permissions approval、command text、cwd、patch、raw JSON-RPC id、raw URL、token、stack/cause 和私密路径不公开。
+- Web 只通过 Worker HTTP client 执行 interrupt、steer、approval decision；成功后显示 accepted 并刷新 timeline/approval snapshot，失败只显示 compact failed 状态。
+- fake Worker smoke server 支持 Stage 5 control endpoints，用于浏览器正常和 fallback 路径验证。
+- 未引入 Control Plane、DB、reverse WSS、durable stream/event log、task board、iOS、pairing、产品化 auth、sandbox override、policy amendment UI 或 permission grant UI。
+- Review 修复项：
+  - approval observer 需要长生命周期 Worker session；已改为 HTTP context 复用 shared app-server session。
+  - approval response 发送失败不能删除 pending approval；已改为 `sendApprovalResponse` 成功后才 `completeApproval`。
+  - unknown approval start time 不能落 Unix epoch；已改为 Worker capture time。
+  - approval list/decision 必须先证明 conversation 在 allowed root 内；已补 `assertConversationAllowed` 和 forbidden 回归测试。
+
+验证：
+
+- `pnpm --filter @codex-remote/api-contract test`
+- `pnpm --filter @codex-remote/api-contract build`
+- `pnpm --filter @codex-remote/worker typecheck`
+- `pnpm --filter @codex-remote/worker test`（143/143）
+- `pnpm --filter @codex-remote/web typecheck`
+- `pnpm --filter @codex-remote/web test`（76/76）
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+Chrome 验证：
+
+- 正常加载：fake Worker 数据显示 `Smoke Worker conversation`、datasource `loaded`、active turn `smoke-turn-1`、pending approval `command_execution · medium · Run smoke command`。
+- Steer：提交后显示 accepted，draft 清空，active turn 保持；UI 不显示 raw Worker URL 或 token。
+- Approval：点击 `accept` 后 pending approval 消失并显示 accepted；UI 不显示 raw Worker URL 或 token。
+- Interrupt：点击前按钮可用；点击后显示 accepted、`turn completed`、`no active turn`，Interrupt/Steer 禁用。
+- Fallback：停止 fake Worker 后刷新，显示 `request_failure`，无 smoke 数据，无 active turn，控制按钮禁用，且不显示 raw Worker URL 或 token。
+
+Stage 5 剩余限制：
+
+- Approval registry 和 idempotency memory 仍是 process-local；Worker restart 会丢 pending approval 和 accepted-command replay memory。
+- Approval UI 仍只显示 sanitized summary/risk/kind，不展示命令、路径、patch 或权限详情。
+
+下一步建议进入 Stage 6：Control Plane 多设备。
+
+Stage 6 范围建议：
+
+- 先写 Control Plane 多设备 spec，明确 Worker 注册、设备身份、路由、状态聚合、反向连接和审计边界。
+- 先写 threat model，再决定 bearer 开发姿态、token rotation、revocation、device-bound token 是否进入本阶段。
+- 默认只做本地多 Worker 可验证主链，不引入 DB 持久任务看板或 iOS UI，除非 Stage 6 spec 明确需要极小状态存储。
+- Web 继续只调用 Control Plane-shaped API；Worker 继续是唯一 app-server 调用者。
+- 不把 WSS send 当任务完成；如实现 reverse connection，必须设计 `msg_id/seq/ack/lease/resume/credit` 和 backpressure。
+
+Stage 6 风险：
+
+- 多设备路由和 auth 容易变成产品化安全系统；必须先收敛为本地可验证 slice，并把生产级 auth 明确标为后续。
+- Control Plane 不能保存 provider/Codex secrets；设备身份、token hash、状态和审计可以保存，秘密留在 Worker 设备侧。
+- 如果过早引入 DB/task board，会稀释多设备主链；Stage 7 才默认 SQLite + Drizzle。
 
 后续阶段默认设计输入：
 

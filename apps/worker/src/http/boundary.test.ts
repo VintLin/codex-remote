@@ -34,9 +34,9 @@ test("worker architecture boundary when public API types are used, should consum
   assert.doesNotMatch(httpSources, /interface\s+ConversationTimeline\b/);
 });
 
-test("worker architecture boundary when stage 4 routes are maintained, should expose only scoped write paths", () => {
+test("worker architecture boundary when stage 5 routes are maintained, should expose only scoped write and control paths", () => {
   const source = readFileSync(join(repoRoot, "apps/worker/src/http/workerHttpApp.ts"), "utf8");
-  const forbiddenRouteTokens = ["approval", "interrupt", "steer", "stream"];
+  const forbiddenRouteTokens = ["stream", "rawJsonRpc"];
   const postRoutes = [...source.matchAll(/app\.post\("([^"]+)"/g)].map((match) => match[1]);
 
   assert.match(source, /\/v1\/worker\/health/);
@@ -46,7 +46,10 @@ test("worker architecture boundary when stage 4 routes are maintained, should ex
   assert.match(source, /\/v1\/conversations\/:conversationId\/timeline/);
   assert.deepEqual(postRoutes.sort(), [
     "/v1/conversations",
+    "/v1/conversations/:conversationId/approvals/:approvalRequestId/decision",
     "/v1/conversations/:conversationId/follow-up",
+    "/v1/conversations/:conversationId/turns/:turnId/interrupt",
+    "/v1/conversations/:conversationId/turns/:turnId/steer",
   ]);
 
   for (const token of forbiddenRouteTokens) {

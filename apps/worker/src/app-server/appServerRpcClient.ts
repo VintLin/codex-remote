@@ -1,6 +1,8 @@
 import type {
   ClientNotification,
   ClientRequest,
+  ServerNotification,
+  ServerRequest,
 } from "@codex-remote/codex-protocol";
 
 import { assertLoopbackWebSocketUrl } from "./appServerProcessService.ts";
@@ -36,7 +38,9 @@ type WorkerAppServerMethod =
   | "thread/list"
   | "thread/read"
   | "thread/start"
-  | "turn/start";
+  | "turn/start"
+  | "turn/interrupt"
+  | "turn/steer";
 type RpcClientErrorKind =
   | "app_server_connection_error"
   | "app_server_connection_timeout"
@@ -45,11 +49,15 @@ type RpcClientErrorKind =
   | "app_server_websocket_unavailable";
 
 interface ConnectAppServerRpcClientOptions {
+  onServerRequest?(request: ServerRequest): void;
+  onServerRequestResolved?(notification: Extract<ServerNotification, { method: "serverRequest/resolved" }>["params"]): void;
   connectTimeoutMs?: number;
   requestTimeoutMs?: number;
 }
 
 interface AppServerRpcClientOptions {
+  onServerRequest?(request: ServerRequest): void;
+  onServerRequestResolved?(notification: Extract<ServerNotification, { method: "serverRequest/resolved" }>["params"]): void;
   requestTimeoutMs?: number;
 }
 
@@ -121,18 +129,28 @@ export async function connectAppServerRpcClient(
 
   return new AppServerRpcClient(
     socket,
-    options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs },
+    {
+      ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
+      ...(options.onServerRequest === undefined ? {} : { onServerRequest: options.onServerRequest }),
+      ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
+    },
   );
 }
 
 export class AppServerRpcClient {
   private nextId = 1;
+  private readonly onServerRequest: ((request: ServerRequest) => void) | undefined;
+  private readonly onServerRequestResolved:
+    | ((notification: Extract<ServerNotification, { method: "serverRequest/resolved" }>["params"]) => void)
+    | undefined;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly requestTimeoutMs: number;
   private readonly socket: SocketLike;
 
   constructor(socket: SocketLike, options: AppServerRpcClientOptions = {}) {
     this.socket = socket;
+    this.onServerRequest = options.onServerRequest;
+    this.onServerRequestResolved = options.onServerRequestResolved;
     this.requestTimeoutMs = options.requestTimeoutMs ?? 5_000;
     this.socket.addEventListener("message", (event) => {
       this.handleMessage(event.data);
@@ -174,6 +192,14 @@ export class AppServerRpcClient {
     }
   }
 
+  sendApprovalResponse(params: { requestId: string | number; result: unknown }): void {
+    try {
+      this.socket.send(JSON.stringify({ id: params.requestId, result: params.result }));
+    } catch {
+      throw createRpcClientError("app_server_connection_error");
+    }
+  }
+
   close(): void {
     this.socket.close();
   }
@@ -185,6 +211,16 @@ export class AppServerRpcClient {
       message = JSON.parse(String(data)) as unknown;
     } catch {
       this.rejectAll(createRpcClientError("app_server_protocol_error"));
+      return;
+    }
+
+    if (isServerRequest(message)) {
+      this.onServerRequest?.(message);
+      return;
+    }
+
+    if (isServerRequestResolvedNotification(message)) {
+      this.onServerRequestResolved?.(message.params);
       return;
     }
 
@@ -244,4 +280,43 @@ function isRpcResponse(value: unknown): value is RpcResponse {
   }
 
   return "id" in value;
+}
+
+function isServerRequest(value: unknown): value is ServerRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (!("id" in value) || !("method" in value) || !("params" in value)) {
+    return false;
+  }
+
+  const method = (value as { method: unknown }).method;
+  return typeof method === "string" && [
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/tool/requestUserInput",
+    "mcpServer/elicitation/request",
+    "item/permissions/requestApproval",
+    "item/tool/call",
+    "account/chatgptAuthTokens/refresh",
+    "attestation/generate",
+    "applyPatchApproval",
+    "execCommandApproval",
+  ].includes(method);
+}
+
+function isServerRequestResolvedNotification(
+  value: unknown,
+): value is Extract<ServerNotification, { method: "serverRequest/resolved" }> {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (!("method" in value) || (value as { method: unknown }).method !== "serverRequest/resolved") {
+    return false;
+  }
+
+  const params = (value as { params?: unknown }).params;
+  return params !== null && typeof params === "object" && "threadId" in params && "requestId" in params;
 }

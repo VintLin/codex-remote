@@ -6,8 +6,10 @@ import test from "node:test";
 
 import type { v2 } from "@codex-remote/codex-protocol";
 
+import { createWorkerApprovalRegistry } from "./approvalRegistry.ts";
+import type { WorkerControlAppServerClient, WorkerControlHandlerContext } from "./controlHandlers.ts";
 import { createWorkerHttpApp } from "./workerHttpApp.ts";
-import { createWorkerWriteHandlerState, type WorkerWriteAppServerClient, type WorkerWriteHandlerContext } from "./writeHandlers.ts";
+import { createWorkerWriteHandlerState } from "./writeHandlers.ts";
 import type { WorkerHttpConfig } from "./workerHttpConfig.ts";
 
 const authHeaders = { authorization: "Bearer example-token" };
@@ -145,6 +147,78 @@ test("worker http app when start is accepted, should return CommandAccepted with
   assert.equal(body.turnId, "turn-started");
 });
 
+test("worker http app when interrupt and steer routes are accepted, should return CommandAccepted with 202", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+
+  const interruptResponse = await app.request("/v1/conversations/thread-123/turns/turn-123/interrupt", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      clientRequestId: "client-http-interrupt-1",
+      expectedTurnId: "turn-123",
+    }),
+  });
+  const steerResponse = await app.request("/v1/conversations/thread-123/turns/turn-123/steer", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: "Adjust active turn",
+      clientRequestId: "client-http-steer-1",
+      expectedTurnId: "turn-123",
+    }),
+  });
+
+  assert.equal(interruptResponse.status, 202);
+  assert.equal((await interruptResponse.json()).turnId, "turn-123");
+  assert.equal(steerResponse.status, 202);
+  assert.equal((await steerResponse.json()).turnId, "turn-123");
+});
+
+test("worker http app when approval routes are used, should list and decide sanitized pending approvals", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+  const pending = context.approvalRegistry.captureServerRequest({
+    id: "jsonrpc-secret",
+    method: "item/commandExecution/requestApproval",
+    params: {
+      threadId: "thread-123",
+      turnId: "turn-123",
+      itemId: "item-command",
+      startedAtMs: 1_718_791_200_000,
+      command: "echo SECRET_TOKEN",
+      cwd: "/Users/vint/private/project",
+      reason: "needs approval",
+    },
+  });
+  assert.ok(pending);
+
+  const listResponse = await app.request("/v1/conversations/thread-123/approvals", { headers: authHeaders });
+  const approvals = await listResponse.json();
+  const serializedApprovals = JSON.stringify(approvals);
+
+  assert.equal(listResponse.status, 200);
+  assert.equal(approvals.length, 1);
+  assert.doesNotMatch(serializedApprovals, /jsonrpc-secret|SECRET_TOKEN|\/Users\/vint\/private/);
+
+  const decisionResponse = await app.request(`/v1/conversations/thread-123/approvals/${pending.id}/decision`, {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      decision: "accept",
+      clientRequestId: "client-http-approval-1",
+      expectedConversationId: "thread-123",
+      expectedTurnId: "turn-123",
+      expectedApprovalRequestId: pending.id,
+    }),
+  });
+  const decisionBody = await decisionResponse.json();
+
+  assert.equal(decisionResponse.status, 202);
+  assert.equal(decisionBody.status, "accepted");
+  assert.equal(decisionBody.turnId, "turn-123");
+});
+
 test("worker http app when write body is invalid, should return 400 without app-server write", async () => {
   const client = new FakeClient();
   const context = await createContext({ client });
@@ -204,6 +278,53 @@ test("worker http app when write body is invalid, should return 400 without app-
   assert.equal(client.startTurnCalls, 0);
 });
 
+test("worker http app when control body is invalid, should return 400 without app-server control", async () => {
+  const client = new FakeClient();
+  const context = await createContext({ client });
+  const app = createWorkerHttpApp(context);
+
+  const extraFieldResponse = await app.request("/v1/conversations/thread-123/turns/turn-123/interrupt", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      clientRequestId: "client-http-interrupt-extra",
+      expectedTurnId: "turn-123",
+      rawJsonRpc: "{}",
+    }),
+  });
+  const overlongIdResponse = await app.request("/v1/conversations/thread-123/turns/turn-123/steer", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: "Adjust",
+      clientRequestId: "x".repeat(129),
+      expectedTurnId: "turn-123",
+    }),
+  });
+  const approvalExtraFieldResponse = await app.request("/v1/conversations/thread-123/approvals/approval-1/decision", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      decision: "accept",
+      clientRequestId: "client-http-approval-extra",
+      expectedConversationId: "thread-123",
+      expectedTurnId: "turn-123",
+      expectedApprovalRequestId: "approval-1",
+      rawJsonRpc: "{}",
+    }),
+  });
+
+  assert.equal(extraFieldResponse.status, 400);
+  assert.equal((await extraFieldResponse.json()).code, "invalid_request");
+  assert.equal(overlongIdResponse.status, 400);
+  assert.equal((await overlongIdResponse.json()).code, "invalid_request");
+  assert.equal(approvalExtraFieldResponse.status, 400);
+  assert.equal((await approvalExtraFieldResponse.json()).code, "invalid_request");
+  assert.equal(client.interruptTurnCalls, 0);
+  assert.equal(client.steerTurnCalls, 0);
+  assert.equal(client.approvalResponses.length, 0);
+});
+
 test("worker http app when handler fails, should return sanitized ErrorEnvelope", async () => {
   const leakMarkers = [
     "ws://127.0.0.1:4321",
@@ -233,7 +354,7 @@ test("worker http app when handler fails, should return sanitized ErrorEnvelope"
   }
 });
 
-async function createContext(options: { client?: WorkerWriteAppServerClient } = {}): Promise<WorkerWriteHandlerContext & { projectId: string }> {
+async function createContext(options: { client?: WorkerControlAppServerClient } = {}): Promise<WorkerControlHandlerContext & { projectId: string }> {
   const allowedProjectRoot = await mkdtemp(join(tmpdir(), "worker-http-app-"));
   const project = join(allowedProjectRoot, "project");
   await mkdir(project);
@@ -256,14 +377,18 @@ async function createContext(options: { client?: WorkerWriteAppServerClient } = 
     } satisfies WorkerHttpConfig,
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,
+    approvalRegistry: createWorkerApprovalRegistry(),
     writeState: createWorkerWriteHandlerState(),
     projectId: allowedProjectRoot.split("/").at(-1) ?? "project",
   };
 }
 
-class FakeClient implements WorkerWriteAppServerClient {
+class FakeClient implements WorkerControlAppServerClient {
   startThreadCalls = 0;
   startTurnCalls = 0;
+  interruptTurnCalls = 0;
+  steerTurnCalls = 0;
+  approvalResponses: Array<{ requestId: string | number; result: unknown }> = [];
   private readonly cwd: string;
   private readonly listError: Error | null;
 
@@ -298,6 +423,20 @@ class FakeClient implements WorkerWriteAppServerClient {
   async startTurn(): Promise<v2.TurnStartResponse> {
     this.startTurnCalls += 1;
     return { turn: createTurn({ id: "turn-started", status: "inProgress" }) };
+  }
+
+  async interruptTurn(): Promise<v2.TurnInterruptResponse> {
+    this.interruptTurnCalls += 1;
+    return {};
+  }
+
+  async steerTurn(): Promise<v2.TurnSteerResponse> {
+    this.steerTurnCalls += 1;
+    return { turnId: "turn-123" };
+  }
+
+  async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {
+    this.approvalResponses.push(params);
   }
 
   close(): void {}

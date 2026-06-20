@@ -161,4 +161,16 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
   async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
     return (await this.rpc.request("turn/start", params)) as v2.TurnStartResponse;
   }
+
+  async interruptTurn(params: v2.TurnInterruptParams): Promise<v2.TurnInterruptResponse> {
+    return (await this.rpc.request("turn/interrupt", params)) as v2.TurnInterruptResponse;
+  }
+
+  async steerTurn(params: v2.TurnSteerParams): Promise<v2.TurnSteerResponse> {
+    return (await this.rpc.request("turn/steer", params)) as v2.TurnSteerResponse;
+  }
+
+  async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {
+    this.rpc.sendApprovalResponse(params);
+  }
 }

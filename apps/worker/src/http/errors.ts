@@ -6,8 +6,12 @@ export type WorkerHttpErrorCode =
   | "origin_forbidden"
   | "project_forbidden"
   | "conversation_not_found"
+  | "turn_not_found"
+  | "approval_not_found"
   | "app_server_timeout"
   | "app_server_unavailable"
+  | "control_not_supported"
+  | "duplicate_request"
   | "worker_config_invalid"
   | "worker_internal_error";
 
@@ -18,6 +22,8 @@ const allowedDetailKeys = new Set([
   "reason",
   "field",
   "limit",
+  "expected",
+  "actualKind",
 ] as const);
 
 const publicMessages: Record<WorkerHttpErrorCode, string> = {
@@ -26,8 +32,12 @@ const publicMessages: Record<WorkerHttpErrorCode, string> = {
   origin_forbidden: "Origin is not allowed.",
   project_forbidden: "Requested project is outside the allowed root.",
   conversation_not_found: "Conversation was not found.",
+  turn_not_found: "Turn was not found.",
+  approval_not_found: "Approval request was not found.",
   app_server_timeout: "App-server request timed out.",
   app_server_unavailable: "Codex app-server is unavailable.",
+  control_not_supported: "Control is not supported yet.",
+  duplicate_request: "Duplicate request conflicts with the original request.",
   worker_config_invalid: "Worker HTTP configuration is invalid.",
   worker_internal_error: "Worker request failed.",
 };
@@ -148,6 +158,18 @@ function sanitizeDetails(details: WorkerHttpErrorDetails | undefined): ErrorEnve
       case "field": {
         if (isSafeIdentifier(value)) {
           sanitized.field = value;
+        }
+        break;
+      }
+      case "expected": {
+        if (isSafeIdentifier(value)) {
+          sanitized.expected = value;
+        }
+        break;
+      }
+      case "actualKind": {
+        if (isSafeIdentifier(value)) {
+          sanitized.actualKind = value;
         }
         break;
       }

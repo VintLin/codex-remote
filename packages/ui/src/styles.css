@@ -1403,6 +1403,64 @@ button.sidebar-list-content {
   padding: 0;
 }
 
+.conversation-control-strip {
+  display: grid;
+  width: min(calc(100% - 40px), 860px);
+  gap: 8px;
+  margin: 16px auto 0;
+  padding: 10px 0;
+  border-bottom: var(--cr-stroke);
+}
+
+.conversation-control-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.conversation-control-row:has(.conversation-control-button:nth-of-type(2)) {
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+}
+
+.conversation-control-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-compact);
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-control-input {
+  min-width: 0;
+  min-height: var(--cr-compact-control-height);
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-bg);
+  color: var(--cr-ink);
+  padding: 0 10px;
+  outline: 0;
+}
+
+.conversation-control-input:focus-visible {
+  border-color: var(--cr-line-hover);
+}
+
+.conversation-control-button {
+  min-height: var(--cr-compact-control-height);
+  padding: 0 10px;
+}
+
+.conversation-control-button:disabled,
+.conversation-control-input:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
 .devices-page {
   grid-template-rows: var(--cr-topbar-height) minmax(0, 1fr);
 }

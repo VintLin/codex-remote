@@ -245,6 +245,167 @@ paths:
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/turns/{turnId}/interrupt:
+    post:
+      operationId: interruptWorkerTurn
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: turnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterruptTurnInput"
+      responses:
+        "202":
+          description: Interrupt command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/turns/{turnId}/steer:
+    post:
+      operationId: steerWorkerTurn
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: turnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SteerTurnInput"
+      responses:
+        "202":
+          description: Steer command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/approvals:
+    get:
+      operationId: listPendingApprovals
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Process-local pending approval snapshot for a conversation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingApproval"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:
+    post:
+      operationId: decidePendingApproval
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: approvalRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalDecisionInput"
+      responses:
+        "202":
+          description: Approval decision command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
   responses:
     BadRequestError:
@@ -809,6 +970,114 @@ components:
           maxLength: 128
         expectedConversationId:
           type: string
+    InterruptTurnInput:
+      type: object
+      additionalProperties: false
+      required:
+        - clientRequestId
+        - expectedTurnId
+      properties:
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expectedTurnId:
+          type: string
+          minLength: 1
+    SteerTurnInput:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - clientRequestId
+        - expectedTurnId
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expectedTurnId:
+          type: string
+          minLength: 1
+    PendingApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - conversationId
+        - turnId
+        - itemId
+        - kind
+        - status
+        - startedAt
+        - summary
+        - risk
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        turnId:
+          type: string
+        itemId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - command_execution
+            - file_change
+            - legacy_exec
+            - legacy_apply_patch
+        status:
+          type: string
+          enum:
+            - pending
+        startedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          maxLength: 200
+        risk:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - unknown
+    ApprovalDecisionInput:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - clientRequestId
+        - expectedConversationId
+        - expectedTurnId
+        - expectedApprovalRequestId
+      properties:
+        decision:
+          type: string
+          enum:
+            - accept
+            - decline
+            - cancel
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expectedConversationId:
+          type: string
+          minLength: 1
+        expectedTurnId:
+          type: string
+          minLength: 1
+        expectedApprovalRequestId:
+          type: string
+          minLength: 1
     CommandAccepted:
       type: object
       additionalProperties: false
@@ -861,5 +1130,9 @@ components:
               type: string
             limit:
               type: number
+            expected:
+              type: string
+            actualKind:
+              type: string
         requestId:
           type: string

@@ -4,7 +4,11 @@ import type {
   ConversationTimeline,
   ErrorEnvelope,
   FollowUpInput,
+  ApprovalDecisionInput,
+  InterruptTurnInput,
+  PendingApproval,
   StartConversationInput,
+  SteerTurnInput,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -22,6 +26,10 @@ export interface WorkerApiClientLike {
   getTimeline(conversationId: string): Promise<ConversationTimeline>;
   startConversation(input: StartConversationInput): Promise<CommandAccepted>;
   followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
+  interruptTurn(conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
+  steerTurn(conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
+  listApprovals(conversationId: string): Promise<PendingApproval[]>;
+  decideApproval(conversationId: string, approvalRequestId: string, input: ApprovalDecisionInput): Promise<CommandAccepted>;
 }
 
 type RequestOptions = {
@@ -37,7 +45,7 @@ type SanitizedErrorEnvelope = {
   requestId?: string;
 };
 
-const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit"]);
+const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind"]);
 const fallbackErrorMessage = "Worker request failed.";
 
 export interface WorkerApiErrorEnvelope extends Error {
@@ -103,6 +111,35 @@ export class WorkerApiClient implements WorkerApiClientLike {
       method: "POST",
     });
     return response;
+  }
+
+  public async interruptTurn(conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/turns/${turnId}/interrupt`, {
+      body: input,
+      method: "POST",
+    });
+  }
+
+  public async steerTurn(conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/turns/${turnId}/steer`, {
+      body: input,
+      method: "POST",
+    });
+  }
+
+  public async listApprovals(conversationId: string): Promise<PendingApproval[]> {
+    return this.request<PendingApproval[]>(`/v1/conversations/${conversationId}/approvals`);
+  }
+
+  public async decideApproval(
+    conversationId: string,
+    approvalRequestId: string,
+    input: ApprovalDecisionInput,
+  ): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/approvals/${approvalRequestId}/decision`, {
+      body: input,
+      method: "POST",
+    });
   }
 
   private async request<TResponse>(path: string, options: RequestOptions = {}): Promise<TResponse> {
@@ -176,6 +213,8 @@ function sanitizeErrorDetails(details: unknown): {
   reason?: string;
   field?: string;
   limit?: number;
+  expected?: string;
+  actualKind?: string;
 } | undefined {
   if (!isRecord(details)) {
     return undefined;
@@ -188,6 +227,8 @@ function sanitizeErrorDetails(details: unknown): {
     reason?: string;
     field?: string;
     limit?: number;
+    expected?: string;
+    actualKind?: string;
   } = {};
 
   for (const [rawKey, rawValue] of Object.entries(details)) {
@@ -201,6 +242,8 @@ function sanitizeErrorDetails(details: unknown): {
       case "diagnosticId":
       case "reason":
       case "field":
+      case "expected":
+      case "actualKind":
         if (typeof rawValue === "string" && rawValue.trim() !== "") {
           sanitized[key] = rawValue;
         }

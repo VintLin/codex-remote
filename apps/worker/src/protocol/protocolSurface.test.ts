@@ -13,6 +13,10 @@ const stage4WriteProtocolMethods = [
   "thread/start",
   "turn/start",
 ] as const satisfies readonly ClientRequest["method"][];
+const stage5ControlProtocolMethods = [
+  "turn/interrupt",
+  "turn/steer",
+] as const satisfies readonly ClientRequest["method"][];
 
 test("when checking read-only protocol methods, generated ClientRequest should expose supported methods", () => {
   assert.deepEqual([...readOnlyProtocolMethods], [
@@ -30,6 +34,13 @@ test("when checking stage 4 write protocol methods, generated ClientRequest shou
   ]);
 });
 
+test("when checking stage 5 control protocol methods, generated ClientRequest should expose supported methods", () => {
+  assert.deepEqual([...stage5ControlProtocolMethods], [
+    "turn/interrupt",
+    "turn/steer",
+  ]);
+});
+
 // @ts-expect-error Current generated protocol does not expose thread/turns/list.
 const missingThreadTurnsList: ClientRequest["method"] = "thread/turns/list";
 
@@ -38,17 +49,17 @@ void missingThreadTurnsList;
 type ReadOnlyRequestMethod = Parameters<import("../app-server/appServerRpcClient.ts").AppServerRpcClient["request"]>[0];
 
 const stage4RuntimeMethod: ReadOnlyRequestMethod = "turn/start";
+const stage5InterruptRuntimeMethod: ReadOnlyRequestMethod = "turn/interrupt";
+const stage5SteerRuntimeMethod: ReadOnlyRequestMethod = "turn/steer";
 
 void stage4RuntimeMethod;
-
-// @ts-expect-error AppServerRpcClient request surface does not expose steer in Stage 4.
-const invalidRuntimeMethod: ReadOnlyRequestMethod = "turn/steer";
-
-void invalidRuntimeMethod;
+void stage5InterruptRuntimeMethod;
+void stage5SteerRuntimeMethod;
 
 type ReadOnlyHandlerClient = import("../http/readOnlyHandlers.ts").WorkerReadOnlyAppServerClient;
 type ReadOnlySessionClient = import("../app-server/readOnlyAppServerSession.ts").ReadOnlyAppServerSession["client"];
 type WriteHandlerClient = import("../http/writeHandlers.ts").WorkerWriteAppServerClient;
+type ControlHandlerClient = import("../http/controlHandlers.ts").WorkerControlAppServerClient;
 
 // @ts-expect-error Read-only handler client must not expose thread/start.
 type ReadOnlyHandlerStartThread = ReadOnlyHandlerClient["startThread"];
@@ -67,3 +78,20 @@ type WriteHandlerStartTurn = WriteHandlerClient["startTurn"];
 
 void (undefined as unknown as WriteHandlerStartThread);
 void (undefined as unknown as WriteHandlerStartTurn);
+
+// @ts-expect-error Write handler client must not expose turn/interrupt.
+type WriteHandlerInterruptTurn = WriteHandlerClient["interruptTurn"];
+
+// @ts-expect-error Write handler client must not expose turn/steer.
+type WriteHandlerSteerTurn = WriteHandlerClient["steerTurn"];
+
+// @ts-expect-error Read-only handler client must not expose approval responses.
+type ReadOnlyHandlerSendApprovalResponse = ReadOnlyHandlerClient["sendApprovalResponse"];
+
+type ControlHandlerInterruptTurn = ControlHandlerClient["interruptTurn"];
+type ControlHandlerSteerTurn = ControlHandlerClient["steerTurn"];
+type ControlHandlerSendApprovalResponse = ControlHandlerClient["sendApprovalResponse"];
+
+void (undefined as unknown as ControlHandlerInterruptTurn);
+void (undefined as unknown as ControlHandlerSteerTurn);
+void (undefined as unknown as ControlHandlerSendApprovalResponse);

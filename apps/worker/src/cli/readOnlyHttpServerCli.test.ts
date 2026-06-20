@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
+import type { AppServerWorkerClient } from "../probe/appServerReadOnlyProbeClient.ts";
 import { startReadOnlyHttpServer } from "./readOnlyHttpServerCli.ts";
 
 test("read-only http server cli when config is invalid, should fail without binding", async () => {
@@ -55,6 +56,53 @@ test("read-only http server cli when config is valid, should bind loopback and p
   assert.doesNotMatch(writes.stdoutText(), new RegExp(token));
   assert.doesNotMatch(writes.stdoutText(), /ws:\/\/127\.0\.0\.1:4321/);
   assert.equal(writes.stderrText(), "");
+});
+
+test("read-only http server cli should keep one Worker session open for approval observers", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
+  const writes = createWritable();
+  const captured: { fetch?: (request: Request) => Promise<Response> | Response } = {};
+  let openCount = 0;
+  let closeCount = 0;
+
+  const exitCode = await startReadOnlyHttpServer({
+    env: {
+      CODEX_REMOTE_WORKER_TOKEN: "example-token",
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: projectRoot,
+      CODEX_REMOTE_ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+      CODEX_APP_SERVER_URL: "ws://127.0.0.1:4321",
+    },
+    stdout: writes.stdout,
+    stderr: writes.stderr,
+    openWorkerSession: async () => {
+      openCount += 1;
+      return {
+        client: createFakeWorkerClient(),
+        startedByWorker: false,
+        close: () => {
+          closeCount += 1;
+        },
+      };
+    },
+    serveHttp: (options) => {
+      captured.fetch = (request) => options.fetch(request, undefined as never) as Promise<Response> | Response;
+      return undefined as never;
+    },
+  });
+  assert.equal(exitCode, 0);
+  if (!captured.fetch) {
+    throw new Error("fetch app was not captured");
+  }
+
+  for (let i = 0; i < 2; i += 1) {
+    const response: Response = await captured.fetch(new Request("http://127.0.0.1:8787/v1/worker/health", {
+      headers: { authorization: "Bearer example-token" },
+    }));
+    assert.equal(response.status, 200);
+  }
+
+  assert.equal(openCount, 1);
+  assert.equal(closeCount, 0);
 });
 
 test("read-only http server cli when server binding fails, should print sanitized internal error", async () => {
@@ -109,4 +157,28 @@ function createWritable(): {
     stdoutText: () => stdoutChunks.join(""),
     stderrText: () => stderrChunks.join(""),
   };
+}
+
+function createFakeWorkerClient(): AppServerWorkerClient {
+  return {
+    readyz: async () => {},
+    initialize: async () => {},
+    initialized: async () => {},
+    listThreads: async () => [],
+    listThreadsWithParams: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
+    readFirstAllowedThread: async () => ({}),
+    readThread: async () => {
+      throw new Error("unexpected_read_thread");
+    },
+    startThread: async () => {
+      throw new Error("unexpected_start_thread");
+    },
+    startTurn: async () => {
+      throw new Error("unexpected_start_turn");
+    },
+    interruptTurn: async () => ({}),
+    steerTurn: async () => ({ turnId: "turn-1" }),
+    sendApprovalResponse: async () => {},
+    close: () => {},
+  } as unknown as AppServerWorkerClient;
 }

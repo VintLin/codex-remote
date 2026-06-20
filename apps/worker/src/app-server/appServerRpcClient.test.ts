@@ -122,6 +122,99 @@ test("when sending stage 4 write requests, should serialize generated app-server
   assert.deepEqual(await turnStart, { turn: { id: "turn-1" } });
 });
 
+test("when sending stage 5 control requests, should serialize generated app-server methods", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket);
+
+  const interrupt = client.request("turn/interrupt", {
+    threadId: "thread-1",
+    turnId: "turn-1",
+  });
+  assert.match(socket.sent[0] ?? "", /"method":"turn\/interrupt"/);
+  assert.match(socket.sent[0] ?? "", /"threadId":"thread-1"/);
+  assert.match(socket.sent[0] ?? "", /"turnId":"turn-1"/);
+  socket.receive(JSON.stringify({ id: 1, result: {} }));
+  assert.deepEqual(await interrupt, {});
+
+  const steer = client.request("turn/steer", {
+    threadId: "thread-1",
+    clientUserMessageId: "client-message-1",
+    expectedTurnId: "turn-1",
+    input: [{ type: "text", text: "Adjust the active turn", text_elements: [] }],
+  });
+  assert.match(socket.sent[1] ?? "", /"method":"turn\/steer"/);
+  assert.match(socket.sent[1] ?? "", /"expectedTurnId":"turn-1"/);
+  assert.match(socket.sent[1] ?? "", /"clientUserMessageId":"client-message-1"/);
+  socket.receive(JSON.stringify({ id: 2, result: { turnId: "turn-1" } }));
+  assert.deepEqual(await steer, { turnId: "turn-1" });
+});
+
+test("when sending approval responses, should serialize a JSON-RPC result for the original server request id", () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket);
+
+  client.sendApprovalResponse({
+    requestId: "server-request-1",
+    result: { decision: "accept" },
+  });
+
+  assert.deepEqual(JSON.parse(socket.sent[0] ?? "{}"), {
+    id: "server-request-1",
+    result: { decision: "accept" },
+  });
+});
+
+test("when receiving server requests and resolved notifications, should notify typed observers without resolving client requests", () => {
+  const socket = new FakeSocket();
+  const serverRequests: unknown[] = [];
+  const resolvedNotifications: unknown[] = [];
+  new AppServerRpcClient(socket, {
+    onServerRequest: (request) => {
+      serverRequests.push(request);
+    },
+    onServerRequestResolved: (notification) => {
+      resolvedNotifications.push(notification);
+    },
+  });
+
+  socket.receive(JSON.stringify({
+    id: "server-request-1",
+    method: "item/commandExecution/requestApproval",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "item-command",
+      startedAtMs: 1_718_791_200_000,
+    },
+  }));
+  socket.receive(JSON.stringify({
+    method: "serverRequest/resolved",
+    params: {
+      threadId: "thread-1",
+      requestId: "server-request-1",
+    },
+  }));
+
+  assert.deepEqual(serverRequests, [
+    {
+      id: "server-request-1",
+      method: "item/commandExecution/requestApproval",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-command",
+        startedAtMs: 1_718_791_200_000,
+      },
+    },
+  ]);
+  assert.deepEqual(resolvedNotifications, [
+    {
+      threadId: "thread-1",
+      requestId: "server-request-1",
+    },
+  ]);
+});
+
 test("when socket responds synchronously during send, should still resolve the request", async () => {
   const socket = new SyncResponseSocket();
   const client = new AppServerRpcClient(socket);

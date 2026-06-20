@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
-import type { CodexConversation, Device, DeviceConnectionStatus, TaskStatus } from "@codex-remote/api-contract";
+import type { CodexConversation, Device, DeviceConnectionStatus, PendingApproval, TaskStatus } from "@codex-remote/api-contract";
 import type { SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
@@ -15,6 +17,7 @@ interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
   canSubmitFollowUp: boolean;
   conversation: CodexConversation | null;
+  controlStatus: "accepted" | "failed" | "idle" | "submitting";
   followUpStatus: "accepted" | "failed" | "idle" | "submitting";
   isDetailCollapsed: boolean;
   isMobile?: boolean;
@@ -22,12 +25,17 @@ interface ConversationMainProps {
   onBack?: () => void;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
   onSelectAdjacentConversation: (conversationId: string) => void;
+  onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   onSubmitFollowUp: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
+  onSubmitInterrupt: () => Promise<void>;
+  onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   previousConversationId: string | null;
   nextConversationId: string | null;
+  pendingApprovals: PendingApproval[];
   source: WorkbenchData["source"];
+  activeTurnId: string | null;
 }
 
 interface DevicesPageProps {
@@ -55,6 +63,7 @@ export function ConversationMain({
   assistantThread,
   canSubmitFollowUp,
   conversation,
+  controlStatus,
   followUpStatus,
   isDetailCollapsed,
   isMobile = false,
@@ -65,9 +74,14 @@ export function ConversationMain({
   onExpandSidebar,
   onOpenDetail,
   onSelectAdjacentConversation,
+  onSubmitApprovalDecision,
   onSubmitFollowUp,
+  onSubmitInterrupt,
+  onSubmitSteer,
   previousConversationId,
+  pendingApprovals,
   source,
+  activeTurnId,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? "对话" : conversation.title;
   const datasourceStatus: string[] = [source.reason];
@@ -137,6 +151,15 @@ export function ConversationMain({
       </header>
 
       <div className="content-scroll conversation-content-scroll">
+        <ConversationControlStrip
+          activeTurnId={activeTurnId}
+          canControl={canSubmitFollowUp}
+          controlStatus={controlStatus}
+          onSubmitApprovalDecision={onSubmitApprovalDecision}
+          onSubmitInterrupt={onSubmitInterrupt}
+          onSubmitSteer={onSubmitSteer}
+          pendingApprovals={pendingApprovals}
+        />
         <CodexAssistantThread
           canSubmitFollowUp={canSubmitFollowUp}
           followUpStatus={followUpStatus}
@@ -146,6 +169,84 @@ export function ConversationMain({
         />
       </div>
     </main>
+  );
+}
+
+function ConversationControlStrip({
+  activeTurnId,
+  canControl,
+  controlStatus,
+  onSubmitApprovalDecision,
+  onSubmitInterrupt,
+  onSubmitSteer,
+  pendingApprovals,
+}: {
+  activeTurnId: string | null;
+  canControl: boolean;
+  controlStatus: "accepted" | "failed" | "idle" | "submitting";
+  onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
+  onSubmitInterrupt: () => Promise<void>;
+  onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
+  pendingApprovals: PendingApproval[];
+}) {
+  const [steerDraft, setSteerDraft] = useState("");
+  const disabled = !canControl || !activeTurnId || controlStatus === "submitting";
+
+  return (
+    <section aria-label="Conversation control" className="conversation-control-strip">
+      <div className="conversation-control-row">
+        <span className="conversation-control-meta">
+          {activeTurnId ? `turn ${activeTurnId}` : "no active turn"} · {controlStatus}
+        </span>
+        <button className="button secondary conversation-control-button" disabled={disabled} onClick={onSubmitInterrupt} type="button">
+          Interrupt
+        </button>
+      </div>
+      <form
+        className="conversation-control-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const draft = steerDraft.trim();
+          if (!draft || disabled) {
+            return;
+          }
+          void (async () => {
+            if (await onSubmitSteer(draft) === "accepted") {
+              setSteerDraft("");
+            }
+          })();
+        }}
+      >
+        <input
+          aria-label="Steer active turn"
+          className="conversation-control-input"
+          disabled={disabled}
+          onChange={(event) => setSteerDraft(event.target.value)}
+          value={steerDraft}
+        />
+        <button className="button secondary conversation-control-button" disabled={disabled || !steerDraft.trim()} type="submit">
+          Steer
+        </button>
+      </form>
+      {pendingApprovals.map((approval) => (
+        <div className="conversation-control-row" key={approval.id}>
+          <span className="conversation-control-meta">
+            {approval.kind} · {approval.risk} · {approval.summary}
+          </span>
+          {(["accept", "decline", "cancel"] as const).map((decision) => (
+            <button
+              className="button secondary conversation-control-button"
+              disabled={!canControl || controlStatus === "submitting"}
+              key={decision}
+              onClick={() => void onSubmitApprovalDecision(approval, decision)}
+              type="button"
+            >
+              {decision}
+            </button>
+          ))}
+        </div>
+      ))}
+    </section>
   );
 }
 

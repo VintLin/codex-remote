@@ -21,6 +21,10 @@ const schemaTypeNames = [
   "ConversationInputItem",
   "StartConversationInput",
   "FollowUpInput",
+  "InterruptTurnInput",
+  "SteerTurnInput",
+  "PendingApproval",
+  "ApprovalDecisionInput",
   "CommandAccepted",
   "ErrorEnvelope",
   "AppServerTransport",
@@ -54,11 +58,56 @@ const stage2ErrorStatuses = ["400", "401", "403", "408", "424", "500"] as const;
 const stage2DisallowedMethods = ["post", "put", "patch", "delete", "head", "options", "trace"];
 const stage2DisallowedOperationIds = ["approval", "stream", "interrupt", "steer", "followUpConversation"];
 const stage4WritePaths = ["/v1/conversations:", "/v1/conversations/{conversationId}/follow-up:"] as const;
+const stage5ControlPaths = [
+  "/v1/conversations/{conversationId}/turns/{turnId}/interrupt:",
+  "/v1/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/conversations/{conversationId}/approvals:",
+  "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
+] as const;
+const stage5WriteControlPaths = [
+  "/v1/conversations/{conversationId}/turns/{turnId}/interrupt:",
+  "/v1/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
+] as const;
 const stage4WriteErrorStatuses = {
   "/v1/conversations:": ["400", "401", "403", "408", "409", "424", "500"],
   "/v1/conversations/{conversationId}/follow-up:": ["400", "401", "403", "404", "408", "409", "424", "500"],
 } as const satisfies Record<(typeof stage4WritePaths)[number], readonly string[]>;
+const stage5ControlErrorStatuses = {
+  "/v1/conversations/{conversationId}/turns/{turnId}/interrupt:": [
+    "400",
+    "401",
+    "403",
+    "404",
+    "408",
+    "409",
+    "424",
+    "500",
+  ],
+  "/v1/conversations/{conversationId}/turns/{turnId}/steer:": [
+    "400",
+    "401",
+    "403",
+    "404",
+    "408",
+    "409",
+    "424",
+    "500",
+  ],
+  "/v1/conversations/{conversationId}/approvals:": ["400", "401", "403", "404", "408", "424", "500"],
+  "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:": [
+    "400",
+    "401",
+    "403",
+    "404",
+    "408",
+    "409",
+    "424",
+    "500",
+  ],
+} as const satisfies Record<(typeof stage5ControlPaths)[number], readonly string[]>;
 const writeMethods = ["post", "put", "patch", "delete"] as const;
+const controlRequestSchemas = ["InterruptTurnInput", "SteerTurnInput", "ApprovalDecisionInput"] as const;
 
 function indentOf(line: string): number {
   return line.match(/^\s*/)?.[0].length ?? 0;
@@ -102,6 +151,41 @@ function extractBlockLines(source: string, startLinePattern: RegExp): string[] {
 
 function extractPathBlock(source: string, pathLine: string): string[] {
   return extractBlockLines(source, new RegExp(`^  ${escapeRegExp(pathLine)}$`));
+}
+
+function extractSchemaBlock(source: string, schemaName: string): string[] {
+  return extractBlockLines(source, new RegExp(`^    ${escapeRegExp(schemaName)}:$`));
+}
+
+function extractPropertyBlock(schemaBlockLines: string[], propertyName: string): string[] {
+  return extractBlockLines(schemaBlockLines.join("\n"), new RegExp(`^        ${escapeRegExp(propertyName)}:$`));
+}
+
+function extractEnumValues(propertyBlockLines: string[]): string[] {
+  const enumBlockLines = extractBlockLines(propertyBlockLines.join("\n"), /^          enum:\s*$/);
+  return enumBlockLines.flatMap((line) => {
+    const enumValueMatch = line.match(/^            - (.+)$/);
+    return enumValueMatch ? [expectCapturedGroup(enumValueMatch, "enum value should exist")] : [];
+  });
+}
+
+function expectSchemaDisallowsAdditionalProperties(source: string, schemaName: string): string[] {
+  const schemaBlockLines = extractSchemaBlock(source, schemaName);
+  assert.equal(schemaBlockLines.length > 0, true, `${schemaName} should exist`);
+  assert.match(schemaBlockLines.join("\n"), /^      additionalProperties:\s*false$/m);
+  return schemaBlockLines;
+}
+
+function expectPropertyMaxLength(schemaBlockLines: string[], propertyName: string, maxLength: number): void {
+  const propertyBlockLines = extractPropertyBlock(schemaBlockLines, propertyName);
+  assert.equal(propertyBlockLines.length > 0, true, `${propertyName} should exist`);
+  assert.match(propertyBlockLines.join("\n"), new RegExp(`^          maxLength:\\s*${maxLength}$`, "m"));
+}
+
+function expectPropertyEnum(schemaBlockLines: string[], propertyName: string, expectedValues: readonly string[]): void {
+  const propertyBlockLines = extractPropertyBlock(schemaBlockLines, propertyName);
+  assert.equal(propertyBlockLines.length > 0, true, `${propertyName} should exist`);
+  assert.deepEqual(new Set(extractEnumValues(propertyBlockLines)), new Set(expectedValues));
 }
 
 type MethodBlock = { method: string; lines: string[] };
@@ -418,13 +502,15 @@ test("when worker read-only http api is maintained, openapi should define versio
   }
 });
 
-test("when worker write http api is maintained, openapi should define only versioned stage 4 write paths", () => {
+test("when worker write http api is maintained, openapi should define only versioned write paths", () => {
   const source = readFileSync(openApiPath, "utf8");
   const writePathMethodPairs = extractPathMethodPairs(source).filter((pathMethodPair) => {
     const method = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
     return writeMethods.some((writeMethod) => writeMethod === method);
   });
-  const expectedWritePathMethodPairs = stage4WritePaths.map((path) => `${path.slice(0, -1)}:post`);
+  const expectedWritePathMethodPairs = [...stage4WritePaths, ...stage5WriteControlPaths].map(
+    (path) => `${path.slice(0, -1)}:post`,
+  );
 
   assert.deepEqual(writePathMethodPairs.sort(), expectedWritePathMethodPairs.sort());
   for (const pathMethodPair of writePathMethodPairs) {
@@ -452,6 +538,82 @@ test("when worker write http api is maintained, openapi should define only versi
   assert.match(followUpMethodSource, /#\/components\/schemas\/CommandAccepted/);
 });
 
+test("when worker control http api is maintained, openapi should define versioned stage 5 control paths", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  for (const path of stage5ControlPaths) {
+    assert.equal(versionedPathLines.includes(path), true);
+  }
+
+  const expectedMethods = new Map<(typeof stage5ControlPaths)[number], "get" | "post">([
+    ["/v1/conversations/{conversationId}/turns/{turnId}/interrupt:", "post"],
+    ["/v1/conversations/{conversationId}/turns/{turnId}/steer:", "post"],
+    ["/v1/conversations/{conversationId}/approvals:", "get"],
+    ["/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", "post"],
+  ]);
+
+  for (const path of stage5ControlPaths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    assert.equal(pathBlockLines.length > 0, true);
+    const methodNames = extractMethodBlocks(pathBlockLines).map((methodBlock) => methodBlock.method);
+    assert.deepEqual(methodNames, [expectDefined(expectedMethods.get(path), `${path} should have an expected method`)]);
+  }
+});
+
+test("when worker control routes are maintained, no unversioned public control paths should exist", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const controlPathLines = source
+    .split("\n")
+    .filter((line) => /^  \/.+:\s*$/.test(line))
+    .filter((line) => /approval|interrupt|steer/i.test(line));
+
+  assert.equal(controlPathLines.length > 0, true);
+  assert.deepEqual(
+    controlPathLines.filter((line) => !/^  \/v1\//.test(line)),
+    [],
+  );
+});
+
+test("when worker control schemas are maintained, request limits should stay explicit", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of controlRequestSchemas) {
+    const schemaBlockLines = expectSchemaDisallowsAdditionalProperties(source, schemaName);
+    expectPropertyMaxLength(schemaBlockLines, "clientRequestId", 128);
+  }
+
+  const steerInputBlockLines = extractSchemaBlock(source, "SteerTurnInput");
+  expectPropertyMaxLength(steerInputBlockLines, "message", 20000);
+});
+
+test("when worker approval schemas are maintained, public approval shape should stay narrowed", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const pendingApprovalBlockLines = expectSchemaDisallowsAdditionalProperties(source, "PendingApproval");
+  const approvalDecisionInputBlockLines = expectSchemaDisallowsAdditionalProperties(source, "ApprovalDecisionInput");
+
+  expectPropertyEnum(pendingApprovalBlockLines, "kind", [
+    "command_execution",
+    "file_change",
+    "legacy_exec",
+    "legacy_apply_patch",
+  ]);
+  expectPropertyEnum(pendingApprovalBlockLines, "status", ["pending"]);
+  expectPropertyMaxLength(pendingApprovalBlockLines, "summary", 200);
+  expectPropertyEnum(approvalDecisionInputBlockLines, "decision", ["accept", "decline", "cancel"]);
+});
+
+test("when worker control api types are exported, public aliases should derive from generated schemas", () => {
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+
+  for (const aliasName of ["InterruptTurnInput", "SteerTurnInput", "PendingApproval", "ApprovalDecisionInput"]) {
+    assert.match(
+      publicExportSource,
+      new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`),
+    );
+  }
+});
+
 test("when worker write http api errors are maintained, stage 4 write routes should use ErrorEnvelope", () => {
   const source = readFileSync(openApiPath, "utf8");
   const componentResponseDefs = getComponentResponseUsesErrorEnvelope(source);
@@ -465,6 +627,26 @@ test("when worker write http api errors are maintained, stage 4 write routes sho
     const responseRefs = extractResponseRefs(method.lines);
 
     for (const status of stage4WriteErrorStatuses[path]) {
+      const responseInfo = responseRefs.get(status);
+      assert.equal(typeof responseInfo, "object");
+      const responseRefsErrorEnvelope = responseInfo
+        ? responseInfo.componentResponseRefs.some((responseName) => componentResponseDefs.get(responseName) === true)
+        : false;
+      assert.equal(responseInfo?.hasDirectSchemaRef || responseRefsErrorEnvelope, true);
+    }
+  }
+});
+
+test("when worker control http api errors are maintained, stage 5 control routes should use ErrorEnvelope", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const componentResponseDefs = getComponentResponseUsesErrorEnvelope(source);
+
+  for (const path of stage5ControlPaths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    const method = expectDefined(extractMethodBlocks(pathBlockLines)[0], `${path} should define a method`);
+    const responseRefs = extractResponseRefs(method.lines);
+
+    for (const status of stage5ControlErrorStatuses[path]) {
       const responseInfo = responseRefs.get(status);
       assert.equal(typeof responseInfo, "object");
       const responseRefsErrorEnvelope = responseInfo
@@ -548,7 +730,7 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
   const additionalPropertiesIsFalse = /^ {10}additionalProperties:\s*false$/m;
   const propertiesBlock = extractBlockLines(detailsBlock, /^ {10}properties:\s*$/).join("\n");
-  const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit"];
+  const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind"];
   const propertyKeys = [
     ...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9_-]*):\s*$/gm),
   ].map((match) => expectDefined(match[1], "property key capture should exist"));

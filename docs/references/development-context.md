@@ -17,7 +17,7 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-The next planned stage is Stage 5: control main chain for interrupt, steer, and approval request/response.
+The next planned stage is Stage 6: Control Plane multi-device routing and status aggregation.
 
 Stage 4 completed context:
 
@@ -41,6 +41,35 @@ Stage 5 default design input:
 - Approval responses must be idempotent and fail closed if the pending approval state does not match.
 - Do not implement Control Plane multi-device routing, DB persistence, reverse WSS, iOS, pairing, productized auth, or broad task board behavior in Stage 5 unless the Stage 5 spec explicitly narrows one of them as a required control verification dependency.
 - Do not expose raw app-server JSON-RPC, raw notification payload, prompt echo, command output, full diff, stack/cause, provider secrets, raw app-server URL, or private paths.
+
+Stage 5 completed context:
+
+- Public control API is versioned under `/v1` and schema-first in `packages/api-contract/openapi.yaml`.
+- Implemented control endpoints: interrupt, steer, pending approval list, and approval decision.
+- Worker remains the only app-server control caller and JSON-RPC approval responder.
+- Web calls only Worker-shaped HTTP APIs and imports only public API contract types.
+- Interrupt and steer require `expectedTurnId`; approval decisions require expected conversation, turn, and approval request ids.
+- Approval list and approval decision now both prove the conversation is inside `allowedProjectRoot` before exposing or consuming process-local registry state.
+- Approval registry exposes only sanitized metadata for command execution, file change, legacy exec, and legacy apply-patch approvals. Permissions approval is intentionally unsupported in Stage 5.
+- Approval response completion happens only after `sendApprovalResponse` succeeds; failed sends keep pending approval retryable.
+- The HTTP Worker context keeps one shared app-server session for approval observers; lifecycle management remains a later Worker daemon/productization concern.
+- Approval unknown start time uses Worker capture time, not Unix epoch.
+- Fake Worker supports Stage 5 control endpoints for browser smoke verification.
+- Chrome verified loaded, steer, approval accept, interrupt, fallback, and no raw URL/token leakage.
+
+Stage 5 remaining limitations:
+
+- Approval registry and idempotency state are process-local only.
+- Approval UI intentionally omits command text, cwd, paths, patch details, permissions grants, policy amendment, and sandbox override.
+- Durable approval/idempotency state belongs to Stage 7 or later DB-backed work.
+
+Stage 6 default design input:
+
+- Start with a Control Plane spec and threat model before implementation.
+- Keep provider/Codex secrets on Worker devices; Control Plane may store device identity, token hash/cert metadata, routing/status/audit, and revocation state.
+- Web should move toward Control Plane-shaped API calls, but Worker remains the only app-server caller.
+- Reverse connection default direction is Worker outbound WSS, but WSS send is not durable completion. If implemented, define `msg_id/seq/ack/lease/resume/credit`, backpressure, generation fencing, replay, and reconnect semantics.
+- Keep Stage 6 to a local multi-Worker verifiable slice unless the Stage 6 spec explicitly narrows a small state store. Do not prebuild the Stage 7 task board.
 
 ## App-Server Integration Notes
 

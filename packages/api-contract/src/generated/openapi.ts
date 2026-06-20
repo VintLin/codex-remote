@@ -148,6 +148,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/conversations/{conversationId}/turns/{turnId}/interrupt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["interruptWorkerTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/turns/{turnId}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["steerWorkerTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPendingApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decidePendingApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -318,6 +382,38 @@ export interface components {
             clientRequestId: string;
             expectedConversationId?: string;
         };
+        InterruptTurnInput: {
+            clientRequestId: string;
+            expectedTurnId: string;
+        };
+        SteerTurnInput: {
+            message: string;
+            clientRequestId: string;
+            expectedTurnId: string;
+        };
+        PendingApproval: {
+            id: string;
+            conversationId: string;
+            turnId: string;
+            itemId: string;
+            /** @enum {string} */
+            kind: "command_execution" | "file_change" | "legacy_exec" | "legacy_apply_patch";
+            /** @enum {string} */
+            status: "pending";
+            /** Format: date-time */
+            startedAt: string;
+            summary: string;
+            /** @enum {string} */
+            risk: "low" | "medium" | "high" | "unknown";
+        };
+        ApprovalDecisionInput: {
+            /** @enum {string} */
+            decision: "accept" | "decline" | "cancel";
+            clientRequestId: string;
+            expectedConversationId: string;
+            expectedTurnId: string;
+            expectedApprovalRequestId: string;
+        };
         CommandAccepted: {
             id: string;
             /** @enum {string} */
@@ -337,6 +433,8 @@ export interface components {
                 reason?: string;
                 field?: string;
                 limit?: number;
+                expected?: string;
+                actualKind?: string;
             };
             requestId?: string;
         };
@@ -667,6 +765,140 @@ export interface operations {
         };
         responses: {
             /** @description Follow-up command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    interruptWorkerTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterruptTurnInput"];
+            };
+        };
+        responses: {
+            /** @description Interrupt command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    steerWorkerTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SteerTurnInput"];
+            };
+        };
+        responses: {
+            /** @description Steer command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    listPendingApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process-local pending approval snapshot for a conversation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingApproval"][];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    decidePendingApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+                approvalRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description Approval decision command accepted. */
             202: {
                 headers: {
                     [name: string]: unknown;
