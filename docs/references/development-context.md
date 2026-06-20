@@ -133,7 +133,7 @@ Stage 9 in-progress context:
 - Task 5/6 implemented the real calibration runner and smoke gate; fake Worker smoke no longer satisfies real readiness claims.
 - Worker-owned `stdio` app-server lifecycle is implemented and is the default `pnpm real:start` path.
 - The local real stack uses Worker, Control Plane, Web, SQLite task DB, and Codex app-server on one Mac; `pnpm real:start` starts all three HTTP surfaces and `pnpm real:status` reports them running.
-- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=15 fixedPass=0 realGap=4`.
+- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=18 fixedPass=0 realGap=1`.
 - Worker app-server readiness evidence requires `appServerConnected=true`, `transport=stdio`, and sanitized version metadata; `debug-websocket` does not satisfy readiness.
 - `pnpm web:e2e:smoke` now passes against the real stack and checks that Web does not make runtime external asset requests.
 - Task link invalid ids are now rejected before persistence, and both `task link` and `task link invalid ids` record `real-pass`.
@@ -144,7 +144,7 @@ Stage 9 in-progress context:
 - Q23 cwd scope and pagination now use a Control Plane device-scoped Worker probe. `thread/list cwd scope` and `thread/list pagination` record `real-pass` with `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, and sanitized page/count evidence.
 - `steer` now uses an independent safe steer-only sample and records `real-pass` with `activeTurnProven=true` plus accepted public steer status.
 - Start, timeline, follow-up, approval pending list, and interrupt now record `real-pass`.
-- Remaining real gaps include approval decision lacking a safe pending approval.
+- Documented safety gap: approval decision lacks a safe pending approval in the current real project stack. Approval pending list is real, but approval decision is excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel; automatic accept, persistent policy amendment, and production approval safety model are out of Stage 9.
 - Q24 Task 10 semantics are now implemented for the current slice: `/v1/control-plane/health` and `/v1/devices` may return sanitized degraded state, partial Worker conversation failures keep reachable conversations available, and all-workers-down or invalid-worker-token makes `/v1/conversations` return a sanitized dependency error instead of `200 []`.
 - `debug-websocket` is an explicit local debug fallback only. `real:check` and readiness accept only `stdio` proof.
 - Tracked docs may contain only sanitized evidence summaries; raw ids, prompts, command output, raw JSON-RPC, tokens, private paths, stack/cause, and full diffs stay out of tracked files.

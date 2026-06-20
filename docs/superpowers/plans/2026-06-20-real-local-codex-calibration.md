@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-12 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=15 fixedPass=0 realGap=4`; start, timeline, follow-up, approval pending list, interrupt, task link, and Q24 degraded-vs-empty fixtures now record `real-pass`. Remaining work is the next vertical slice for steer, approval decision scenario, and Q23 real probes.
+**Current status:** Tasks 1-17 close Stage 9 with one documented approval-decision safety gap. `pnpm real:start` defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=18 fixedPass=0 realGap=1`; start, timeline, follow-up, approval pending list, interrupt, steer, task link, Q23 Worker probes, and Q24 degraded-vs-empty fixtures record `real-pass`. Approval decision remains excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -2434,6 +2434,100 @@ Task 16 implementation notes:
 - Real runtime verification passed: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, and `pnpm real:status`.
 - Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
+---
+
+### Task 17: Finalize Approval Decision As Safe Real-Gap
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+- Modify: `QUESTIONS.md`
+- Modify: `docs/references/questions/SYNTHESIS.md`
+- Modify if needed: `scripts/real-local-calibration.mjs`
+- Modify if needed: `scripts/real-local-calibration.test.mjs`
+- Modify if needed: `scripts/product-readiness-check.mjs`
+- Modify if needed: `scripts/product-readiness-check.test.mjs`
+
+**Interfaces:**
+- Prefer no code/API change if current `approval decision` evidence is already a precise sanitized `real-gap`.
+- Keep Web, Control Plane, Worker, OpenAPI, DB schema, and Codex protocol generated files unchanged unless the review finds the current `real-gap` evidence unsafe or too generic.
+- Keep Worker as the only app-server caller.
+
+**Non-goals:**
+- No automatic approval accept.
+- No `acceptForSession`, policy amendment, network permission, broad filesystem permission, host UI automation, `thread/shellCommand`, bypass flags, or yolo mode.
+- No command execution in the real repository merely to improve coverage.
+- No new isolated CODEX_HOME / fixture workspace / approval profile implementation in Stage 9 unless explicitly reviewed as necessary and safe.
+- No raw command, command output, cwd, local path, raw prompt, raw ids, JSON-RPC, token, stack/cause, or provider secret in reports/docs.
+
+**Pre-review evidence:**
+- Latest `logs/real-check/latest.json` records `total=19 realPass=18 fixedPass=0 realGap=1`; only `approval decision` remains `real-gap` with `reasonCode=no_safe_pending_approval`.
+- Q22 says approval automation should default to decline/cancel and should not broaden permissions just to cover approval.
+- Q22's safe approval scenario requires an isolated empty fixture workspace, sanitized env, and read-only/on-request approval profile. The current Stage 9 local stack uses the real configured project and does not yet provision that isolated approval profile.
+- Approval pending list itself records `real-pass`; the remaining gap is only a safe pending approval decision sample.
+
+Reviewer: `019ee63a-a4f7-7dc1-a4a9-aca4593869f9`
+
+Result: needs changes; plan updated to complete Stage 9 with a documented approval-decision safety gap and without changing the real-check report schema.
+
+Findings addressed by Task 17:
+
+- P1: Final checklist separates real approval pending-list evidence from approval decision, which remains a documented safety gap and is not product-ready.
+- P1: Stage 9 completion wording must not imply approval decision automation, accept path, persistent policy amendment, or production approval safety model readiness.
+- P2: `reasonCode=no_safe_pending_approval` is sufficiently precise and safe; do not expand report schema with path/profile/prompt details.
+
+Review focus:
+
+- Is `no_safe_pending_approval` sufficiently precise as Stage 9 real evidence, or must the runner add more structured safe-stop detail?
+- Would attempting to trigger approval under the current real stack violate Stage 9 safety constraints?
+- If approval remains a gap, what exact docs/checklist wording makes clear this is a deliberate safety stop, not product readiness?
+
+- [x] **Step 1: Review and tighten approval real-gap evidence**
+
+If needed, update `real-local-calibration.mjs` so `approval decision` real-gap includes only allowlisted sanitized detail such as `reasonCode=no_safe_pending_approval`. Do not include prompts, commands, output, paths, ids, or raw app-server data.
+
+- [x] **Step 2: Record Stage 9 completion with one documented safety gap**
+
+Update roadmap and context to state:
+
+- Web -> Control Plane -> Worker -> Codex app-server is real for devices, projects, conversations, start, follow-up, interrupt, steer, task link, Q23 inventory, Q24 degraded semantics, and self-hosted local run path;
+- approval pending list is real;
+- approval decision remains a deliberate safety `real-gap` until a separate isolated approval fixture stage exists.
+- Approval decision remains excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel. Accept remains manual-only and out of Stage 9.
+
+- [x] **Step 3: Run verification**
+
+```bash
+pnpm product:check
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Expected: `logs/real-check/latest.json` remains `total=19 realPass=18 fixedPass=0 realGap=1`, with only `approval decision` as `no_safe_pending_approval`; no other evidence regresses.
+
+- [x] **Step 4: Commit**
+
+```bash
+git commit -m "docs: close real local calibration with approval gap"
+```
+
+Task 17 implementation notes:
+
+- No code, API, generated protocol, DB, Worker, Control Plane, or Web runtime change was needed; current `approval decision` evidence is already a precise sanitized safety `real-gap`.
+- Roadmap, development context, and research queue now separate approval pending-list `real-pass` from approval decision, which remains excluded from product-ready claims.
+- Fresh real runtime verification passed: `pnpm product:check`, `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, and `pnpm real:status`.
+- Latest `logs/real-check/latest.json` records `total=19 realPass=18 fixedPass=0 realGap=1`; the only gap is `approval decision` with `reasonCode=no_safe_pending_approval`.
+- Full gates passed: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.
@@ -2445,7 +2539,9 @@ Task 16 implementation notes:
 - [x] Web has a minimal start conversation entrypoint.
 - [x] `pnpm real:check` creates or uses a `codex-remote-calibration` real conversation.
 - [x] Real read/timeline/start/follow-up/task-link are `real-pass` or `fixed-pass`.
-- [x] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
+- [x] Real interrupt and steer are `real-pass`.
+- [x] Real approval pending list is `real-pass`.
+- [x] Approval decision is a documented safety `real-gap` and is not product-ready.
 - [x] `pnpm web:e2e:smoke` passes against the real local stack.
 - [x] Web makes no runtime external font/static asset requests.
 - [x] Q24 all-workers-down is visible as a sanitized dependency error for `/v1/conversations`, not empty real data.

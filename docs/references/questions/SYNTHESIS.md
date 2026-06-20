@@ -33,10 +33,10 @@ The synthesis answers two questions:
 | Q18 app-server session lifecycle | Answered | Worker should use initialized long-lived app-server sessions; per-HTTP-request app-server connections are not suitable for approval/control. |
 | Q19 public project identity | Answered | Public project ids must be opaque; `allowedProjectRoot`, cwd, basename, and absolute paths are Worker-local implementation details. |
 | Q20 Worker-owned app-server transport | Answered | Stage 9 default target is stdio; loopback WebSocket is explicit debug fallback only. |
-| Q21 real command/control compatibility | Partial | Method semantics are usable, but current CLI/runtime must produce real-pass/fixed-pass/real-gap before exposing readiness. |
-| Q22 safe active turn and pending approval | Partial | Safe scenarios must be run in a disposable low-risk repo; unsafe approvals should become documented real-gap. |
+| Q21 real command/control compatibility | Answered by local verification | Stage 9 real-check records start, follow-up, interrupt, and steer as `real-pass`; steer requires public active-turn proof from a safe independent sample. |
+| Q22 safe active turn and pending approval | Partial | Approval pending list is real; approval decision remains a documented safety `real-gap` until a separate isolated approval fixture proves at least decline/cancel. |
 | Q23 `thread/list(cwd)` scope and pagination | Answered by local verification | Current Stage 9 Worker probe proves exact-cwd list and cursor-drain pagination for the configured project root; multi-root/worktree/path-alias matrix remains future scope. |
-| Q24 degraded versus empty data | Partial | Semantics are clear, but current Control Plane contract/implementation must prove Worker failure is not hidden as empty data. |
+| Q24 degraded versus empty data | Answered by local verification | Stage 9 fixtures distinguish healthy empty data from dependency failure; all-workers-down and invalid-worker-token do not return `200 []` for conversations. |
 | Q25 real Web E2E gate | Answered | Stage 9 needs a minimal browser smoke; HTTP-only `real:check` is not sufficient for Web readiness. |
 | Q26 calibration report and secret scanning | Answered | Default real-check artifacts belong in ignored `logs/real-check/`; tracked docs should contain only explicit sanitized evidence. |
 | Q27 task link integrity | Answered | Control Plane must validate resources and project ownership before storing verified task links; offline Worker checks may remain pending. |
@@ -90,6 +90,7 @@ Stage 9 real local calibration:
 - Control Plane must not catch Worker failures and return `200 []` for required local project/conversation data.
 - `pnpm real:check` must record Q21-Q24 results as `real-pass`, `fixed-pass`, or `real-gap`.
 - Q23 readiness evidence must come from the Control Plane device-scoped Worker probe. `thread/list cwd scope` requires `exactCwdListProven=true`; `thread/list pagination` requires `completedUntilNextCursorNull=true` plus sanitized page/count evidence.
+- Q22 approval decision remains excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel. Automatic accept, persistent policy amendment, and production approval safety model are out of Stage 9.
 - Add a minimal browser smoke to prove Web env wiring, source banners, start UI, network accept, and DOM transition.
 - Store full real-check artifacts in ignored `logs/real-check/`; only sanitized evidence summaries may enter tracked docs.
 - Web readiness includes no runtime external font/static asset requests.
@@ -106,7 +107,7 @@ Stage 9 real local calibration:
 - WSS transport does not provide durable delivery by itself; the project must define message ack, lease, generation fencing, replay, and backpressure.
 - DPoP-like auth must not be half-implemented; partial custom signing can be worse than a simpler bearer-token MVP with clear limitations.
 - Linux Secret Service/headless behavior must be verified locally; file fallback is a conscious security tradeoff, not a default.
-- Q21, Q22, and Q24 remain open until the real local stack records reproducible results. Q23 is locally verified for the configured Stage 9 project root; broader worktree/path-alias/source/archive/provider coverage remains future scope.
+- Q21, Q23, and Q24 are locally verified for the current Stage 9 stack. Q22 remains partial: approval pending list is real, while approval decision is a documented safety `real-gap` until an isolated fixture exists.
 - If the Worker still depends on loopback WebSocket for self-started app-server, that is a Stage 9 readiness gap unless it is explicitly marked as debug fallback.
 - Current `RemoteProject.path` compatibility must not be used to expose `allowedProjectRoot`; schema cleanup should be scheduled if implementation still requires the field.
 

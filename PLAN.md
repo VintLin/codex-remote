@@ -55,7 +55,7 @@ flowchart LR
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 已完成本地可验证切片 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
-| 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 进行中 / real-gap |
+| 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 已完成本地可验证切片；approval decision 为安全 real-gap |
 
 ```mermaid
 flowchart TB
@@ -68,7 +68,7 @@ flowchart TB
   P6["6. Multi-device Control Plane"]
   P7["7. DB + Task Board"]
   P8["8. Product Readiness + iOS Guardrails"]
-  P9["9. Real Local Codex Calibration - real-gap"]
+  P9["9. Real Local Codex Calibration - complete with approval safety gap"]
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
 ```
@@ -77,7 +77,7 @@ Stage 9 当前证据：
 
 - Fake smoke evidence：Stage 3-8 的 fake Worker smoke 覆盖过 Web/Control Plane/Worker-shaped flows，但它只能证明 contract/UI/fallback 行为；Task 5/6 已实现 real calibration runner 和 smoke gate 后，fake Worker smoke 不再能作为 real readiness。
 - Real app-server evidence：Worker-owned `stdio` app-server lifecycle 已实现为当前默认路径；`pnpm real:start` 可启动 Worker、Control Plane 和 Web，`pnpm real:status` 看到三项 running。
-- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=15 fixedPass=0 realGap=4`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
+- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=18 fixedPass=0 realGap=1`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
 - Web real entrypoint evidence：`pnpm web:e2e:smoke` 在真实栈上通过，覆盖 Web -> Control Plane -> Worker 的加载、start、任务创建/关联和无外部 runtime asset 请求检查。
 - Fixed in current slice：Control Plane task conversation links now reject arbitrary invalid ids before persisting; `task link` and `task link invalid ids` both record `real-pass`.
 - Fixed in current slice：Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`; all-workers-down and invalid-worker-token make `/v1/conversations` return a sanitized dependency error instead of `200 []`, while health/devices remain sanitized degraded inventory.
@@ -86,7 +86,7 @@ Stage 9 当前证据：
 - Fixed in current slice：`steer` readiness is now guarded by public active-turn proof; without that proof, `real:check` records sanitized `active-turn-gap` instead of a generic Worker error or product-ready pass.
 - Fixed in current slice：Q23 cwd scope and pagination now use a Control Plane device-scoped Worker probe. `thread/list cwd scope` and `thread/list pagination` record `real-pass` with `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, and sanitized page/count evidence.
 - Fixed in current slice：`steer` now uses an independent safe steer-only sample and records `real-pass` with `activeTurnProven=true` plus accepted public steer status.
-- Remaining real gaps：approval decision has no safe pending approval.
+- Documented safety gap：approval decision has no safe pending approval in the current real project stack. Approval pending list is real, but approval decision is excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel; automatic accept, persistent policy amendment, and production approval safety model are out of Stage 9.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 
@@ -410,10 +410,10 @@ Stage 8 剩余限制：
 
 下一步建议：
 
-- Stage 0-8 已完成本地可验证切片；Stage 9 仍在进行中且当前是 real-gap。
-- 下一步先补 Worker stdio app-server lifecycle，使 `pnpm real:start` 默认路径能启动真实栈，再重跑 `pnpm real:check` 和 `pnpm web:e2e:smoke`。
-- Q23 的 cwd scope 和 pagination probes 需要真实 fixture 后才能从 explicit gap 移出；Q24 all-workers-down / invalid-worker-token fixture 已有 real-pass evidence。
-- 不要在 Stage 9 real readiness 之前并行铺 real installer/keychain/pairing threat model、device-bound auth、reverse WSS relay、外部部署安全模型或 iOS client。
+- Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
+- 下一步不要把 fake Worker smoke 当作 real readiness；继续新增阶段前先写对应 spec/plan，并明确是否要做 isolated approval fixture、streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
+- Q22 的 approval decision 仍需单独 isolated approval fixture 才能从 safety `real-gap` 移出；自动 accept、persistent policy amendment 和 production approval safety model 不属于 Stage 9 已完成范围。
+- Q23 的 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是 Stage 9 当前阻塞；Q24 degraded-vs-empty 当前 Stage 9 fixture 已有 real-pass evidence。
 
 后续阶段默认设计输入：
 
