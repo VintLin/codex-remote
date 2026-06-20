@@ -8,13 +8,37 @@ TOKEN="${CODEX_REMOTE_LOCAL_TOKEN:-example-token}"
 PROJECT_ROOT="${CODEX_REMOTE_ALLOWED_PROJECT_ROOT:-$ROOT_DIR}"
 WORKER_PORT="${CODEX_REMOTE_WORKER_PORT:-8787}"
 CONTROL_PLANE_PORT="${CODEX_REMOTE_CONTROL_PLANE_PORT:-8786}"
+APP_SERVER_TRANSPORT="${CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio}"
+CODEX_REMOTE_START_APP_SERVER=false
 
 mkdir -p "$LOG_DIR"
+
+log_status() {
+  printf "%s %s\n" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$1" >>"$LOG_DIR/real-local-stack.log"
+}
 
 is_pid_running() {
   local pid="$1"
   [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1
 }
+
+case "$APP_SERVER_TRANSPORT" in
+  stdio)
+    echo "real:start blocked: Worker stdio app-server transport is not implemented by the current Worker lifecycle."
+    echo "Use CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket only for the Stage 9 loopback debug fallback."
+    exit 1
+    ;;
+  debug-websocket)
+    CODEX_REMOTE_START_APP_SERVER=true
+    echo "real:start using debug fallback: Worker will start loopback WebSocket app-server; this is not real stdio readiness evidence."
+    log_status "debug-websocket fallback selected"
+    ;;
+  *)
+    echo "real:start blocked: unsupported CODEX_REMOTE_APP_SERVER_TRANSPORT value."
+    echo "Supported values: stdio, debug-websocket."
+    exit 1
+    ;;
+esac
 
 start_background() {
   local name="$1"
@@ -26,13 +50,15 @@ start_background() {
     existing_pid="$(cat "$pid_file")"
     if is_pid_running "$existing_pid"; then
       echo "$name already running: $existing_pid"
+      log_status "$name already running"
       return
     fi
     rm -f "$pid_file"
   fi
 
-  (cd "$ROOT_DIR" && "$@" >"$LOG_DIR/$name.log" 2>&1 & echo $! >"$pid_file")
+  (cd "$ROOT_DIR" && "$@" >/dev/null 2>&1 & echo $! >"$pid_file")
   echo "$name started: $(cat "$pid_file")"
+  log_status "$name started"
 }
 
 start_background worker env \
@@ -41,8 +67,8 @@ start_background worker env \
   CODEX_REMOTE_ALLOWED_PROJECT_ROOT="$PROJECT_ROOT" \
   CODEX_REMOTE_DEVICE_ID="local-device" \
   CODEX_REMOTE_HTTP_PORT="$WORKER_PORT" \
-  CODEX_REMOTE_APP_SERVER_TRANSPORT="${CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio}" \
-  CODEX_REMOTE_START_APP_SERVER=true \
+  CODEX_REMOTE_APP_SERVER_TRANSPORT="$APP_SERVER_TRANSPORT" \
+  CODEX_REMOTE_START_APP_SERVER="$CODEX_REMOTE_START_APP_SERVER" \
   pnpm --filter @codex-remote/worker serve:read
 
 start_background control-plane env \

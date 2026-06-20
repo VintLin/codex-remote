@@ -2,12 +2,14 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
+import { spawnSync } from "node:child_process";
 
 const defaultRoot = process.cwd();
 
 export function runProductReadinessCheck(root = defaultRoot) {
   const failures = [
     ...checkRootScripts(root),
+    ...checkRealLocalStackScripts(root),
     ...checkLoopbackDefaults(root),
     ...checkOpenApi(root),
     ...checkImports(root),
@@ -59,6 +61,54 @@ function checkRootScripts(root) {
       );
     }),
   ];
+}
+
+function checkRealLocalStackScripts(root) {
+  const scriptPaths = [
+    "scripts/start-real-local-stack.sh",
+    "scripts/status-real-local-stack.sh",
+    "scripts/stop-real-local-stack.sh",
+  ];
+  const failures = [];
+
+  for (const path of scriptPaths) {
+    if (!existsSync(join(root, path))) {
+      failures.push(`${path} missing`);
+      continue;
+    }
+    const syntax = spawnSync("bash", ["-n", join(root, path)], { encoding: "utf8" });
+    if (syntax.status !== 0) {
+      failures.push(`${path} has invalid shell syntax`);
+    }
+  }
+
+  if (failures.length > 0) {
+    return failures;
+  }
+
+  const startSource = readText(root, "scripts/start-real-local-stack.sh");
+  const statusSource = readText(root, "scripts/status-real-local-stack.sh");
+  if (!/APP_SERVER_TRANSPORT="\$\{CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio\}"/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh missing stdio transport default");
+  }
+  if (!/Worker stdio app-server transport is not implemented/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh missing stdio fail-closed guard");
+  }
+  if (!/debug-websocket fallback/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh missing debug fallback label");
+  }
+  if (/>"\$LOG_DIR\/\$name\.log" 2>&1/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh redirects full service output to lifecycle logs");
+  }
+  if (!/\(cd "\$ROOT_DIR" && "\$@" >\/dev\/null 2>&1 & echo \$! >"\$pid_file"\)/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh missing suppressed service output");
+  }
+  for (const envName of ["CODEX_REMOTE_WEB_PORT", "CODEX_REMOTE_CONTROL_PLANE_PORT", "CODEX_REMOTE_WORKER_PORT"]) {
+    if (!statusSource.includes(envName)) {
+      failures.push(`scripts/status-real-local-stack.sh missing ${envName} override`);
+    }
+  }
+  return failures;
 }
 
 function checkLoopbackDefaults(root) {

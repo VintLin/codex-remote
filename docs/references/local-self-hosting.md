@@ -38,6 +38,7 @@ export CODEX_REMOTE_ALLOWED_ORIGINS=http://127.0.0.1:8786
 export CODEX_REMOTE_ALLOWED_PROJECT_ROOT=.
 export CODEX_REMOTE_DEVICE_ID=local-device
 export CODEX_REMOTE_HTTP_PORT=8787
+export CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio
 ```
 
 Start:
@@ -50,7 +51,9 @@ Notes:
 
 - Worker must bind loopback.
 - Worker is the only app that talks to Codex app-server.
-- `CODEX_REMOTE_START_APP_SERVER=true` may start the local app-server through the Worker boundary.
+- `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` is the target Worker-owned app-server transport.
+- Current Stage 9 lifecycle scripts fail closed for `stdio` because the Worker lifecycle does not implement stdio app-server startup yet.
+- `CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket` is an explicit loopback WebSocket debug fallback only; it is a Stage 9 readiness gap, not real stdio readiness evidence.
 
 ## Control Plane
 
@@ -107,6 +110,26 @@ Defaults:
 - Control Plane: `http://127.0.0.1:8786`
 - Web: `http://127.0.0.1:5173`
 - Local token placeholder: `example-token`
+- App-server transport: `stdio`
+
+With the default transport, `pnpm real:start` exits before starting services because Worker stdio app-server lifecycle is not implemented yet. This is intentional fail-closed behavior.
+
+For local debugging only, run the current loopback WebSocket fallback explicitly:
+
+```bash
+CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket pnpm real:start
+```
+
+That fallback sets `CODEX_REMOTE_START_APP_SERVER=true` for the Worker and must be treated as debug evidence only, not product readiness.
+
+Status honors these port overrides:
+
+```bash
+CODEX_REMOTE_WEB_PORT=5173 \
+CODEX_REMOTE_CONTROL_PLANE_PORT=8786 \
+CODEX_REMOTE_WORKER_PORT=8787 \
+pnpm real:status
+```
 
 ## Validation
 
