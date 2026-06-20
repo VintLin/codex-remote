@@ -109,6 +109,7 @@ export function ConversationMain({
   activeTurnId,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? "对话" : conversation.title;
+  const isExampleData = source.reason !== "loaded";
   const datasourceStatus: string[] = [source.reason];
   if (source.error?.code) {
     datasourceStatus.push(source.error.code);
@@ -176,6 +177,12 @@ export function ConversationMain({
       </header>
 
       <div className="content-scroll conversation-content-scroll">
+        {isExampleData ? (
+          <section aria-label="数据源状态" className="conversation-source-banner">
+            <strong>未连接真实 Control Plane</strong>
+            <span>当前显示示例数据 · {datasourceStatus.join(" · ")}</span>
+          </section>
+        ) : null}
         <ConversationControlStrip
           activeTurnId={activeTurnId}
           canControl={canSubmitFollowUp}

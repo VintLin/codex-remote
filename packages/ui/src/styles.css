@@ -1412,6 +1412,33 @@ button.sidebar-list-content {
   border-bottom: var(--cr-stroke);
 }
 
+.conversation-source-banner {
+  display: flex;
+  width: min(calc(100% - 40px), 860px);
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  margin: 12px auto 0;
+  border-bottom: var(--cr-stroke);
+  color: var(--cr-muted);
+  padding: 10px 0;
+  font-size: var(--cr-text-compact);
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.conversation-source-banner strong {
+  color: var(--cr-ink);
+  font-weight: var(--cr-weight-emphasis);
+}
+
+.conversation-source-banner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .conversation-control-row {
   display: grid;
   min-width: 0;

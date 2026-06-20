@@ -3,6 +3,8 @@ import { readWebSource, readWorkspaceSource } from "../../test-support/sourcePat
 import test from "node:test";
 
 const sidebarComponent = readWebSource("components/sidebar/sidebar.tsx");
+const conversationThreadComponent = readWebSource("components/conversation/codex-assistant-thread.tsx");
+const mainPanelsComponent = readWebSource("components/detail/main-panels.tsx");
 const sharedStyles = readWorkspaceSource("packages/ui/src/styles.css");
 
 test("when the sidebar header is rendered, should use application header semantics instead of window chrome", () => {
@@ -110,14 +112,6 @@ test("when container borders are aligned to the reference visual language, shoul
   assert.match(sharedStyles, /\.search-input:focus,\s*\.search-input:focus-visible\s*\{[^}]*outline:\s*none;[^}]*box-shadow:\s*none;/s);
   assert.match(sharedStyles, /\.codex-assistant-composer\s*\{[^}]*border:\s*var\(--cr-stroke\);[^}]*border-radius:\s*var\(--cr-radius-xl\);/s);
   assert.match(sharedStyles, /\.codex-assistant-composer\s*\{[^}]*box-shadow:\s*var\(--cr-shadow\);/s);
-  assert.match(sharedStyles, /\.icon-shield-alert\s*\{[^}]*shield-alert\.svg/);
-  assert.match(sharedStyles, /\.icon-hand\s*\{[^}]*hand\.svg/);
-  assert.match(sharedStyles, /\.icon-shield-check\s*\{[^}]*shield-check\.svg/);
-  assert.match(sharedStyles, /\.codex-assistant-access-menu\s*\{[^}]*position:\s*absolute;[^}]*bottom:\s*calc\(100% \+ 8px\);[^}]*border:\s*var\(--cr-stroke\);/s);
-  assert.match(sharedStyles, /\.codex-assistant-access-option:hover,[^}]*\.codex-assistant-access-option\.is-selected\s*\{[^}]*background:\s*var\(--cr-sidebar-strong\);/s);
-  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="approval-request"\]\s*\{[^}]*color:\s*var\(--cr-ink\);/s);
-  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="approval-delegate"\]\s*\{[^}]*color:\s*var\(--cr-accent\);/s);
-  assert.match(sharedStyles, /\.codex-assistant-access\[data-mode="full-access"\]\s*\{[^}]*color:\s*var\(--cr-danger\);/s);
   assert.match(sharedStyles, /\.panel,\s*\.run-card,\s*\.composer\s*\{[^}]*border:\s*var\(--cr-stroke\);/s);
   assert.match(sharedStyles, /\.approval-box,\s*\.linked-task,\s*\.diff-panel\s*\{[^}]*border:\s*var\(--cr-stroke\);/s);
   assert.match(sharedStyles, /\.search-results\s*\{[^}]*gap:\s*2px;/s);
@@ -136,4 +130,16 @@ test("when mobile navigation is active, should promote full-page back navigation
 test("when sidebar panels are collapsed or expanded, should switch to panel-specific glyphs instead of rotating one shared icon", () => {
   assert.doesNotMatch(sharedStyles, /\.sidebar-toggle-button\[data-direction="left"\]\[data-state="expanded"\] \.sidebar-toggle-icon,[^}]*transform:\s*rotate\(180deg\);/s);
   assert.match(sidebarComponent, /name=\{props\.isCollapsed \? "panel-left-open" : "panel-left-close"\}/);
+});
+
+test("conversation main when source is not loaded, should render explicit example data copy", () => {
+  assert.match(mainPanelsComponent, /示例数据/);
+  assert.match(mainPanelsComponent, /未连接真实 Control Plane/);
+});
+
+test("conversation composer when future controls are not implemented, should omit nonfunctional controls", () => {
+  assert.doesNotMatch(conversationThreadComponent, /aria-label="添加附件"/);
+  assert.doesNotMatch(conversationThreadComponent, /aria-label="语音输入"/);
+  assert.doesNotMatch(conversationThreadComponent, /className="codex-assistant-model"/);
+  assert.doesNotMatch(conversationThreadComponent, /className="codex-assistant-access"/);
 });

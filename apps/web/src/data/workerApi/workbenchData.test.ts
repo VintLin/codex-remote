@@ -190,6 +190,13 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
 });
 
+test("workbench datasource when fallback is returned, should label source as not real data", async () => {
+  const data = createFallbackWorkbenchData("not_configured");
+
+  assert.equal(data.source.reason, "not_configured");
+  assert.equal(data.conversations.every((conversation) => conversation.title.startsWith("Example ")), true);
+});
+
 test("workbench datasource when remote conversations are empty should keep remote empty state", async () => {
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",

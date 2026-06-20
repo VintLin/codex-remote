@@ -21,7 +21,7 @@ test("when refreshing the svg icon library, should point icon classes at the imp
   assert.match(styles, /\.icon-square-terminal\s*\{[^}]*url\("\/icons\/square-terminal\.svg"\);/s);
 });
 
-test("when icon semantics differ by action, should split send pin and mic while removing the old detail close glyph", () => {
+test("when icon semantics differ by action, should keep send pin resources and omit unimplemented mic control", () => {
   assert.match(iconComponent, /"arrow-up"/);
   assert.match(iconComponent, /"clock"/);
   assert.match(iconComponent, /"mic"/);
@@ -31,7 +31,7 @@ test("when icon semantics differ by action, should split send pin and mic while 
   assert.match(actionMenuComponent, /icon: "pin", label: "置顶"/);
   assert.match(actionMenuComponent, /icon: "clock", label: "按创建时间排序"/);
   assert.doesNotMatch(detailWorkspaceComponent, /<Icon name="x" \/>/);
-  assert.match(assistantThreadComponent, /<Icon name="mic" \/>/);
+  assert.doesNotMatch(assistantThreadComponent, /<Icon name="mic" \/>/);
   assert.match(assistantThreadComponent, /<Icon name="arrow-up" \/>/);
 });
 

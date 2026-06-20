@@ -3,6 +3,10 @@ import test from "node:test";
 
 import { assistantThreads, conversations } from "./mockData.ts";
 
+test("when fixture conversations are used, should label them as examples", () => {
+  assert.equal(conversations.every((conversation) => conversation.title.startsWith("Example ")), true);
+});
+
 test("when demo assistant threads define metadata, should derive it from conversations", () => {
   const conversationById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
 
