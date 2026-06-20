@@ -18,6 +18,7 @@ import type {
   TaskConversationLink,
   WorkerCapabilities,
   WorkerHealth,
+  WorkerProbeSummary,
 } from "@codex-remote/api-contract";
 
 import type { ControlPlaneConfig, ConfiguredWorkerDevice } from "../config/controlPlaneConfig.ts";
@@ -419,12 +420,15 @@ test("control plane http app when device scoped routes are used, should call sel
 
   const health = await (await request(app, "/v1/devices/device-a/worker/health")).json() as WorkerHealth;
   const capabilities = await (await request(app, "/v1/devices/device-a/worker/capabilities")).json() as WorkerCapabilities;
+  const probe = await (await request(app, "/v1/devices/device-a/worker/probe")).json() as WorkerProbeSummary;
   const timeline = await (await request(app, "/v1/devices/device-a/conversations/thread-a/timeline")).json() as ConversationTimeline;
 
   assert.equal(health.deviceId, "device-a");
   assert.equal(capabilities.deviceId, "device-a");
+  assert.equal(probe.deviceId, "device-a");
+  assert.equal(probe.checks.find((check) => check.name === "thread/list")?.exactCwdListProven, true);
   assert.equal(timeline.deviceId, "device-a");
-  assert.deepEqual(client.calls.map((call) => call.deviceId), ["device-a", "device-a", "device-a"]);
+  assert.deepEqual(client.calls.map((call) => call.deviceId), ["device-a", "device-a", "device-a", "device-a"]);
 });
 
 test("control plane http app when approvals are listed, should proxy selected device", async () => {
@@ -617,6 +621,33 @@ class FakeWorkerClient implements WorkerUpstreamClient {
       canRunReadOnlyProbe: true,
       appServerTransport: "loopbackWebSocket",
       supportedSourceKinds: ["cli"],
+    };
+  }
+
+  async getProbeSummary(device: ConfiguredWorkerDevice): Promise<WorkerProbeSummary> {
+    this.record(device, "getProbeSummary");
+    this.throwIfUnavailable(device);
+    return {
+      schemaVersion: 1,
+      startedAt: "2026-06-20T00:00:01.000Z",
+      completedAt: "2026-06-20T00:00:02.000Z",
+      ok: true,
+      mode: "readOnly",
+      deviceId: this.upstreamDeviceId ?? device.id,
+      codexVersion: "fake",
+      appServer: { transport: "loopbackWebSocket", startedByWorker: false, readyz: true },
+      checks: [
+        {
+          name: "thread/list",
+          ok: true,
+          durationMs: 1,
+          exactCwdListProven: true,
+          completedUntilNextCursorNull: true,
+          pageCount: 1,
+          cursorCount: 0,
+          count: 1,
+        },
+      ],
     };
   }
 

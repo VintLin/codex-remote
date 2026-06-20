@@ -8,7 +8,15 @@ const passingClient: ReadOnlyProbeClient = {
   async initialize() {},
   async initialized() {},
   async listModels() {},
-  async listThreads() {},
+  async listThreads() {
+    return {
+      exactCwdListProven: true,
+      completedUntilNextCursorNull: true,
+      pageCount: 1,
+      cursorCount: 0,
+      count: 1,
+    };
+  },
   async readFirstAllowedThread() {},
   close() {},
 };
@@ -36,6 +44,16 @@ test("when read-only checks pass, should mark missing turns list as explicit pre
   assert.equal(summary.appServer.readyz, true);
   assert.equal(summary.checks.some((check) => check.name === "thread/turns/list"), true);
   assert.equal(summary.checks.at(-1)?.failureType, "precondition_missing");
+  assert.deepEqual(summary.checks.find((check) => check.name === "thread/list"), {
+    name: "thread/list",
+    ok: true,
+    durationMs: summary.checks.find((check) => check.name === "thread/list")?.durationMs,
+    exactCwdListProven: true,
+    completedUntilNextCursorNull: true,
+    pageCount: 1,
+    cursorCount: 0,
+    count: 1,
+  });
 });
 
 test("when no allowed thread exists, should skip thread/read as a precondition", async () => {

@@ -141,9 +141,9 @@ Stage 9 in-progress context:
 - Worker write paths initialize the stdio app-server session before `thread/start` / `turn/start`; Worker specific conversation routes prove access with `thread/read` followed by Worker-local realpath verification.
 - The real calibration runner waits briefly for post-start timeline visibility and uses separate steer/interrupt samples where available; same-turn steer-before-interrupt was tested and rejected because it regressed earlier evidence.
 - `steer` readiness is now guarded by public active-turn proof; without that proof, `real:check` records sanitized `active-turn-gap` instead of a generic Worker error or product-ready pass.
+- Q23 cwd scope and pagination now use a Control Plane device-scoped Worker probe. `thread/list cwd scope` and `thread/list pagination` record `real-pass` with `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, and sanitized page/count evidence.
 - Start, timeline, follow-up, approval pending list, and interrupt now record `real-pass`.
-- Remaining real gaps include approval decision lacking a safe pending approval, steer lacking a safe public active-turn sample, and Q23 probes still absent.
-- Q23 remains an explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
+- Remaining real gaps include approval decision lacking a safe pending approval and steer lacking a safe public active-turn sample.
 - Q24 Task 10 semantics are now implemented for the current slice: `/v1/control-plane/health` and `/v1/devices` may return sanitized degraded state, partial Worker conversation failures keep reachable conversations available, and all-workers-down or invalid-worker-token makes `/v1/conversations` return a sanitized dependency error instead of `200 []`.
 - `debug-websocket` is an explicit local debug fallback only. `real:check` and readiness accept only `stdio` proof.
 - Tracked docs may contain only sanitized evidence summaries; raw ids, prompts, command output, raw JSON-RPC, tokens, private paths, stack/cause, and full diffs stay out of tracked files.

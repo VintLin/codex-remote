@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/worker/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getControlPlaneDeviceWorkerProbeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{deviceId}/conversations": {
         parameters: {
             query?: never;
@@ -571,6 +587,12 @@ export interface components {
             errorKind?: string;
             diagnosticId?: string;
             skippedReason?: string;
+            exactCwdListProven?: boolean;
+            completedUntilNextCursorNull?: boolean;
+            pageCount?: number;
+            cursorCount?: number;
+            count?: number;
+            reasonCode?: string;
         };
         WorkerProbeSummary: {
             schemaVersion: number;
@@ -1122,6 +1144,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerCapabilities"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getControlPlaneDeviceWorkerProbeSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worker-owned read-only probe summary for a configured device. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerProbeSummary"];
                 };
             };
             400: components["responses"]["BadRequestError"];

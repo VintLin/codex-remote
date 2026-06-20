@@ -2,7 +2,7 @@ import type { InitializeResponse, v2 } from "@codex-remote/codex-protocol";
 
 import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
-import { PreconditionMissingError, type ReadOnlyProbeClient } from "./readOnlyProbe.ts";
+import { PreconditionMissingError, type ReadOnlyProbeClient, type ThreadListProbeEvidence } from "./readOnlyProbe.ts";
 
 interface AppServerReadOnlyProbeClientOptions {
   readyzTimeoutMs?: number;
@@ -11,7 +11,7 @@ interface AppServerReadOnlyProbeClientOptions {
 
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private firstAllowedThreadId: string | null = null;
-  private readonly maxPages = 3;
+  private readonly maxPages = 100;
   protected readonly rpc: AppServerRpcClient;
   private readonly readyzUrl: string;
   private readonly allowedProjectRoot: string;
@@ -103,8 +103,8 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
     });
   }
 
-  async listThreads(): Promise<unknown> {
-    return await this.listThreadsWithParams({
+  async listThreads(): Promise<ThreadListProbeEvidence> {
+    return await this.probeThreadListWithParams({
       cwd: this.allowedProjectRoot,
       sourceKinds: ["cli", "vscode", "appServer"],
       archived: false,
@@ -122,38 +122,70 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
     sortDirection: "desc";
     cursor: string | null;
   }): Promise<v2.ThreadListResponse> {
+    return await this.requestThreadList(params);
+  }
+
+  private async probeThreadListWithParams(params: {
+    cwd: string;
+    sourceKinds: readonly ["cli", "vscode", "appServer"];
+    archived: false;
+    limit: number;
+    sortDirection: "desc";
+    cursor: string | null;
+  }): Promise<ThreadListProbeEvidence> {
     let cursor: string | null = params.cursor;
-    let lastResponse: v2.ThreadListResponse | null = null;
+    let pageCount = 0;
+    let cursorCount = 0;
+    let count = 0;
+    let completedUntilNextCursorNull = false;
+    let exactCwdListProven = false;
 
     for (let page = 0; page < this.maxPages; page += 1) {
-      const response = (await this.rpc.request("thread/list", {
-        cwd: params.cwd,
-        sourceKinds: [...params.sourceKinds],
-        archived: params.archived,
-        limit: params.limit,
-        sortDirection: params.sortDirection,
-        cursor,
-      })) as v2.ThreadListResponse;
+      const response = await this.requestThreadList({ ...params, cursor });
 
-      lastResponse = response;
+      pageCount += 1;
+      count += response.data.length;
       for (const thread of response.data) {
         if (await isPathInsideRootRealpath(thread.cwd, this.allowedProjectRoot)) {
+          exactCwdListProven = true;
           this.firstAllowedThreadId = thread.id;
-          break;
         }
-      }
-
-      if (this.firstAllowedThreadId) {
-        break;
       }
 
       cursor = response.nextCursor;
       if (!cursor) {
+        completedUntilNextCursorNull = true;
         break;
       }
+      cursorCount += 1;
     }
 
-    return lastResponse ?? { data: [], nextCursor: null, backwardsCursor: null };
+    return {
+      exactCwdListProven,
+      completedUntilNextCursorNull,
+      pageCount,
+      cursorCount,
+      count,
+      ...(completedUntilNextCursorNull ? {} : { reasonCode: "pagination_probe_incomplete" }),
+    };
+  }
+
+  private async requestThreadList(params: {
+    cwd: string;
+    sourceKinds: readonly ["cli", "vscode", "appServer"];
+    archived: false;
+    limit: number;
+    sortDirection: "desc";
+    cursor: string | null;
+  }): Promise<v2.ThreadListResponse> {
+    return (await this.rpc.request("thread/list", {
+      cwd: params.cwd,
+      sourceKinds: [...params.sourceKinds],
+      archived: params.archived,
+      limit: params.limit,
+      sortDirection: params.sortDirection,
+      cursor: params.cursor,
+    })) as v2.ThreadListResponse;
   }
 
   async readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse> {

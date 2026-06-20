@@ -40,3 +40,17 @@ test("real local calibration should use only safe public steer probes", () => {
   assert.match(source, /safeSteerPrompt/);
   assert.doesNotMatch(source.match(/const safeSteerPrompt = "([^"]+)"/)?.[1] ?? "", /read|write|file|command|network|environment|token|path|output/i);
 });
+
+test("real local calibration when probing Q23 should use Worker-owned probe evidence", () => {
+  const source = readFileSync(join(repoRoot, "scripts/real-local-calibration.mjs"), "utf8");
+  const mainBody = source.slice(source.indexOf("async function main()"), source.indexOf("function inspectWorkerEvidence"));
+  const probeBody = source.slice(source.indexOf("function recordThreadListProbe"), source.indexOf("async function waitForTimeline"));
+
+  assert.match(mainBody, /\/worker\/probe/);
+  assert.match(mainBody, /recordThreadListProbe\(workerProbe\)/);
+  assert.match(probeBody, /exactCwdListProven/);
+  assert.match(probeBody, /completedUntilNextCursorNull/);
+  assert.match(probeBody, /cwd_scope_probe_incomplete/);
+  assert.match(probeBody, /pagination_probe_incomplete/);
+  assert.doesNotMatch(source, /no_control_plane_cwd_scope_probe|no_control_plane_pagination_probe/);
+});

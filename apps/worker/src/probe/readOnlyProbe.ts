@@ -5,9 +5,18 @@ export interface ReadOnlyProbeClient {
   initialize(): Promise<void>;
   initialized(): Promise<void>;
   listModels(): Promise<unknown>;
-  listThreads(): Promise<unknown>;
+  listThreads(): Promise<ThreadListProbeEvidence>;
   readFirstAllowedThread(): Promise<unknown>;
   close(): void;
+}
+
+export interface ThreadListProbeEvidence {
+  exactCwdListProven: boolean;
+  completedUntilNextCursorNull: boolean;
+  pageCount: number;
+  cursorCount: number;
+  count: number;
+  reasonCode?: string;
 }
 
 export interface RunReadOnlyProbeOptions {
@@ -102,13 +111,13 @@ export function createReadOnlyProbeFailureSummary(options: ProbeFailureSummaryOp
 
 async function runCheck(
   name: string,
-  run: () => Promise<void>,
+  run: () => Promise<Partial<ProbeCheckResult> | void>,
   timeoutMs: number,
 ): Promise<ProbeCheckResult> {
   const startedAt = Date.now();
   try {
-    await withTimeout(run(), timeoutMs);
-    return { name, ok: true, durationMs: Date.now() - startedAt };
+    const evidence = await withTimeout(run(), timeoutMs);
+    return { name, ok: true, durationMs: Date.now() - startedAt, ...(evidence ?? {}) };
   } catch (error) {
     if (error instanceof PreconditionMissingError) {
       return {
@@ -168,7 +177,7 @@ export async function runReadOnlyProbe(options: RunReadOnlyProbeOptions = {}): P
     checks.push(await runCheck("initialize", () => client.initialize(), checkTimeoutMs));
     checks.push(await runCheck("initialized", () => client.initialized(), checkTimeoutMs));
     checks.push(await runCheck("model/list", async () => void (await client.listModels()), checkTimeoutMs));
-    checks.push(await runCheck("thread/list", async () => void (await client.listThreads()), checkTimeoutMs));
+    checks.push(await runCheck("thread/list", async () => client.listThreads(), checkTimeoutMs));
     checks.push(await runCheck("thread/read", async () => void (await client.readFirstAllowedThread()), checkTimeoutMs));
     checks.push({
       name: "thread/turns/list",

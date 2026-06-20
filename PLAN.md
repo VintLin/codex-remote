@@ -84,7 +84,8 @@ Stage 9 当前证据：
 - Fixed in current slice：Worker specific conversation routes now prove access with `thread/read` followed by Worker-local realpath verification; start, timeline, follow-up, approval pending list, and interrupt record `real-pass`.
 - Fixed in current slice：`real:check` now waits briefly for post-start timeline visibility and uses separate steer/interrupt samples where available; same-turn steer-before-interrupt was tested and rejected because it regressed earlier evidence.
 - Fixed in current slice：`steer` readiness is now guarded by public active-turn proof; without that proof, `real:check` records sanitized `active-turn-gap` instead of a generic Worker error or product-ready pass.
-- Remaining real gaps：approval decision has no safe pending approval; steer has no safe public active-turn sample yet; Q23 cwd scope/pagination probes remain explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
+- Fixed in current slice：Q23 cwd scope and pagination now use a Control Plane device-scoped Worker probe. `thread/list cwd scope` and `thread/list pagination` record `real-pass` with `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, and sanitized page/count evidence.
+- Remaining real gaps：approval decision has no safe pending approval; steer has no safe public active-turn sample yet.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 

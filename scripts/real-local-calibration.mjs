@@ -56,6 +56,8 @@ const allowedDetailKeys = new Set([
   "pageCount",
   "cursorCount",
   "activeTurnProven",
+  "exactCwdListProven",
+  "completedUntilNextCursorNull",
 ]);
 
 const workerProofGatedChecks = new Set(["start conversation", "follow-up", "interrupt", "steer", "approval decision", "task link"]);
@@ -74,6 +76,7 @@ async function main() {
 
   const workerHealth = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/health`);
   const workerCapabilities = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/capabilities`);
+  const workerProbe = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/probe`);
   const workerEvidence = inspectWorkerEvidence(workerHealth, workerCapabilities);
   record("worker app-server proof", workerEvidence.proven ? "real-pass" : "real-gap", {
     ...detailFromResponse(workerHealth),
@@ -101,16 +104,7 @@ async function main() {
     count: conversationList.length,
   });
 
-  record("thread/list cwd scope", "real-gap", {
-    count: conversationList.length,
-    reasonCode: "no_control_plane_cwd_scope_probe",
-  });
-  record("thread/list pagination", "real-gap", {
-    pageCount: conversations.ok ? 1 : 0,
-    cursorCount: 0,
-    count: conversationList.length,
-    reasonCode: "no_control_plane_pagination_probe",
-  });
+  recordThreadListProbe(workerProbe);
 
   if (workerEvidence.proven && deviceId && projectId) {
     const started = await request(`/v1/devices/${encodeURIComponent(deviceId)}/conversations`, {
@@ -358,6 +352,41 @@ async function startControlPlaneFixture(device) {
   return null;
 }
 
+function recordThreadListProbe(workerProbe) {
+  const threadList = Array.isArray(workerProbe.value?.checks)
+    ? workerProbe.value.checks.find((check) => check?.name === "thread/list")
+    : null;
+  const detail = {
+    ...detailFromResponse(workerProbe),
+    exactCwdListProven: threadList?.exactCwdListProven === true,
+    completedUntilNextCursorNull: threadList?.completedUntilNextCursorNull === true,
+    pageCount: safeNumber(threadList?.pageCount),
+    cursorCount: safeNumber(threadList?.cursorCount),
+    count: safeNumber(threadList?.count),
+  };
+
+  if (!workerProbe.ok || !threadList) {
+    record("thread/list cwd scope", "real-gap", {
+      ...detail,
+      reasonCode: workerProbe.ok ? "cwd_scope_probe_missing" : "worker_probe_unavailable",
+    });
+    record("thread/list pagination", "real-gap", {
+      ...detail,
+      reasonCode: workerProbe.ok ? "pagination_probe_missing" : "worker_probe_unavailable",
+    });
+    return;
+  }
+
+  record("thread/list cwd scope", threadList.exactCwdListProven === true ? "real-pass" : "real-gap", {
+    ...detail,
+    reasonCode: threadList.exactCwdListProven === true ? undefined : "cwd_scope_probe_incomplete",
+  });
+  record("thread/list pagination", threadList.completedUntilNextCursorNull === true ? "real-pass" : "real-gap", {
+    ...detail,
+    reasonCode: threadList.completedUntilNextCursorNull === true ? undefined : safeReasonCode(threadList.reasonCode) ?? "pagination_probe_incomplete",
+  });
+}
+
 async function waitForTimeline(deviceId, conversationId) {
   let latest = null;
 
@@ -574,6 +603,14 @@ function refOf(value) {
 }
 
 function firstString(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function safeNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function safeReasonCode(value) {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 

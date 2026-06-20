@@ -299,6 +299,40 @@ test("product readiness check when real-check report contains raw URL value shou
   }
 });
 
+test("product readiness check when Q23 passes without Worker probe proof should fail", () => {
+  const root = createFixture();
+  try {
+    mkdirSync(join(root, "logs/real-check"), { recursive: true });
+    writeFileSync(
+      join(root, "logs/real-check/latest.json"),
+      JSON.stringify({
+        schemaVersion: "real-check-report/v1",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        summary: { total: 2, realPass: 2, fixedPass: 0, realGap: 0 },
+        checks: [
+          {
+            name: "thread/list cwd scope",
+            status: "real-pass",
+            durationMs: 1,
+            detail: { count: 1 },
+          },
+          {
+            name: "thread/list pagination",
+            status: "real-pass",
+            durationMs: 1,
+            detail: { pageCount: 1, cursorCount: 0, count: 1 },
+          },
+        ],
+      }),
+    );
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /real-pass thread\/list cwd scope without exact cwd proof/);
+    assert.match(failures, /real-pass thread\/list pagination without cursor-drain proof/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("product readiness check when calibration runner uses weak Q23 proof should fail", () => {
   const root = createFixture();
   try {
@@ -306,12 +340,14 @@ test("product readiness check when calibration runner uses weak Q23 proof should
     writeFileSync(
       runnerPath,
       readFileSync(runnerPath, "utf8")
-        .replace("no_control_plane_cwd_scope_probe", "no_conversations_to_compare_cwd_scope")
-        .replace("no_control_plane_pagination_probe", "conversationList.length > 0 ? \"real-pass\""),
+        .replace("/worker/probe", "/worker/health")
+        .replaceAll("exactCwdListProven", "conversationCountOnly")
+        .replaceAll("completedUntilNextCursorNull", "firstPageOnly"),
     );
     const failures = runProductReadinessCheck(root).join("\n");
-    assert.match(failures, /missing Q23 cwd-scope gap reason/);
-    assert.match(failures, /contains weak Q23 conversation-count pass pattern/);
+    assert.match(failures, /missing Worker-owned Q23 probe route/);
+    assert.match(failures, /missing Q23 exact cwd proof field/);
+    assert.match(failures, /missing Q23 pagination completion proof field/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

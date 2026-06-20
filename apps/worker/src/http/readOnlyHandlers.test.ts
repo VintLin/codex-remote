@@ -77,6 +77,27 @@ test("worker read-only handlers when no allowed conversations exist, should retu
   assert.equal(client.closed, true);
 });
 
+test("worker read-only handlers when listing conversations, should follow cursors until completion", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeClient({
+    listResponses: [
+      { data: [], nextCursor: "cursor-2", backwardsCursor: null },
+      { data: [createThread({ cwd: paths.allowedChild, id: "thread-2" })], nextCursor: null, backwardsCursor: null },
+    ],
+  });
+
+  const conversations = await listConversations(createContext(paths.allowedRoot, client));
+
+  assert.deepEqual(
+    client.listCalls.map((call) => call.cursor),
+    [null, "cursor-2"],
+  );
+  assert.deepEqual(
+    conversations.map((conversation) => conversation.id),
+    ["thread-2"],
+  );
+});
+
 test("worker read-only handlers when reading timeline, should prove specific id by read and return metadata only", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
@@ -205,9 +226,15 @@ test("worker read-only handlers when probe runs, should close client through pro
   });
 
   const summary = await runProbe(createContext(paths.allowedRoot, client));
+  const threadListCheck = summary.checks.find((check) => check.name === "thread/list");
 
   assert.equal(summary.deviceId, "device-local");
   assert.equal(summary.appServer.transport, "loopbackWebSocket");
+  assert.equal(threadListCheck?.exactCwdListProven, true);
+  assert.equal(threadListCheck?.completedUntilNextCursorNull, true);
+  assert.equal(threadListCheck?.pageCount, 1);
+  assert.equal(threadListCheck?.cursorCount, 0);
+  assert.equal(threadListCheck?.count, 1);
   assert.equal(summary.checks.find((check) => check.name === "model/list")?.failureType, "precondition_missing");
   assert.equal(client.closed, true);
 });

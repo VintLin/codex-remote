@@ -13,6 +13,7 @@ import type {
   SteerTurnInput,
   WorkerCapabilities,
   WorkerHealth,
+  WorkerProbeSummary,
 } from "@codex-remote/api-contract";
 
 import type { ConfiguredWorkerDevice } from "../config/controlPlaneConfig.ts";
@@ -21,6 +22,7 @@ import { ControlPlaneHttpError } from "../http/errors.ts";
 export interface WorkerUpstreamClient {
   getHealth(device: ConfiguredWorkerDevice): Promise<WorkerHealth>;
   getCapabilities(device: ConfiguredWorkerDevice): Promise<WorkerCapabilities>;
+  getProbeSummary(device: ConfiguredWorkerDevice): Promise<WorkerProbeSummary>;
   listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
@@ -97,6 +99,7 @@ export function createWorkerUpstreamClient(options: {
   return {
     getHealth: (device) => request<WorkerHealth>(device, "/v1/worker/health", { method: "GET", project: projectWorkerHealth }),
     getCapabilities: (device) => request<WorkerCapabilities>(device, "/v1/worker/capabilities", { method: "GET", project: projectWorkerCapabilities }),
+    getProbeSummary: (device) => request<WorkerProbeSummary>(device, "/v1/worker/probe", { method: "GET", project: projectWorkerProbeSummary }),
     listProjects: (device) => request<RemoteProject[]>(device, "/v1/projects", { method: "GET", project: projectProjectList }),
     listConversations: (device) => request<CodexConversation[]>(device, "/v1/conversations", { method: "GET", project: projectConversationList }),
     readTimeline: (device, conversationId) =>
@@ -235,6 +238,64 @@ function projectWorkerCapabilities(value: unknown): WorkerCapabilities {
     canRunReadOnlyProbe: readBoolean(body, "canRunReadOnlyProbe"),
     appServerTransport: readEnum(body, "appServerTransport", ["loopbackWebSocket", "stdio", "unixSocket"]),
     supportedSourceKinds: readStringArray(body, "supportedSourceKinds"),
+  };
+}
+
+function projectWorkerProbeSummary(value: unknown): WorkerProbeSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, ["schemaVersion", "startedAt", "completedAt", "ok", "mode", "deviceId", "codexVersion", "appServer", "checks"]);
+  const appServer = requireRecord(body.appServer);
+  assertExactFields(appServer, ["transport", "startedByWorker", "readyz"]);
+
+  return {
+    schemaVersion: readNumber(body, "schemaVersion"),
+    startedAt: readString(body, "startedAt"),
+    completedAt: readString(body, "completedAt"),
+    ok: readBoolean(body, "ok"),
+    mode: readEnum(body, "mode", ["readOnly"]),
+    deviceId: readString(body, "deviceId"),
+    codexVersion: readNullableString(body, "codexVersion"),
+    appServer: {
+      transport: readEnum(appServer, "transport", ["loopbackWebSocket", "stdio", "unixSocket"]),
+      startedByWorker: readBoolean(appServer, "startedByWorker"),
+      readyz: readBoolean(appServer, "readyz"),
+    },
+    checks: requireArray(body.checks).map(projectProbeCheckResult),
+  };
+}
+
+function projectProbeCheckResult(value: unknown): WorkerProbeSummary["checks"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, [
+    "name",
+    "ok",
+    "durationMs",
+    "failureType",
+    "errorKind",
+    "diagnosticId",
+    "skippedReason",
+    "exactCwdListProven",
+    "completedUntilNextCursorNull",
+    "pageCount",
+    "cursorCount",
+    "count",
+    "reasonCode",
+  ]);
+
+  return {
+    name: readString(body, "name"),
+    ok: readBoolean(body, "ok"),
+    durationMs: readNumber(body, "durationMs"),
+    ...(typeof body.failureType === "string" ? { failureType: readEnum(body, "failureType", ["env_not_configured", "precondition_missing", "assertion_failed"]) } : {}),
+    ...(typeof body.errorKind === "string" ? { errorKind: readString(body, "errorKind") } : {}),
+    ...(typeof body.diagnosticId === "string" ? { diagnosticId: readString(body, "diagnosticId") } : {}),
+    ...(typeof body.skippedReason === "string" ? { skippedReason: readString(body, "skippedReason") } : {}),
+    ...(typeof body.exactCwdListProven === "boolean" ? { exactCwdListProven: readBoolean(body, "exactCwdListProven") } : {}),
+    ...(typeof body.completedUntilNextCursorNull === "boolean" ? { completedUntilNextCursorNull: readBoolean(body, "completedUntilNextCursorNull") } : {}),
+    ...(typeof body.pageCount === "number" ? { pageCount: readNumber(body, "pageCount") } : {}),
+    ...(typeof body.cursorCount === "number" ? { cursorCount: readNumber(body, "cursorCount") } : {}),
+    ...(typeof body.count === "number" ? { count: readNumber(body, "count") } : {}),
+    ...(typeof body.reasonCode === "string" ? { reasonCode: readString(body, "reasonCode") } : {}),
   };
 }
 
@@ -399,6 +460,14 @@ function readBoolean(body: Record<string, unknown>, field: string): boolean {
 function readNullableNumber(body: Record<string, unknown>, field: string): number | null {
   const value = body[field];
   if (value === null || typeof value === "number") {
+    return value;
+  }
+  throw new ControlPlaneHttpError(424, "device_unavailable", "Device response was invalid.", { field, operation: "worker_response", retryable: false });
+}
+
+function readNumber(body: Record<string, unknown>, field: string): number {
+  const value = body[field];
+  if (typeof value === "number") {
     return value;
   }
   throw new ControlPlaneHttpError(424, "device_unavailable", "Device response was invalid.", { field, operation: "worker_response", retryable: false });

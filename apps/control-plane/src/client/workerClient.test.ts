@@ -27,6 +27,44 @@ test("worker upstream client when requesting, should use bearer token and versio
   assert.equal(headers.get("authorization"), "Bearer example-token");
 });
 
+test("worker upstream client when requesting probe, should use worker probe path and project sanitized evidence", async () => {
+  const calls: Array<{ init: RequestInit | undefined; url: string }> = [];
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async (request, init) => {
+      calls.push({ init, url: String(request) });
+      return Response.json({
+        schemaVersion: 1,
+        startedAt: "2026-06-20T00:00:00.000Z",
+        completedAt: "2026-06-20T00:00:01.000Z",
+        ok: true,
+        mode: "readOnly",
+        deviceId: "device-a",
+        codexVersion: null,
+        appServer: { transport: "stdio", startedByWorker: true, readyz: true },
+        checks: [
+          {
+            name: "thread/list",
+            ok: true,
+            durationMs: 1,
+            exactCwdListProven: true,
+            completedUntilNextCursorNull: true,
+            pageCount: 2,
+            cursorCount: 1,
+            count: 3,
+          },
+        ],
+      });
+    },
+  });
+
+  const probe = await client.getProbeSummary(device);
+
+  assert.equal(calls[0]?.url, "http://127.0.0.1:8788/v1/worker/probe");
+  assert.equal(probe.checks[0]?.exactCwdListProven, true);
+  assert.equal(probe.checks[0]?.completedUntilNextCursorNull, true);
+});
+
 test("worker upstream client when upstream fails, should throw sanitized error", async () => {
   const client = createWorkerUpstreamClient({
     timeoutMs: 1_000,

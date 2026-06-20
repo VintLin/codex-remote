@@ -10,7 +10,12 @@ import type {
 } from "@codex-remote/api-contract";
 import type { v2 } from "@codex-remote/codex-protocol";
 
-import { createReadOnlyProbeFailureSummary, PreconditionMissingError, runReadOnlyProbe } from "../probe/readOnlyProbe.ts";
+import {
+  createReadOnlyProbeFailureSummary,
+  PreconditionMissingError,
+  runReadOnlyProbe,
+  type ThreadListProbeEvidence,
+} from "../probe/readOnlyProbe.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
 import { mapUnknownError, WorkerHttpError } from "./errors.ts";
 import {
@@ -47,7 +52,7 @@ type ThreadListParams = {
 
 const sourceKinds = ["cli", "vscode", "appServer"] as const;
 const listLimit = 25;
-const maxPages = 3;
+const maxPages = 100;
 
 export async function getHealth(context: WorkerReadOnlyHandlerContext): Promise<WorkerHealth> {
   const checkedAt = context.now();
@@ -100,7 +105,7 @@ export async function runProbe(context: WorkerReadOnlyHandlerContext): Promise<W
       listModels: async () => {
         throw new PreconditionMissingError("Worker HTTP read-only client does not expose model/list.");
       },
-      listThreads: async () => client.listThreads(createThreadListParams(context.config.allowedProjectRoot, null)),
+      listThreads: async () => collectThreadListProbeEvidence(client, context.config.allowedProjectRoot),
       readFirstAllowedThread: async () => {
         const response = await client.listThreads(createThreadListParams(context.config.allowedProjectRoot, null));
         const firstAllowed = await findFirstAllowedThread(response.data, context.config.allowedProjectRoot);
@@ -232,6 +237,46 @@ async function listAllowedThreads(
   }
 
   return allowedThreads;
+}
+
+async function collectThreadListProbeEvidence(
+  client: WorkerReadOnlyAppServerClient,
+  allowedProjectRoot: string,
+): Promise<ThreadListProbeEvidence> {
+  let cursor: string | null = null;
+  let pageCount = 0;
+  let cursorCount = 0;
+  let count = 0;
+  let exactCwdListProven = false;
+  let completedUntilNextCursorNull = false;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const response = await client.listThreads(createThreadListParams(allowedProjectRoot, cursor));
+    pageCount += 1;
+    count += response.data.length;
+
+    for (const thread of response.data) {
+      if (await isPathInsideRootRealpath(thread.cwd, allowedProjectRoot)) {
+        exactCwdListProven = true;
+      }
+    }
+
+    cursor = response.nextCursor;
+    if (!cursor) {
+      completedUntilNextCursorNull = true;
+      break;
+    }
+    cursorCount += 1;
+  }
+
+  return {
+    exactCwdListProven,
+    completedUntilNextCursorNull,
+    pageCount,
+    cursorCount,
+    count,
+    ...(completedUntilNextCursorNull ? {} : { reasonCode: "pagination_probe_incomplete" }),
+  };
 }
 
 async function findFirstAllowedThread(

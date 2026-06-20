@@ -155,8 +155,11 @@ function checkRealCheckRunnerSource(root) {
   )
     .concat(source.includes("/worker/capabilities") ? [] : [`${path} missing worker capabilities proof`])
     .concat(source.includes("appServerTransport") ? [] : [`${path} missing WorkerCapabilities appServerTransport proof`])
-    .concat(source.includes("no_control_plane_cwd_scope_probe") ? [] : [`${path} missing Q23 cwd-scope gap reason`])
-    .concat(source.includes("no_control_plane_pagination_probe") ? [] : [`${path} missing Q23 pagination gap reason`])
+    .concat(source.includes("/worker/probe") ? [] : [`${path} missing Worker-owned Q23 probe route`])
+    .concat(source.includes("exactCwdListProven") ? [] : [`${path} missing Q23 exact cwd proof field`])
+    .concat(source.includes("completedUntilNextCursorNull") ? [] : [`${path} missing Q23 pagination completion proof field`])
+    .concat(source.includes("cwd_scope_probe_incomplete") ? [] : [`${path} missing Q23 cwd-scope incomplete reason`])
+    .concat(source.includes("pagination_probe_incomplete") ? [] : [`${path} missing Q23 pagination incomplete reason`])
     .concat(source.includes("no_all_workers_down_fixture") ? [] : [`${path} missing Q24 all-workers-down fixture gap reason`])
     .concat(source.includes("no_invalid_worker_token_fixture") ? [] : [`${path} missing Q24 invalid-worker-token fixture gap reason`])
     .concat(/conversationList\.length\s*>\s*0\s*\?\s*["']real-pass["']/.test(source) ? [`${path} contains weak Q23 conversation-count pass pattern`] : []);
@@ -206,6 +209,8 @@ function checkRealCheckLatestReport(root) {
     "pageCount",
     "cursorCount",
     "activeTurnProven",
+    "exactCwdListProven",
+    "completedUntilNextCursorNull",
   ]);
   const unsafeValuePatterns = [
     /\bsk-[A-Za-z0-9_-]{12,}\b/,
@@ -258,6 +263,19 @@ function checkRealCheckLatestReport(root) {
         }
         if (record.name === "steer" && record.status === "real-pass" && (detail.status !== 202 || detail.activeTurnProven !== true)) {
           failures.push(`${reportPath} contains real-pass steer without active turn proof`);
+        }
+        if (record.name === "thread/list cwd scope" && record.status === "real-pass" && detail.exactCwdListProven !== true) {
+          failures.push(`${reportPath} contains real-pass thread/list cwd scope without exact cwd proof`);
+        }
+        if (
+          record.name === "thread/list pagination" &&
+          record.status === "real-pass" &&
+          (detail.completedUntilNextCursorNull !== true ||
+            typeof detail.pageCount !== "number" ||
+            typeof detail.cursorCount !== "number" ||
+            typeof detail.count !== "number")
+        ) {
+          failures.push(`${reportPath} contains real-pass thread/list pagination without cursor-drain proof`);
         }
       }
     }

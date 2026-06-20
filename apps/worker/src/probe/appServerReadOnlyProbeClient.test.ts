@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { AppServerReadOnlyProbeClient } from "./appServerReadOnlyProbeClient.ts";
@@ -83,4 +86,43 @@ test("when readyz uses rpc mode, should initialize with generated client info an
   ]);
   assert.deepEqual(notifications, [{ method: "initialized" }]);
   assert.equal(client.getCodexVersion(), "Codex/0.0.0 test");
+});
+
+test("when probing thread list, should follow cursors until completion and report sanitized evidence", async () => {
+  const allowedRoot = await mkdtemp(join(tmpdir(), "codex-remote-probe-"));
+  const requests: Array<{ method: string; params: { cursor?: string | null } }> = [];
+  const client = new AppServerReadOnlyProbeClient(
+    {
+      close() {},
+      notify() {},
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params: params as { cursor?: string | null } });
+        return requests.length === 1
+          ? {
+              data: [{ id: "thread-1", cwd: allowedRoot }],
+              nextCursor: "cursor-2",
+              backwardsCursor: null,
+            }
+          : {
+              data: [],
+              nextCursor: null,
+              backwardsCursor: null,
+            };
+      },
+    } as never,
+    "",
+    allowedRoot,
+  );
+
+  assert.deepEqual(await client.listThreads(), {
+    exactCwdListProven: true,
+    completedUntilNextCursorNull: true,
+    pageCount: 2,
+    cursorCount: 1,
+    count: 1,
+  });
+  assert.deepEqual(requests.map((request) => ({ method: request.method, cursor: request.params.cursor })), [
+    { method: "thread/list", cursor: null },
+    { method: "thread/list", cursor: "cursor-2" },
+  ]);
 });

@@ -18,6 +18,7 @@ import type {
   TaskStatus,
   WorkerCapabilities,
   WorkerHealth,
+  WorkerProbeSummary,
 } from "@codex-remote/api-contract";
 
 import type { ControlPlaneConfig, ConfiguredWorkerDevice } from "../config/controlPlaneConfig.ts";
@@ -160,6 +161,11 @@ export function createControlPlaneHttpApp(params: {
   app.get("/v1/devices/:deviceId/worker/capabilities", async (c) => {
     const device = requireDevice(registry, c.req.param("deviceId"));
     return c.json(normalizeWorkerCapabilities(device, await runForDevice(device, "worker/capabilities", () => params.workerClient.getCapabilities(device))));
+  });
+
+  app.get("/v1/devices/:deviceId/worker/probe", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    return c.json(normalizeWorkerProbeSummary(device, await runForDevice(device, "worker/probe", () => params.workerClient.getProbeSummary(device))));
   });
 
   app.get("/v1/devices/:deviceId/projects", async (c) => {
@@ -322,6 +328,10 @@ function normalizeWorkerHealth(device: ConfiguredWorkerDevice, health: WorkerHea
 
 function normalizeWorkerCapabilities(device: ConfiguredWorkerDevice, capabilities: WorkerCapabilities): WorkerCapabilities {
   return { ...capabilities, deviceId: device.id };
+}
+
+function normalizeWorkerProbeSummary(device: ConfiguredWorkerDevice, summary: WorkerProbeSummary): WorkerProbeSummary {
+  return { ...summary, deviceId: device.id };
 }
 
 function normalizeConversation(device: ConfiguredWorkerDevice, conversation: CodexConversation): CodexConversation {

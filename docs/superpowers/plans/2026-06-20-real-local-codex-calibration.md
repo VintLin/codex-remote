@@ -2194,6 +2194,144 @@ Task 14 implementation notes:
 - Real runtime verification passed for stack lifecycle and Web smoke: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, `pnpm real:status`.
 - Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
+---
+
+### Task 15: Probe Q23 Cwd Scope And Pagination
+
+**Files:**
+- Modify: `scripts/real-local-calibration.mjs`
+- Modify: `scripts/real-local-calibration.test.mjs`
+- Modify: `scripts/product-readiness-check.mjs`
+- Modify: `scripts/product-readiness-check.test.mjs`
+- Modify: `packages/api-contract/openapi.yaml`
+- Generate: `packages/api-contract/src/generated/openapi.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.test.ts`
+- Modify: `apps/worker/src/probe/readOnlyProbe.ts`
+- Modify: `apps/worker/src/probe/readOnlyProbe.test.ts`
+- Modify: `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`
+- Modify: `apps/worker/src/probe/appServerReadOnlyProbeClient.test.ts`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Use `packages/api-contract/openapi.yaml` as the source for any new Worker probe evidence fields, then regenerate API types.
+- Keep DB schema and Codex protocol generated files unchanged.
+- Keep `apps/web` out of this slice; Q23 is a calibration/readiness probe, not a UI change.
+- Keep Worker as the only app-server caller.
+- `real-local-calibration.mjs` must call the Worker-owned probe endpoint through Control Plane/Worker-shaped HTTP and consume only sanitized contract fields.
+
+**Non-goals:**
+- No persistent multi-root/project binding table.
+- No git worktree discovery implementation.
+- No symlink, Windows/WSL path alias, sourceKinds, archived inventory, or provider matrix implementation.
+- No broad conversation inventory UI change.
+- No deletion or mutation of Codex conversation history.
+- No raw cwd, allowedProjectRoot, local path, raw ids, raw prompts, raw JSON-RPC, command output, stack/cause, or token in reports/docs.
+
+**Pre-review evidence:**
+- Q23 imported answer says `thread/list(cwd)` is exact-after-normalization, not prefix/subtree.
+- Q23 says pagination must continue until `nextCursor:null`; fixed page count is not valid readiness evidence.
+- Current real-check records `thread/list cwd scope` and `thread/list pagination` as explicit gaps with `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
+- Worker now uses `thread/read` plus Worker-local realpath verification for specific conversation authorization, so list gaps should be handled as inventory/readiness evidence rather than reintroducing list-only authorization.
+
+Reviewer: `019ee628-15be-7b21-8d67-162914f80e7b`
+
+Result: needs changes; plan updated to use an OpenAPI-first Worker-owned probe instead of weak conversation counts or direct app-server access.
+
+Findings addressed by Task 15:
+
+- High: File scope now includes Worker probe/read-only code, Worker tests, OpenAPI source, and generated API types.
+- High: Q23 evidence fields will be added to `packages/api-contract/openapi.yaml` before implementation; no non-contract fields are allowed on `/v1/worker/probe`.
+- Medium: Q23 `real-pass` must come from Worker probe exact-cwd and cursor-drain evidence, not `/v1/conversations` count.
+- Medium: Hitting any page cap while `nextCursor` remains non-null is `pagination_probe_incomplete`, not readiness.
+
+Review focus:
+
+- Does this slice need a Worker-only probe endpoint, or can `real-local-calibration.mjs` prove Q23 through existing public endpoints without violating Worker-only app-server ownership?
+- What is the smallest safe real evidence that can turn Q23 from generic `no_*_probe` into `real-pass` or a narrower `real-gap`?
+- Are report details sufficiently sanitized if they include only `pageCount`, `cursorCount`, `count`, booleans, and reason codes?
+- Does the plan avoid claiming subtree/worktree support that Stage 9 does not implement?
+
+- [x] **Step 1: Add focused Q23 tests**
+
+Extend calibration/readiness tests to require:
+
+- no generic `no_control_plane_cwd_scope_probe` / `no_control_plane_pagination_probe` after the probe exists;
+- pagination evidence records at least `pageCount`, `cursorCount`, `count`, and a specific reason when incomplete;
+- cwd-scope evidence records only booleans/counts/reason codes, not raw cwd or local paths;
+- product readiness rejects Q23 `real-pass` without Worker probe fields `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, `pageCount`, `cursorCount`, and `count`.
+
+- [x] **Step 2: Update OpenAPI and generated contract types**
+
+Add sanitized Q23 evidence fields to the Worker probe response schema:
+
+- `exactCwdListProven`: boolean
+- `completedUntilNextCursorNull`: boolean
+- `pageCount`: number
+- `cursorCount`: number
+- `count`: number
+- `reasonCode`: controlled string when incomplete
+
+Then run the package generation command so implementation imports generated types instead of hand-writing parallel DTOs.
+
+- [x] **Step 3: Implement Worker-owned Q23 evidence path**
+
+Implement the smallest Worker-owned evidence path that can safely answer:
+
+- whether the current configured project root exact-cwd `thread/list` query succeeds;
+- whether paginated inventory follows cursors until completion for the current filter, or records a specific sanitized incomplete reason;
+- whether the report can distinguish exact-cwd proof from subtree/worktree support not implemented in this slice.
+
+The Worker probe may use bounded defense-in-depth limits for runtime safety, but if it stops before `nextCursor:null`, it must report `pagination_probe_incomplete` and cannot mark pagination `real-pass`.
+
+- [x] **Step 4: Update readiness guard**
+
+Ensure `pnpm product:check` fails if future `logs/real-check/latest.json` claims Q23 `real-pass` with only weak conversation-count evidence, generic gap reasons, fixed one-page assumptions, or missing Worker probe proof fields.
+
+- [x] **Step 5: Run focused and real verification**
+
+```bash
+pnpm --filter @codex-remote/api-contract check:generated
+pnpm --filter @codex-remote/worker test
+node --test scripts/real-local-calibration.test.mjs
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: Q23 checks become `real-pass` if exact-cwd and full pagination are proven through Worker-owned evidence; otherwise they become narrower `real-gap` records such as `cwd_scope_probe_incomplete` or `pagination_probe_incomplete`.
+
+Actual: `pnpm real:check` generated `logs/real-check/latest.json` with `total=19 realPass=17 fixedPass=0 realGap=2`. Both Q23 checks are `real-pass` with Worker probe fields `exactCwdListProven=true`, `completedUntilNextCursorNull=true`, `pageCount=1`, `cursorCount=0`, and `count=17`. The remaining gaps are `approval decision` with `no_safe_pending_approval` and `steer` with `active-turn-gap`.
+
+- [x] **Step 6: Run full gates and commit**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git commit -m "fix: probe real thread list inventory"
+```
+
+Task 15 implementation notes:
+
+- Added device-scoped Control Plane route `/v1/devices/{deviceId}/worker/probe` to the OpenAPI source and regenerated API types.
+- Extended `ProbeCheckResult` with sanitized Q23 evidence fields.
+- Worker probe now drains `thread/list` cursors until `nextCursor:null` or records `pagination_probe_incomplete`; it no longer treats a fixed page count as readiness.
+- Worker conversation inventory follows cursors instead of stopping at the previous three-page cap.
+- `scripts/real-local-calibration.mjs` records Q23 from the Control Plane device-scoped Worker probe, not from `/v1/conversations` count.
+- Focused verification passed: `pnpm --filter @codex-remote/api-contract check:generated`, `pnpm --filter @codex-remote/api-contract test`, `pnpm --filter @codex-remote/worker test`, `pnpm --filter @codex-remote/worker typecheck`, `pnpm --filter @codex-remote/control-plane test`, `pnpm --filter @codex-remote/control-plane typecheck`, `node --test scripts/real-local-calibration.test.mjs scripts/product-readiness-check.test.mjs`, and `pnpm product:check`.
+- Real runtime verification passed: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, and `pnpm real:status`.
+- Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.

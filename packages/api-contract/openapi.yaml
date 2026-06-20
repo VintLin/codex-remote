@@ -276,6 +276,36 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/worker/probe:
+    get:
+      operationId: getControlPlaneDeviceWorkerProbeSummary
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Worker-owned read-only probe summary for a configured device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerProbeSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/devices/{deviceId}/conversations:
     post:
       operationId: startControlPlaneDeviceConversation
@@ -1343,6 +1373,18 @@ components:
         diagnosticId:
           type: string
         skippedReason:
+          type: string
+        exactCwdListProven:
+          type: boolean
+        completedUntilNextCursorNull:
+          type: boolean
+        pageCount:
+          type: number
+        cursorCount:
+          type: number
+        count:
+          type: number
+        reasonCode:
           type: string
     WorkerProbeSummary:
       type: object
