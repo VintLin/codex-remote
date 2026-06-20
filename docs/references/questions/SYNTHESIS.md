@@ -34,7 +34,7 @@ The synthesis answers two questions:
 | Q19 public project identity | Answered | Public project ids must be opaque; `allowedProjectRoot`, cwd, basename, and absolute paths are Worker-local implementation details. |
 | Q20 Worker-owned app-server transport | Answered | Stage 9 default target is stdio; loopback WebSocket is explicit debug fallback only. |
 | Q21 real command/control compatibility | Answered by local verification | Stage 9 real-check records start, follow-up, interrupt, and steer as `real-pass`; steer requires public active-turn proof from a safe independent sample. |
-| Q22 safe active turn and pending approval | Partial | Approval pending list is real; Stage 10 isolated fixture exists but current app-server runs still do not emit a safe pending approval, so approval decision remains a documented safety `real-gap`. |
+| Q22 safe active turn and pending approval | Partial | Approval pending list is real; Stage 10 isolated fixture exists but current app-server runs still do not emit a safe pending approval after stdout-only probing and `approvalsReviewer: "user"`, so approval decision remains a documented safety `real-gap`. |
 | Q23 `thread/list(cwd)` scope and pagination | Answered by local verification | Current Stage 9 Worker probe proves exact-cwd list and cursor-drain pagination for the configured project root; multi-root/worktree/path-alias matrix remains future scope. |
 | Q24 degraded versus empty data | Answered by local verification | Stage 9 fixtures distinguish healthy empty data from dependency failure; all-workers-down and invalid-worker-token do not return `200 []` for conversations. |
 | Q25 real Web E2E gate | Answered | Stage 9 needs a minimal browser smoke; HTTP-only `real:check` is not sufficient for Web readiness. |

@@ -209,26 +209,28 @@ function createTextUserInput(message: string): v2.UserInput {
 
 function getCalibrationThreadStartOverrides(
   context: WorkerWriteHandlerContext,
-): Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox"> {
+): Pick<v2.ThreadStartParams, "approvalPolicy" | "approvalsReviewer" | "sandbox"> {
   if (context.config.calibrationApprovalMode !== "on-request") {
     return {};
   }
 
   return {
     approvalPolicy: "on-request",
+    approvalsReviewer: "user",
     sandbox: "read-only",
   };
 }
 
 function getCalibrationTurnStartOverrides(
   context: WorkerWriteHandlerContext,
-): Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy"> {
+): Pick<v2.TurnStartParams, "approvalPolicy" | "approvalsReviewer" | "sandboxPolicy"> {
   if (context.config.calibrationApprovalMode !== "on-request") {
     return {};
   }
 
   return {
     approvalPolicy: "on-request",
+    approvalsReviewer: "user",
     sandboxPolicy: {
       type: "readOnly",
       networkAccess: false,

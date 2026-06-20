@@ -97,9 +97,10 @@ Stage 10 当前证据：
 
 - Implemented in current slice：Worker calibration runtime flag, isolated approval fixture process orchestration, sanitized fixture report checks, and decline-only decision path are implemented without OpenAPI/Web/Control Plane public contract changes.
 - Real verification：`pnpm real:start` and `pnpm real:status` prove Worker, Control Plane, and Web running on loopback; `pnpm web:e2e:smoke` passes against the real stack.
-- Current `pnpm real:check` evidence：`logs/real-check/latest.json` currently records `total=19 realPass=17 fixedPass=0 realGap=2`. `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`; latest run also has an intermittent `interrupt_not_accepted` sanitized gap.
-- Focused fixes attempted：workspace-write/on-request, read-only/on-request, and read-only/untrusted fixture profiles were tested. The retained implementation is read-only/on-request because it matches Q22's safer fixture direction; no automatic accept, `acceptForSession`, policy amendment, or production approval model was added.
-- Remaining risk：current app-server behavior does not emit a pending approval for the isolated fixture prompt within the bounded polling window, so approval decision is still not product-ready.
+- Current `pnpm real:check` evidence：`logs/real-check/latest.json` currently records `total=19 realPass=18 fixedPass=0 realGap=1`. `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`; `interrupt` records `real-pass` with `activeTurnProven=true`.
+- Fixed in current slice：interrupt now uses an independent safe interrupt-only active-turn sample before calling the public interrupt route, avoiding the previous follow-up/interrupt race on the original conversation.
+- Focused fixes attempted：workspace-write/on-request, read-only/on-request, read-only/untrusted, stdout-only command prompt, and explicit generated-protocol `approvalsReviewer: "user"` were tested. The retained implementation is read-only/on-request with user-routed approvals because it matches Q22's safer fixture direction; no automatic accept, `acceptForSession`, policy amendment, production approval model, user-layer rules edit, or auth-copying path was added.
+- Remaining risk：current app-server behavior does not emit a pending approval for the isolated fixture prompt within the bounded polling window, so approval decision is still not product-ready. The next safe evidence source is a trusted project-local rules layer or equivalent app-server-supported rules injection; do not modify user `~/.codex/rules` automatically.
 
 ## 每阶段交付标准
 
@@ -423,7 +424,7 @@ Stage 8 剩余限制：
 
 - Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
 - Stage 10 已进入实现中，只处理 isolated approval decision fixture；不做 streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
-- Q22 的 isolated approval fixture 已实现但当前 real run 仍未产生 pending approval；approval decision 继续保留为 safety `real-gap`。自动 accept、persistent policy amendment 和 production approval safety model 不属于当前范围。
+- Q22 的 isolated approval fixture 已实现但当前 real run 仍未产生 pending approval；approval decision 继续保留为 safety `real-gap`。自动 accept、persistent policy amendment、user-layer rules edit、auth-copying path 和 production approval safety model 不属于当前范围。
 - Q23 的 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是 Stage 9 当前阻塞；Q24 degraded-vs-empty 当前 Stage 9 fixture 已有 real-pass evidence。
 
 后续阶段默认设计输入：

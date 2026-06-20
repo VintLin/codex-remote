@@ -18,6 +18,7 @@ const token =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.CODEX_REMOTE_LOCAL_TOKEN ?? "example-token";
 const requestTimeoutMs = Number.parseInt(process.env.CODEX_REMOTE_REAL_CHECK_TIMEOUT_MS ?? "5000", 10);
 const safeSteerSamplePrompt = "codex-remote-calibration steer sample: wait ten seconds, then reply with OK.";
+const safeInterruptSamplePrompt = "codex-remote-calibration interrupt sample: wait ten seconds, then reply with OK.";
 const safeSteerPrompt = "codex-remote-calibration steer: keep the response short.";
 const fixtureDeviceId = "fixture-device";
 const fixtureApprovalKinds = new Set(["file_change", "command_execution", "legacy_apply_patch", "legacy_exec"]);
@@ -150,14 +151,15 @@ async function main() {
     });
   }
 
-  let activeTurnId = null;
   let steerConversationId = null;
   let steerTurnId = null;
   let steerActiveTurnId = null;
+  let interruptConversationId = null;
+  let interruptTurnId = null;
+  let interruptActiveTurnId = null;
   if (workerEvidence.proven && deviceId && conversationId) {
     const timeline = await waitForTimeline(deviceId, conversationId);
     const turns = Array.isArray(timeline.value?.turns) ? timeline.value.turns : [];
-    activeTurnId = firstString(turns.find((turn) => isActiveTurnStatus(turn?.status))?.id);
     record("timeline", timeline.ok ? "real-pass" : "real-gap", {
       ...detailFromResponse(timeline),
       turns: turns.length,
@@ -221,6 +223,10 @@ async function main() {
     steerConversationId = steerSample.conversationId;
     steerTurnId = steerSample.turnId;
     steerActiveTurnId = steerTurnId && steerConversationId ? await waitForActiveTurn(deviceId, steerConversationId, steerTurnId) : null;
+    const interruptSample = await startInterruptSample(deviceId, projectId);
+    interruptConversationId = interruptSample.conversationId;
+    interruptTurnId = interruptSample.turnId;
+    interruptActiveTurnId = interruptTurnId && interruptConversationId ? await waitForActiveTurn(deviceId, interruptConversationId, interruptTurnId) : null;
   } else {
     const reasonCode = workerEvidence.proven ? "no_conversation" : "real_app_server_not_proven";
     record("timeline", "real-gap", { reasonCode });
@@ -229,8 +235,15 @@ async function main() {
     record("approval decision", "real-gap", { reasonCode });
   }
 
-  if (workerEvidence.proven && deviceId && conversationId && (activeTurnId || steerTurnId)) {
-    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerConversationId, steerTurnId, steerActiveTurnId }, workerEvidence);
+  if (workerEvidence.proven && deviceId && conversationId && (interruptTurnId || steerTurnId)) {
+    await recordActiveTurnControls(deviceId, conversationId, {
+      interruptConversationId,
+      interruptTurnId,
+      interruptActiveTurnId,
+      steerConversationId,
+      steerTurnId,
+      steerActiveTurnId,
+    }, workerEvidence);
   } else {
     const reasonCode = workerEvidence.proven ? "no_safe_active_turn" : "real_app_server_not_proven";
     record("interrupt", "real-gap", { reasonCode });
@@ -373,7 +386,8 @@ async function runIsolatedApprovalFixture() {
       method: "POST",
       json: {
         projectId,
-        message: "Create a file named approval-fixture-target.txt in the current project root containing the word declined.",
+        message:
+          'Use the shell to run exactly this command: python3 -c "print(\'APPROVAL_PROBE_READONLY_OK\')". If approval is required, request it and wait.',
         clientRequestId: `real-check-approval-fixture-${Date.now()}`,
       },
     });
@@ -711,6 +725,14 @@ function recordThreadListProbe(workerProbe) {
 }
 
 async function startSteerSample(deviceId, projectId) {
+  return await startActiveControlSample(deviceId, projectId, safeSteerSamplePrompt, "steer");
+}
+
+async function startInterruptSample(deviceId, projectId) {
+  return await startActiveControlSample(deviceId, projectId, safeInterruptSamplePrompt, "interrupt");
+}
+
+async function startActiveControlSample(deviceId, projectId, message, label) {
   if (!deviceId || !projectId) {
     return { conversationId: null, turnId: null };
   }
@@ -719,8 +741,8 @@ async function startSteerSample(deviceId, projectId) {
     method: "POST",
     json: {
       projectId,
-      message: safeSteerSamplePrompt,
-      clientRequestId: `real-check-steer-sample-${Date.now()}`,
+      message,
+      clientRequestId: `real-check-${label}-sample-${Date.now()}`,
     },
   });
 
@@ -792,11 +814,12 @@ async function recordActiveTurnControls(deviceId, conversationId, turnIds, worke
     });
   }
 
-  if (turnIds.interruptTurnId) {
+  if (turnIds.interruptTurnId && turnIds.interruptActiveTurnId === turnIds.interruptTurnId) {
+    const targetInterruptConversationId = turnIds.interruptConversationId ?? conversationId;
     const interrupt = await request(
-      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
-        turnIds.interruptTurnId,
-      )}/interrupt`,
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(
+        targetInterruptConversationId,
+      )}/turns/${encodeURIComponent(turnIds.interruptTurnId)}/interrupt`,
       {
         method: "POST",
         json: {
@@ -807,11 +830,16 @@ async function recordActiveTurnControls(deviceId, conversationId, turnIds, worke
     );
     record("interrupt", operationStatus("interrupt", interrupt.status === 202, workerEvidence), {
       ...detailFromResponse(interrupt),
+      activeTurnProven: true,
       turnRef: refOf(turnIds.interruptTurnId),
       reasonCode: operationReasonCode(interrupt.status === 202, workerEvidence, "interrupt_not_accepted"),
     });
   } else {
-    record("interrupt", "real-gap", { reasonCode: "no_safe_active_turn" });
+    record("interrupt", "real-gap", {
+      activeTurnProven: false,
+      turnRef: refOf(turnIds.interruptTurnId),
+      reasonCode: "active-turn-gap",
+    });
   }
 }
 

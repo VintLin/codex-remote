@@ -43,7 +43,7 @@ The fixture is process-local and temporary:
 
 - `scripts/real-local-calibration.mjs` starts a second short-lived Worker and Control Plane on free loopback ports only when the normal real stack has no safe pending approval.
 - The fixture Worker uses a temporary empty project root from the OS temp directory, outside the repository working tree.
-- The fixture Worker receives a calibration-only runtime flag that makes Worker write calls include generated-protocol `approvalPolicy: "on-request"` and a read-only sandbox policy.
+- The fixture Worker receives a calibration-only runtime flag that makes Worker write calls include generated-protocol `approvalPolicy: "on-request"`, `approvalsReviewer: "user"`, and a read-only sandbox policy.
 - The runner starts one calibration conversation, polls the existing public pending approval endpoint, sends a `decline` decision, and records only sanitized evidence.
 - The fixture processes are always stopped before the runner exits.
 
@@ -67,7 +67,7 @@ Existing routes remain the only public surface:
 ## Safety Rules
 
 - The fixture root must be empty and outside the repository working tree.
-- The fixture instruction targets one harmless write inside that temporary root under read-only sandboxing so a real pending approval can be observed and declined before any write is allowed to complete.
+- The fixture instruction targets one harmless stdout-only shell command under read-only sandboxing so a real pending approval can be observed and declined before any command is allowed to complete.
 - Expected public approval kinds are `file_change`, `command_execution`, `legacy_apply_patch`, or `legacy_exec`; any other kind is a sanitized fixture gap.
 - Bounded polling must distinguish no model action from approval route failure with sanitized reason codes.
 - The automated decision must be `decline` first. `cancel` is allowed as fallback only if decline is not accepted by the approval kind.

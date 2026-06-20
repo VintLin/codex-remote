@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces `WorkerHttpConfig.calibrationApprovalMode: "on-request" | null`.
 - Consumes env `CODEX_REMOTE_CALIBRATION_APPROVAL_MODE`.
-- `writeHandlers.ts` uses `v2.ThreadStartParams`, `v2.TurnStartParams`, and generated protocol values only.
+- `writeHandlers.ts` uses `v2.ThreadStartParams`, `v2.TurnStartParams`, and generated protocol values only, including explicit `approvalsReviewer: "user"` for calibration runs.
 
 - [x] **Step 1: Add failing config test**
 
@@ -56,16 +56,18 @@ In `apps/worker/src/http/writeHandlers.test.ts`, add a test for `startConversati
 ```ts
 const expectedThreadParams = {
   approvalPolicy: "on-request",
+  approvalsReviewer: "user",
   sandbox: "read-only",
-} satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox">;
+} satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "approvalsReviewer" | "sandbox">;
 
 const expectedTurnParams = {
   approvalPolicy: "on-request",
+  approvalsReviewer: "user",
   sandboxPolicy: {
     type: "readOnly",
     networkAccess: false,
   },
-} satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy">;
+} satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "approvalsReviewer" | "sandboxPolicy">;
 ```
 
 The fake client assertions should compare against `expectedThreadParams` and `expectedTurnParams`, not duplicate untyped objects.
@@ -83,19 +85,20 @@ Expected: FAIL because write calls do not include the calibration fields.
 In `apps/worker/src/http/writeHandlers.ts`, if `context.config.calibrationApprovalMode === "on-request"`, add helper functions whose return values are typed with generated protocol aliases:
 
 ```ts
-function getCalibrationThreadStartOverrides(context: WorkerWriteHandlerContext): Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox"> {
+function getCalibrationThreadStartOverrides(context: WorkerWriteHandlerContext): Pick<v2.ThreadStartParams, "approvalPolicy" | "approvalsReviewer" | "sandbox"> {
   if (context.config.calibrationApprovalMode !== "on-request") {
     return {};
   }
-  return { approvalPolicy: "on-request", sandbox: "read-only" };
+  return { approvalPolicy: "on-request", approvalsReviewer: "user", sandbox: "read-only" };
 }
 
-function getCalibrationTurnStartOverrides(context: WorkerWriteHandlerContext): Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy"> {
+function getCalibrationTurnStartOverrides(context: WorkerWriteHandlerContext): Pick<v2.TurnStartParams, "approvalPolicy" | "approvalsReviewer" | "sandboxPolicy"> {
   if (context.config.calibrationApprovalMode !== "on-request") {
     return {};
   }
   return {
     approvalPolicy: "on-request",
+    approvalsReviewer: "user",
     sandboxPolicy: {
       type: "readOnly",
       networkAccess: false,
@@ -165,7 +168,7 @@ In `scripts/real-local-calibration.mjs`, add `runIsolatedApprovalFixture()` that
 In `runIsolatedApprovalFixture()`:
 
 - call fixture `/v1/projects` to get the opaque project id;
-- call fixture `POST /v1/devices/{deviceId}/conversations` with a calibration instruction that asks for one harmless file creation inside the temporary root;
+- call fixture `POST /v1/devices/{deviceId}/conversations` with a calibration instruction that asks for one harmless stdout-only shell command under the temporary root;
 - poll fixture approval list for a bounded number of attempts;
 - record `approval_fixture_approval_list_failed` immediately when the approval list route returns a non-2xx response or the sanitized request fails before an HTTP response is available;
 - record `approval_fixture_malformed_response` immediately when the approval list route response parses but does not match the expected Control Plane approval list shape;
@@ -174,7 +177,7 @@ In `runIsolatedApprovalFixture()`:
 - record `approval_fixture_timeout` when the request or poll deadline is exceeded;
 - accept only public approval kinds `file_change`, `command_execution`, `legacy_apply_patch`, or `legacy_exec`;
 - send `decision: "decline"` to the existing approval decision route;
-- verify the fixture target file does not exist after decline;
+- verify the fixture target file does not exist after decline, proving the decline-only path did not leave the known fixture side effect;
 - record only status, sanitized code, count, `conversationRef`, and `turnRef`;
 - stop fixture processes in `finally`.
 
@@ -238,7 +241,7 @@ pnpm real:status
 
 Expected if fixture succeeds: `logs/real-check/latest.json` has `approval decision` as `real-pass`.
 
-Actual current result: `pnpm real:start`, `pnpm real:check`, `pnpm real:status`, and `pnpm web:e2e:smoke` ran. `logs/real-check/latest.json` currently records `total=19 realPass=17 fixedPass=0 realGap=2`; `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`, and the latest run also has intermittent `interrupt_not_accepted`.
+Actual current result: `pnpm real:start`, `pnpm real:check`, `pnpm real:status`, and `pnpm web:e2e:smoke` ran. `logs/real-check/latest.json` currently records `total=19 realPass=18 fixedPass=0 realGap=1`; `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`. The fixture instruction was narrowed from harmless file creation to a harmless stdout-only command probe, and calibration write calls now include generated-protocol `approvalsReviewer: "user"`. Interrupt now records `real-pass` with `activeTurnProven=true` after switching to an independent interrupt-only sample.
 
 After the command, inspect `logs/real-check/latest.json` and assert it does not contain:
 
@@ -275,14 +278,9 @@ Open `http://127.0.0.1:5173/` in Google Chrome against the real stack and confir
 
 Actual result: Chrome-channel Playwright verification loaded `http://127.0.0.1:5173/` with title `Codex Remote`, real local Control Plane content, two inputs, and no forbidden text matches for bearer tokens, raw Worker URLs, private paths, JSON-RPC, command output, diffs, stack/cause, fake/mock readiness, or fixture prompt text. The Chrome extension control path was unavailable due a tool-layer sandbox metadata error, so verification used Google Chrome via Playwright `channel: "chrome"`.
 
-- [ ] **Step 4: Update docs and commit**
+- [x] **Step 4: Update docs and commit**
 
-Update roadmap/research docs with the real result, then commit:
-
-```bash
-git add PLAN.md QUESTIONS.md docs/references/questions/SYNTHESIS.md docs/references/development-context.md docs/superpowers/specs/2026-06-21-isolated-approval-fixture-design.md docs/superpowers/plans/2026-06-21-isolated-approval-fixture.md scripts/real-local-calibration.mjs scripts/real-local-calibration.test.mjs apps/worker/src/http/workerHttpConfig.ts apps/worker/src/http/workerHttpConfig.test.ts apps/worker/src/http/writeHandlers.ts apps/worker/src/http/writeHandlers.test.ts
-git commit -m "fix: prove approval decision with isolated fixture"
-```
+Actual result: docs updated with the `18/1` real-check result, interrupt fix, and approval decision safety gap. Commit message adjusted to avoid claiming approval decision is proven while it remains a real gap.
 
 ---
 
@@ -293,4 +291,4 @@ git commit -m "fix: prove approval decision with isolated fixture"
 - Reviewer `019ee651-d412-7301-99f1-a3b20f3bc561`: clean. Confirmed polling failure taxonomy, report artifact denylist, source-of-truth boundaries, Worker-only app-server boundary, OS temp fixture cleanup, and decline-first decision rule.
 - Task 1 reviewer `019ee657-bcd1-7f02-84da-70bc98a38387`: clean. Confirmed required `calibrationApprovalMode` config, generated-protocol overrides, no public API change, and no leak regressions. Noted follow-up also receives the runtime write-call override; Task 2 should use a new fixture conversation.
 - Task 2 reviewer `019ee65f-d173-7b10-a37b-372d3fd222ee`: errored due external usage limit before review output. Local follow-up review found and fixed a product-readiness source-scan failure caused by forbidden report-key literals in sanitizer tests; `pnpm product:check` and script/product focused tests pass after replacing those literals with dynamically constructed keys.
-- Real verification follow-up: workspace-write/on-request, read-only/on-request, and read-only/untrusted fixture profiles were tried within the three-round focused fix budget. The retained implementation is read-only/on-request; current app-server behavior still does not emit a pending approval for the safe fixture prompt within the bounded polling window.
+- Real verification follow-up: workspace-write/on-request, read-only/on-request, read-only/untrusted, stdout-only command probing, and explicit `approvalsReviewer: "user"` were tried within the focused fix budget. The retained implementation is read-only/on-request with user-routed approvals; current app-server behavior still does not emit a pending approval for the safe fixture prompt within the bounded polling window. The next safe evidence source is a trusted project-local rules layer or equivalent app-server-supported rules injection; do not modify user `~/.codex/rules` automatically or copy auth into a temporary Codex home.

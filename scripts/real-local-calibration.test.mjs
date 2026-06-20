@@ -16,13 +16,21 @@ test("real local calibration when probing active-turn controls should require ac
   assert.match(mainBody, /const steerSample = await startSteerSample\(deviceId, projectId\)/);
   assert.match(mainBody, /steerTurnId = steerSample\.turnId/);
   assert.match(mainBody, /steerActiveTurnId = steerTurnId && steerConversationId \? await waitForActiveTurn\(deviceId, steerConversationId, steerTurnId\) : null/);
-  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{ interruptTurnId: activeTurnId, steerConversationId, steerTurnId, steerActiveTurnId \}, workerEvidence\)/);
+  assert.match(mainBody, /const interruptSample = await startInterruptSample\(deviceId, projectId\)/);
+  assert.match(mainBody, /interruptTurnId = interruptSample\.turnId/);
+  assert.match(mainBody, /interruptActiveTurnId = interruptTurnId && interruptConversationId \? await waitForActiveTurn\(deviceId, interruptConversationId, interruptTurnId\) : null/);
+  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{/);
+  assert.match(mainBody, /interruptConversationId,/);
+  assert.match(mainBody, /interruptTurnId,/);
+  assert.match(mainBody, /interruptActiveTurnId,/);
   assert.match(controlsBody, /turnIds\.steerTurnId/);
   assert.match(controlsBody, /turnIds\.steerActiveTurnId/);
   assert.match(controlsBody, /activeTurnProven: true/);
   assert.match(controlsBody, /reasonCode: "active-turn-gap"/);
   assert.match(controlsBody, /"steer-rpc-gap"/);
   assert.match(controlsBody, /turnIds\.interruptTurnId/);
+  assert.match(controlsBody, /turnIds\.interruptActiveTurnId === turnIds\.interruptTurnId/);
+  assert.match(controlsBody, /targetInterruptConversationId/);
 });
 
 test("real local calibration when reading a started conversation should wait for timeline visibility", () => {
@@ -42,8 +50,13 @@ test("real local calibration should use only safe public steer probes", () => {
   const prompt = source.match(/const safeSteerSamplePrompt = "([^"]+)"/)?.[1] ?? "";
   assert.equal(prompt, "codex-remote-calibration steer sample: wait ten seconds, then reply with OK.");
   assert.doesNotMatch(prompt, /read|write|file|command|network|environment|env|token|path|output|tool|approval|sandbox|shell|terminal|bash|run|execute/i);
+  const interruptPrompt = source.match(/const safeInterruptSamplePrompt = "([^"]+)"/)?.[1] ?? "";
+  assert.equal(interruptPrompt, "codex-remote-calibration interrupt sample: wait ten seconds, then reply with OK.");
+  assert.doesNotMatch(interruptPrompt, /read|write|file|command|network|environment|env|token|path|output|tool|approval|sandbox|shell|terminal|bash|run|execute/i);
   assert.match(source, /startSteerSample/);
+  assert.match(source, /startInterruptSample/);
   assert.match(source, /steerConversationId/);
+  assert.match(source, /interruptConversationId/);
 });
 
 test("real local calibration when probing Q23 should use Worker-owned probe evidence", () => {

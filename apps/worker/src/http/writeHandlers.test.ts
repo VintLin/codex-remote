@@ -72,15 +72,17 @@ test("worker write handlers when calibration approval mode is enabled, should ad
   const context = createContext(paths.allowedRoot, client, { calibrationApprovalMode: "on-request" });
   const expectedThreadParams = {
     approvalPolicy: "on-request",
+    approvalsReviewer: "user",
     sandbox: "read-only",
-  } satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox">;
+  } satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "approvalsReviewer" | "sandbox">;
   const expectedTurnParams = {
     approvalPolicy: "on-request",
+    approvalsReviewer: "user",
     sandboxPolicy: {
       type: "readOnly",
       networkAccess: false,
     },
-  } satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy">;
+  } satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "approvalsReviewer" | "sandboxPolicy">;
 
   await startConversation(context, {
     projectId: "local-project",
@@ -562,6 +564,7 @@ function selectThreadStartCall(params: v2.ThreadStartParams): Partial<v2.ThreadS
   return {
     ...(params.cwd === undefined ? {} : { cwd: params.cwd }),
     ...(params.approvalPolicy === undefined ? {} : { approvalPolicy: params.approvalPolicy }),
+    ...(params.approvalsReviewer === undefined ? {} : { approvalsReviewer: params.approvalsReviewer }),
     ...(params.sandbox === undefined ? {} : { sandbox: params.sandbox }),
   };
 }
@@ -572,6 +575,7 @@ function selectTurnStartCall(params: v2.TurnStartParams): Partial<v2.TurnStartPa
     ...(params.clientUserMessageId === undefined ? {} : { clientUserMessageId: params.clientUserMessageId }),
     ...(params.cwd ? { cwd: params.cwd } : {}),
     ...(params.approvalPolicy === undefined ? {} : { approvalPolicy: params.approvalPolicy }),
+    ...(params.approvalsReviewer === undefined ? {} : { approvalsReviewer: params.approvalsReviewer }),
     ...(params.sandboxPolicy === undefined ? {} : { sandboxPolicy: params.sandboxPolicy }),
     input: params.input,
   };
