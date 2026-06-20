@@ -10,6 +10,7 @@ interface WorkerHttpConfigInput {
   appServerUrl: string | undefined;
   allowedOrigins: string | undefined;
   allowedProjectRoot: string | undefined;
+  calibrationApprovalMode: string | null | undefined;
   connectTimeoutMs: string | undefined;
   deviceId: string | undefined;
   host: string | undefined;
@@ -29,6 +30,7 @@ export interface WorkerHttpConfig {
   appServerUrl: string | null;
   startAppServer: boolean;
   appServerTransport: AppServerTransport;
+  calibrationApprovalMode: "on-request" | null;
   connectTimeoutMs: number;
   requestTimeoutMs: number;
 }
@@ -66,6 +68,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
   const appServerUrl = parseAppServerUrl(input.appServerUrl);
   const startAppServer = parseBooleanFlag(input.startAppServer);
   const appServerTransport = parseAppServerTransport(input.appServerTransport, appServerUrl, startAppServer);
+  const calibrationApprovalMode = parseCalibrationApprovalMode(input.calibrationApprovalMode);
 
   return {
     deviceId: input.deviceId?.trim() || "local-device",
@@ -77,6 +80,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
     appServerUrl,
     startAppServer,
     appServerTransport,
+    calibrationApprovalMode,
     connectTimeoutMs,
     requestTimeoutMs,
   };
@@ -93,6 +97,7 @@ function parseWorkerHttpConfigInput(env: NodeJS.ProcessEnv): WorkerHttpConfigInp
     appServerTransport: env.CODEX_REMOTE_APP_SERVER_TRANSPORT,
     appServerUrl: env.CODEX_APP_SERVER_URL,
     startAppServer: env.CODEX_REMOTE_START_APP_SERVER,
+    calibrationApprovalMode: env.CODEX_REMOTE_CALIBRATION_APPROVAL_MODE,
     connectTimeoutMs: env.CODEX_REMOTE_CONNECT_TIMEOUT_MS,
     requestTimeoutMs: env.CODEX_REMOTE_REQUEST_TIMEOUT_MS,
   };
@@ -207,6 +212,23 @@ function parseAppServerTransport(value: string | undefined, appServerUrl: string
 
   if (transport === "debug-websocket") {
     return "loopbackWebSocket";
+  }
+
+  throw new Error("worker_config_invalid");
+}
+
+function parseCalibrationApprovalMode(value: string | null | undefined): "on-request" | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const mode = value.trim();
+  if (!mode) {
+    throw new Error("worker_config_invalid");
+  }
+
+  if (mode === "on-request") {
+    return "on-request";
   }
 
   throw new Error("worker_config_invalid");

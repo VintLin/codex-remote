@@ -33,7 +33,7 @@
 - Consumes env `CODEX_REMOTE_CALIBRATION_APPROVAL_MODE`.
 - `writeHandlers.ts` uses `v2.ThreadStartParams`, `v2.TurnStartParams`, and generated protocol values only.
 
-- [ ] **Step 1: Add failing config test**
+- [x] **Step 1: Add failing config test**
 
 In `apps/worker/src/http/workerHttpConfig.test.ts`, add a test that valid config with `CODEX_REMOTE_CALIBRATION_APPROVAL_MODE=on-request` returns `calibrationApprovalMode: "on-request"` and any other non-empty value throws `worker_config_invalid`.
 
@@ -45,11 +45,11 @@ pnpm --filter @codex-remote/worker exec node --test src/http/workerHttpConfig.te
 
 Expected: FAIL because the config field does not exist.
 
-- [ ] **Step 2: Parse the runtime flag**
+- [x] **Step 2: Parse the runtime flag**
 
 Add `calibrationApprovalMode` to `WorkerHttpConfigInput` and `WorkerHttpConfig`, parse only `undefined` or `"on-request"`, and reject blank/unknown values.
 
-- [ ] **Step 3: Add failing write handler test**
+- [x] **Step 3: Add failing write handler test**
 
 In `apps/worker/src/http/writeHandlers.test.ts`, add a test for `startConversation` with `calibrationApprovalMode: "on-request"` asserting the fake client receives values assigned through generated protocol types:
 
@@ -81,7 +81,7 @@ pnpm --filter @codex-remote/worker exec node --test src/http/writeHandlers.test.
 
 Expected: FAIL because write calls do not include the calibration fields.
 
-- [ ] **Step 4: Add minimal write mapping**
+- [x] **Step 4: Add minimal write mapping**
 
 In `apps/worker/src/http/writeHandlers.ts`, if `context.config.calibrationApprovalMode === "on-request"`, add helper functions whose return values are typed with generated protocol aliases:
 
@@ -112,7 +112,7 @@ function getCalibrationTurnStartOverrides(context: WorkerWriteHandlerContext): P
 
 Spread those helpers into `thread/start` and `turn/start`. Leave the normal path unchanged.
 
-- [ ] **Step 5: Verify Worker focused tests**
+- [x] **Step 5: Verify Worker focused tests**
 
 Run:
 
@@ -291,3 +291,4 @@ git commit -m "fix: prove approval decision with isolated fixture"
 - Reviewer `019ee64e-74af-79b0-8dc7-7f732155d598`: needs changes. Fixed approval-list route failure diagnosis so route failures cannot be recorded as no pending approvals.
 - Reviewer `019ee650-3b80-74b1-9110-8548c57e034b`: needs changes. Fixed malformed response diagnosis and expanded report leak test requirements to include token/provider secret shapes, raw JSON-RPC, raw prompt, and full diff shapes.
 - Reviewer `019ee651-d412-7301-99f1-a3b20f3bc561`: clean. Confirmed polling failure taxonomy, report artifact denylist, source-of-truth boundaries, Worker-only app-server boundary, OS temp fixture cleanup, and decline-first decision rule.
+- Task 1 reviewer `019ee657-bcd1-7f02-84da-70bc98a38387`: clean. Confirmed required `calibrationApprovalMode` config, generated-protocol overrides, no public API change, and no leak regressions. Noted follow-up also receives the runtime write-call override; Task 2 should use a new fixture conversation.

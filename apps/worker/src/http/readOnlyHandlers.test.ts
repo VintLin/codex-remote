@@ -354,6 +354,7 @@ function createContext(
       appServerTransport: "loopbackWebSocket",
       appServerUrl: "ws://127.0.0.1:4321",
       bindHost: "127.0.0.1",
+      calibrationApprovalMode: null,
       connectTimeoutMs: 5_000,
       deviceId: "device-local",
       port: 8787,

@@ -63,6 +63,46 @@ test("worker write handlers when starting a conversation, should initialize sess
   assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "startThread", "startTurn"]);
 });
 
+test("worker write handlers when calibration approval mode is enabled, should add approval and sandbox protocol overrides", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeWriteClient({
+    threads: [createThread({ cwd: paths.allowedRoot, id: "thread-calibration", turns: [] })],
+    startTurnResponse: { turn: createTurn({ id: "turn-calibration", status: "inProgress" }) },
+  });
+  const context = createContext(paths.allowedRoot, client, { calibrationApprovalMode: "on-request" });
+  const expectedThreadParams = {
+    approvalPolicy: "on-request",
+    sandbox: "workspace-write",
+  } satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox">;
+  const expectedTurnParams = {
+    approvalPolicy: "on-request",
+    sandboxPolicy: {
+      type: "workspaceWrite",
+      writableRoots: [context.config.allowedProjectRoot],
+      networkAccess: false,
+      excludeTmpdirEnvVar: true,
+      excludeSlashTmp: true,
+    },
+  } satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy">;
+
+  await startConversation(context, {
+    projectId: "local-project",
+    message: "Create the isolated fixture request",
+    clientRequestId: "client-start-calibration-1",
+  });
+
+  assert.deepEqual(client.startThreadCalls, [{ cwd: paths.allowedRoot, ...expectedThreadParams }]);
+  assert.deepEqual(client.startTurnCalls, [
+    {
+      threadId: "thread-calibration",
+      clientUserMessageId: "client-start-calibration-1",
+      cwd: paths.allowedRoot,
+      input: [{ type: "text", text: "Create the isolated fixture request", text_elements: [] }],
+      ...expectedTurnParams,
+    },
+  ]);
+});
+
 test("worker write handlers when starting with project basename, should reject before app-server write", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeWriteClient({
@@ -522,7 +562,11 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
 }
 
 function selectThreadStartCall(params: v2.ThreadStartParams): Partial<v2.ThreadStartParams> {
-  return params.cwd === undefined ? {} : { cwd: params.cwd };
+  return {
+    ...(params.cwd === undefined ? {} : { cwd: params.cwd }),
+    ...(params.approvalPolicy === undefined ? {} : { approvalPolicy: params.approvalPolicy }),
+    ...(params.sandbox === undefined ? {} : { sandbox: params.sandbox }),
+  };
 }
 
 function selectTurnStartCall(params: v2.TurnStartParams): Partial<v2.TurnStartParams> {
@@ -530,6 +574,8 @@ function selectTurnStartCall(params: v2.TurnStartParams): Partial<v2.TurnStartPa
     threadId: params.threadId,
     ...(params.clientUserMessageId === undefined ? {} : { clientUserMessageId: params.clientUserMessageId }),
     ...(params.cwd ? { cwd: params.cwd } : {}),
+    ...(params.approvalPolicy === undefined ? {} : { approvalPolicy: params.approvalPolicy }),
+    ...(params.sandboxPolicy === undefined ? {} : { sandboxPolicy: params.sandboxPolicy }),
     input: params.input,
   };
 }
@@ -550,7 +596,11 @@ async function createTempProjectPaths(): Promise<{
   return { allowedRoot, allowedChild, outside };
 }
 
-function createContext(allowedProjectRoot: string, client: WorkerWriteAppServerClient): WorkerWriteHandlerContext {
+function createContext(
+  allowedProjectRoot: string,
+  client: WorkerWriteAppServerClient,
+  configOverrides: Partial<WorkerHttpConfig> = {},
+): WorkerWriteHandlerContext {
   const ticks = ["2026-06-19T10:00:00.000Z", "2026-06-19T10:00:01.000Z"];
 
   return {
@@ -560,12 +610,14 @@ function createContext(allowedProjectRoot: string, client: WorkerWriteAppServerC
       appServerTransport: "loopbackWebSocket",
       appServerUrl: "ws://127.0.0.1:4321",
       bindHost: "127.0.0.1",
+      calibrationApprovalMode: null,
       connectTimeoutMs: 5_000,
       deviceId: "device-local",
       port: 8787,
       requestTimeoutMs: 5_000,
       startAppServer: false,
       workerToken: "example-token",
+      ...configOverrides,
     } satisfies WorkerHttpConfig,
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,

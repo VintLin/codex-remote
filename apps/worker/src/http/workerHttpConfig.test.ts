@@ -192,8 +192,47 @@ test("worker http config when config is valid should return canonical project ro
   assert.equal(config.startAppServer, false);
   assert.equal(config.appServerUrl, null);
   assert.equal(config.appServerTransport, "stdio");
+  assert.equal(config.calibrationApprovalMode, null);
   assert.equal(config.connectTimeoutMs, 5000);
   assert.equal(config.requestTimeoutMs, 5000);
+});
+
+test("worker http config when calibration approval mode is configured should parse only supported values", async (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
+
+  await t.test("when calibration approval mode is on-request", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_CALIBRATION_APPROVAL_MODE = "on-request";
+
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.calibrationApprovalMode, "on-request");
+  });
+
+  await t.test("when calibration approval mode is null", async () => {
+    const env = {
+      ...createBaseEnv(fixtureRoot),
+      CODEX_REMOTE_CALIBRATION_APPROVAL_MODE: null,
+    } as unknown as NodeJS.ProcessEnv;
+
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.calibrationApprovalMode, null);
+  });
+
+  await t.test("when calibration approval mode is blank", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_CALIBRATION_APPROVAL_MODE = "   ";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+
+  await t.test("when calibration approval mode is unsupported", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_CALIBRATION_APPROVAL_MODE = "never";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
 });
 
 test("worker http config when app-server transport is explicit should expose the requested transport", async (t) => {

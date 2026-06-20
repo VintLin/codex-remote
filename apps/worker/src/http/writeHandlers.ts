@@ -63,6 +63,7 @@ export async function startConversation(
   return await withWriteClient(context, "thread/start", async (client) => {
     const threadResponse = await client.startThread({
       cwd: context.config.allowedProjectRoot,
+      ...getCalibrationThreadStartOverrides(context),
     });
     const threadId = threadResponse.thread.id;
     const turnResponse = await client.startTurn({
@@ -70,6 +71,7 @@ export async function startConversation(
       clientUserMessageId: input.clientRequestId,
       cwd: context.config.allowedProjectRoot,
       input: [createTextUserInput(input.message)],
+      ...getCalibrationTurnStartOverrides(context),
     });
     const accepted = createAcceptedResponse({
       idempotencyKey: createIdempotencyKey("start", input.projectId, input.clientRequestId),
@@ -121,6 +123,7 @@ export async function followUpConversation(
       threadId: conversationId,
       clientUserMessageId: input.clientRequestId,
       input: [createTextUserInput(input.message)],
+      ...getCalibrationTurnStartOverrides(context),
     });
     const accepted = createAcceptedResponse({
       idempotencyKey,
@@ -201,6 +204,38 @@ function createTextUserInput(message: string): v2.UserInput {
     type: "text",
     text: message,
     text_elements: [],
+  };
+}
+
+function getCalibrationThreadStartOverrides(
+  context: WorkerWriteHandlerContext,
+): Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox"> {
+  if (context.config.calibrationApprovalMode !== "on-request") {
+    return {};
+  }
+
+  return {
+    approvalPolicy: "on-request",
+    sandbox: "workspace-write",
+  };
+}
+
+function getCalibrationTurnStartOverrides(
+  context: WorkerWriteHandlerContext,
+): Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy"> {
+  if (context.config.calibrationApprovalMode !== "on-request") {
+    return {};
+  }
+
+  return {
+    approvalPolicy: "on-request",
+    sandboxPolicy: {
+      type: "workspaceWrite",
+      writableRoots: [context.config.allowedProjectRoot],
+      networkAccess: false,
+      excludeTmpdirEnvVar: true,
+      excludeSlashTmp: true,
+    },
   };
 }
 
