@@ -174,7 +174,7 @@ export async function readAllowedConversationThread(
   try {
     response = await client.readThread({ threadId: conversationId, includeTurns: true });
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith("app_server_")) {
+    if (error instanceof Error && isConnectionFailure(error.message)) {
       throw error;
     }
 
@@ -245,6 +245,17 @@ async function findFirstAllowedThread(
   }
 
   return null;
+}
+
+function isConnectionFailure(message: string): boolean {
+  return [
+    "app_server_request_timeout",
+    "app_server_connection_error",
+    "app_server_connection_timeout",
+    "app_server_env_not_configured",
+    "app_server_spawn_failed",
+    "app_server_websocket_unavailable",
+  ].includes(message);
 }
 
 function createThreadListParams(cwd: string, cursor: string | null): ThreadListParams {

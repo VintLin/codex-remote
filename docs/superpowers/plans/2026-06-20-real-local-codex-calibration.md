@@ -1988,6 +1988,105 @@ git commit -m "fix: verify specific worker conversations by read"
 
 ---
 
+### Task 13: Stabilize Control Calibration Samples
+
+**Files:**
+- Modify: `scripts/real-local-calibration.mjs`
+- Add or modify: `scripts/real-local-calibration.test.mjs`
+- Modify: `apps/worker/src/http/readOnlyHandlers.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.test.ts`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keeps public API, DB schema, Worker handlers, and Codex protocol generated types unchanged.
+- Changes only the calibration runner sampling/wait behavior and Worker-specific inaccessible-read mapping.
+- Keeps report schema and allowed detail keys unchanged.
+
+**Non-goals:**
+- No Worker control implementation changes.
+- No approval decision scenario construction.
+- No Q23 cwd-scope or pagination probe implementation.
+- No raw ids, prompts, command output, raw JSON-RPC, token, raw URL, stack/cause, or private path in reports/docs.
+
+**Pre-review evidence:**
+- Latest real-check records `interrupt` as `real-pass` but `steer` as sanitized `worker_internal_error`.
+- `recordActiveTurnControls()` currently sends `turn/interrupt` before `turn/steer` against the same active turn id.
+- Interrupting the active turn first can invalidate the active turn for the subsequent steer probe, so this does not prove product steer readiness.
+- A same-turn steer-before-interrupt attempt made post-start timeline/follow-up evidence unstable, so Task 13 must not force both controls against one active turn.
+
+Reviewer: `019ee615-1abc-7633-b400-64a4f339c5c4`
+
+Result: clean enough to execute.
+
+Findings addressed by Task 13:
+
+- Important: This is a reasonable evidence-first calibration slice before changing Worker product logic.
+- Important: If steer-first makes interrupt or earlier timeline evidence stop passing, do not force success on the same turn; escalate to independent active-turn samples.
+- Important: Post-start timeline visibility can be eventually consistent; the calibration runner may wait briefly, but must still record only sanitized final evidence.
+
+- [x] **Step 1: Add failing calibration runner test**
+
+Add focused tests that read `scripts/real-local-calibration.mjs` and prove:
+
+- active-turn controls use independent steer and interrupt samples when possible;
+- post-start timeline reads wait briefly for visibility before recording a final safe result.
+
+- [x] **Step 2: Stabilize calibration sampling**
+
+In `scripts/real-local-calibration.mjs`:
+
+- use the follow-up accepted turn id as the steer sample;
+- use the timeline active turn id as the interrupt sample;
+- wait briefly for post-start timeline visibility;
+- keep sanitized report fields unchanged;
+- do not add raw ids, raw bodies, or fake Worker evidence.
+
+In `apps/worker/src/http/readOnlyHandlers.ts`:
+
+- map inaccessible `thread/read` protocol errors for specific conversation verification to sanitized `conversation_not_found`;
+- keep timeout/unavailable errors as dependency errors.
+
+- [x] **Step 3: Run focused verification**
+
+```bash
+node --test scripts/real-local-calibration.test.mjs
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+- [x] **Step 4: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Observed:
+
+- A same-turn steer-before-interrupt attempt regressed post-start timeline/follow-up evidence and was not kept.
+- Independent turn sampling plus timeline wait restores `pnpm real:check` to `total=19 realPass=15 fixedPass=0 realGap=4`.
+- `steer` still records sanitized `worker_internal_error`; this remains a real Worker/app-server control gap for the next slice.
+- `interrupt` remains `real-pass`; fake Worker evidence remains excluded.
+
+- [x] **Step 5: Run full gates and commit**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git commit -m "fix: stabilize real control calibration"
+```
+
+---
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.

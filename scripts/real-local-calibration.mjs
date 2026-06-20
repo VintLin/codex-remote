@@ -133,10 +133,9 @@ async function main() {
   }
 
   let activeTurnId = null;
+  let steerTurnId = null;
   if (workerEvidence.proven && deviceId && conversationId) {
-    const timeline = await request(
-      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/timeline`,
-    );
+    const timeline = await waitForTimeline(deviceId, conversationId);
     const turns = Array.isArray(timeline.value?.turns) ? timeline.value.turns : [];
     activeTurnId = firstString(turns.find((turn) => isActiveTurnStatus(turn?.status))?.id);
     record("timeline", timeline.ok ? "real-pass" : "real-gap", {
@@ -161,6 +160,7 @@ async function main() {
       turnRef: refOf(followUp.value?.turnId),
       reasonCode: operationReasonCode(followUp.status === 202, workerEvidence, "follow_up_not_accepted"),
     });
+    steerTurnId = followUp.status === 202 ? firstString(followUp.value?.turnId) : null;
 
     const approvals = await request(
       `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals`,
@@ -204,8 +204,8 @@ async function main() {
     record("approval decision", "real-gap", { reasonCode });
   }
 
-  if (workerEvidence.proven && deviceId && conversationId && activeTurnId) {
-    await recordActiveTurnControls(deviceId, conversationId, activeTurnId, workerEvidence);
+  if (workerEvidence.proven && deviceId && conversationId && (activeTurnId || steerTurnId)) {
+    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerTurnId }, workerEvidence);
   } else {
     const reasonCode = workerEvidence.proven ? "no_safe_active_turn" : "real_app_server_not_proven";
     record("interrupt", "real-gap", { reasonCode });
@@ -355,43 +355,67 @@ async function startControlPlaneFixture(device) {
   return null;
 }
 
-async function recordActiveTurnControls(deviceId, conversationId, activeTurnId, workerEvidence) {
-  const interrupt = await request(
-    `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
-      activeTurnId,
-    )}/interrupt`,
-    {
-      method: "POST",
-      json: {
-        clientRequestId: `real-check-interrupt-${Date.now()}`,
-        expectedTurnId: activeTurnId,
-      },
-    },
-  );
-  record("interrupt", operationStatus("interrupt", interrupt.status === 202, workerEvidence), {
-    ...detailFromResponse(interrupt),
-    turnRef: refOf(activeTurnId),
-    reasonCode: operationReasonCode(interrupt.status === 202, workerEvidence, "interrupt_not_accepted"),
-  });
+async function waitForTimeline(deviceId, conversationId) {
+  let latest = null;
 
-  const steer = await request(
-    `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
-      activeTurnId,
-    )}/steer`,
-    {
-      method: "POST",
-      json: {
-        message: "codex-remote-calibration steer: keep the response short.",
-        clientRequestId: `real-check-steer-${Date.now()}`,
-        expectedTurnId: activeTurnId,
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    latest = await request(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/timeline`,
+    );
+    if (latest.ok) {
+      return latest;
+    }
+    await sleep(250);
+  }
+
+  return latest ?? { status: 0, ok: false, durationMs: 0, value: null };
+}
+
+async function recordActiveTurnControls(deviceId, conversationId, turnIds, workerEvidence) {
+  if (turnIds.steerTurnId) {
+    const steer = await request(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
+        turnIds.steerTurnId,
+      )}/steer`,
+      {
+        method: "POST",
+        json: {
+          message: "codex-remote-calibration steer: keep the response short.",
+          clientRequestId: `real-check-steer-${Date.now()}`,
+          expectedTurnId: turnIds.steerTurnId,
+        },
       },
-    },
-  );
-  record("steer", operationStatus("steer", steer.status === 202, workerEvidence), {
-    ...detailFromResponse(steer),
-    turnRef: refOf(activeTurnId),
-    reasonCode: operationReasonCode(steer.status === 202, workerEvidence, "steer_not_accepted"),
-  });
+    );
+    record("steer", operationStatus("steer", steer.status === 202, workerEvidence), {
+      ...detailFromResponse(steer),
+      turnRef: refOf(turnIds.steerTurnId),
+      reasonCode: operationReasonCode(steer.status === 202, workerEvidence, "steer_not_accepted"),
+    });
+  } else {
+    record("steer", "real-gap", { reasonCode: "no_safe_active_turn" });
+  }
+
+  if (turnIds.interruptTurnId) {
+    const interrupt = await request(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
+        turnIds.interruptTurnId,
+      )}/interrupt`,
+      {
+        method: "POST",
+        json: {
+          clientRequestId: `real-check-interrupt-${Date.now()}`,
+          expectedTurnId: turnIds.interruptTurnId,
+        },
+      },
+    );
+    record("interrupt", operationStatus("interrupt", interrupt.status === 202, workerEvidence), {
+      ...detailFromResponse(interrupt),
+      turnRef: refOf(turnIds.interruptTurnId),
+      reasonCode: operationReasonCode(interrupt.status === 202, workerEvidence, "interrupt_not_accepted"),
+    });
+  } else {
+    record("interrupt", "real-gap", { reasonCode: "no_safe_active_turn" });
+  }
 }
 
 async function request(path, options = {}) {

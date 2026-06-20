@@ -127,6 +127,20 @@ test("worker read-only handlers when timeline id cannot be read, should map not 
   assert.equal(client.closed, true);
 });
 
+test("worker read-only handlers when timeline read is inaccessible, should map not found", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeClient({
+    readError: new Error("app_server_protocol_error"),
+  });
+
+  await assert.rejects(
+    readConversationTimeline(createContext(paths.allowedRoot, client), "missing"),
+    (error) => error instanceof WorkerHttpError && error.status === 404 && error.code === "conversation_not_found",
+  );
+  assert.deepEqual(client.readCalls, [{ threadId: "missing", includeTurns: true }]);
+  assert.equal(client.closed, true);
+});
+
 test("worker read-only handlers when read result escapes root, should fail without leaking path", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
@@ -224,6 +238,7 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
   private readonly listResponses: v2.ThreadListResponse[];
   private readonly readResponses: Record<string, v2.ThreadReadResponse>;
   private readonly listError: Error | null;
+  private readonly readError: Error | null;
   private readonly codexVersion: string | null;
 
   constructor(options: {
@@ -231,10 +246,12 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
     listResponses?: v2.ThreadListResponse[];
     readResponses?: Record<string, v2.ThreadReadResponse>;
     listError?: Error;
+    readError?: Error;
   } = {}) {
     this.listResponses = options.listResponses ?? [{ data: [], nextCursor: null, backwardsCursor: null }];
     this.readResponses = options.readResponses ?? {};
     this.listError = options.listError ?? null;
+    this.readError = options.readError ?? null;
     this.codexVersion = options.codexVersion ?? null;
   }
 
@@ -261,6 +278,10 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
 
   async readThread(params: Parameters<WorkerReadOnlyAppServerClient["readThread"]>[0]): Promise<v2.ThreadReadResponse> {
     this.readCalls.push(params);
+    if (this.readError) {
+      throw this.readError;
+    }
+
     const response = this.readResponses[params.threadId];
     if (!response) {
       throw new Error("missing_fake_read_response");

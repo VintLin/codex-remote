@@ -139,6 +139,7 @@ Stage 9 in-progress context:
 - Task link invalid ids are now rejected before persistence, and both `task link` and `task link invalid ids` record `real-pass`.
 - Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`: all-workers-down and invalid-worker-token return a sanitized dependency error for `/v1/conversations` instead of `200 []`.
 - Worker write paths initialize the stdio app-server session before `thread/start` / `turn/start`; Worker specific conversation routes prove access with `thread/read` followed by Worker-local realpath verification.
+- The real calibration runner waits briefly for post-start timeline visibility and uses separate steer/interrupt samples where available; same-turn steer-before-interrupt was tested and rejected because it regressed earlier evidence.
 - Start, timeline, follow-up, approval pending list, and interrupt now record `real-pass`.
 - Remaining real gaps include approval decision lacking a safe pending approval, steer returning sanitized `worker_internal_error`, and Q23 probes still absent.
 - Q23 remains an explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.

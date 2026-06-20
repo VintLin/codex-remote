@@ -82,6 +82,7 @@ Stage 9 当前证据：
 - Fixed in current slice：Control Plane task conversation links now reject arbitrary invalid ids before persisting; `task link` and `task link invalid ids` both record `real-pass`.
 - Fixed in current slice：Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`; all-workers-down and invalid-worker-token make `/v1/conversations` return a sanitized dependency error instead of `200 []`, while health/devices remain sanitized degraded inventory.
 - Fixed in current slice：Worker specific conversation routes now prove access with `thread/read` followed by Worker-local realpath verification; start, timeline, follow-up, approval pending list, and interrupt record `real-pass`.
+- Fixed in current slice：`real:check` now waits briefly for post-start timeline visibility and uses separate steer/interrupt samples where available; same-turn steer-before-interrupt was tested and rejected because it regressed earlier evidence.
 - Remaining real gaps：approval decision has no safe pending approval; steer returns sanitized `worker_internal_error`; Q23 cwd scope/pagination probes remain explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
