@@ -54,7 +54,7 @@ flowchart LR
 | 5. 控制主链 | interrupt、steer、approval request/response | 已完成本地可验证切片 |
 | 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 已完成本地可验证切片 |
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
-| 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 下一阶段 |
+| 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
 
 ```mermaid
 flowchart TB
@@ -66,7 +66,7 @@ flowchart TB
   P5["5. Approval / Interrupt / Steer"]
   P6["6. Multi-device Control Plane"]
   P7["7. DB + Task Board"]
-  P8["8. Product Hardening + iOS"]
+  P8["8. Product Readiness + iOS Guardrails"]
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8
 ```
@@ -342,13 +342,54 @@ Stage 7 剩余限制：
 - Task board 只有手动创建和手动链接；没有自动任务推断、自动 device choice 或任务迁移。
 - DB 不保存设备 registry、token hash、pairing、revocation、audit log 或 approval/idempotency durable state。
 
-下一步建议进入 Stage 8：产品化与扩展。
+最近完成的 Superpowers spec：
 
-Stage 8 范围建议：
+- `docs/superpowers/specs/2026-06-20-product-readiness-design.md`
 
-- 先写产品化/安全 spec，明确安装、权限、secret storage、device identity、审计和未来 iOS API 复用边界。
-- 优先把当前本地开发姿态收敛为可维护的本机部署姿态；不要一次性实现外部部署、付费服务或生产多租户。
-- 对需要真实账号、2FA、provider/Codex secrets、外部部署或法律/隐私判断的事项保持暂停条件。
+最近完成的 Superpowers plan：
+
+- `docs/superpowers/plans/2026-06-20-product-readiness.md`
+
+Stage 8 已完成：
+
+- 本阶段把“产品化与扩展”收敛为本地 self-hosted readiness：运行手册、静态 readiness 命令、API/iOS 复用 guardrails、安全扫描和 Chrome smoke；没有实现 installer、keychain、pairing、reverse WSS、外部部署、生产多租户或 iOS app。
+- 新增 `pnpm product:check`，检查 root/package 本地脚本、loopback 默认、OpenAPI `/v1` operationId、public object schema closedness、Web/Control Plane/Worker import boundaries，以及 active docs/package scripts/reference runbook 中的 secret-shaped values。
+- `docs/references/local-self-hosting.md` 记录本地拓扑、启动顺序、env placeholder、验证命令、故障排查和剩余产品化限制；真实 provider/Codex/OpenAI/ChatGPT secrets 仍只能留在本地 shell 或 operator 选择的本地 secret manager。
+- `packages/api-contract/src/contractGeneration.test.ts` 增加 API guardrails：每个 `/v1` operation 必须有稳定 `operationId`，public object component schemas 必须显式 `additionalProperties: false`。
+- 最终复审修复项：
+  - 扩大 `product:check` secret scan 范围到 root/package scripts、`docs/references/README.md` 和 runbook。
+  - 增加 env token assignment、JSON `token` / `publicToken` / bearer token CLI 参数等敏感值形态检测。
+  - 增加 package script token assignment 和 reference doc token assignment 回归测试。
+
+验证：
+
+- `node --test scripts/product-readiness-check.test.mjs`（11/11）
+- `pnpm product:check`
+- `pnpm --filter @codex-remote/api-contract test`（25/25）
+- `pnpm --filter @codex-remote/api-contract build`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+Chrome 验证：
+
+- 两个 fake Worker + 本地 Control Plane + temp SQLite DB + Web 拓扑通过；Web 加载 Control Plane-backed `Smoke A`、`Project A`、`Project B`，未显示 mock-only device/conversation。
+- Task board 创建 `Stage 8 smoke task` 并把选中 conversation link 到任务，界面显示 `1 links` 和 `Smoke complete conversation · smoke-device-a`。
+- Control Plane 不可用时 Web 显示 fallback 与 `request_failure`，DOM 未出现 token、raw Worker URL/ports、private path、raw JSON-RPC、prompt、command output、full diff 或 stack trace。
+- smoke 进程停止后端口 `5173`、`8786`、`8791`、`8792` 已释放。
+
+Stage 8 剩余限制：
+
+- `pnpm product:check` 是静态 readiness guardrail，不替代生产安全审计、installer 测试、runtime hardening 或 threat model。
+- Loopback guard 仍以源码文本哨兵为主；未来如配置模块重构，应改为更结构化的配置 parser/fixture 验证。
+- Local bearer token 仍是开发姿态，不是 device-bound auth；token rotation、revocation、pairing 和 OS keychain 属于后续产品化。
+- 无外部部署、TLS 自动化、reverse WSS、public relay、iOS app、auto-update 或多租户承诺。
+
+下一步建议：
+
+- 所有 PLAN 中规划的 Stage 0-8 均已完成本地可验证切片。
+- 后续只按明确新 spec 推进 post-MVP 能力；优先级建议为 real installer/keychain/pairing threat model、device-bound auth、reverse WSS relay、外部部署安全模型或 iOS client 之一，不要在没有产品决策时并行铺开。
 
 后续阶段默认设计输入：
 

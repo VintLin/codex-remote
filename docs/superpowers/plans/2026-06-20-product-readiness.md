@@ -40,7 +40,7 @@
 - [x] Implement boundary/import checks that mirror Stage 8 productization invariants, including `apps/control-plane` not importing `apps/worker` source, Worker package internals, or relative paths that cross into Worker.
 - [x] Add root `product:check` script.
 - [x] Run `node --test scripts/product-readiness-check.test.mjs && pnpm product:check`.
-- [ ] Request task review for safety, false positives, and scope control.
+- [x] Request task review for safety, false positives, and scope control.
 
 ## Task 2: API And Future iOS Guardrails
 
@@ -58,7 +58,7 @@
 - [x] Add or tighten tests that public component schemas stay closed with `additionalProperties: false`, except explicit allowlist entries.
 - [x] Avoid adding iOS-specific DTOs or app code.
 - [x] Run `pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build`.
-- [ ] Request task review for API source-of-truth, iOS reuse guardrails, and no parallel DTOs.
+- [x] Request task review for API source-of-truth, iOS reuse guardrails, and no parallel DTOs.
 
 ## Task 3: Local Self-Hosting Runbook
 
@@ -77,7 +77,7 @@
 - [x] Document validation commands and troubleshooting for unavailable Worker, invalid Control Plane config, and empty DB.
 - [x] Document remaining productization limitations without implementing them.
 - [x] Run `pnpm product:check`.
-- [ ] Request task review for secret safety, operator clarity, and no product overclaim.
+- [x] Request task review for secret safety, operator clarity, and no product overclaim.
 
 ## Task 4: Chrome Product Smoke
 
@@ -117,20 +117,46 @@ Chrome evidence:
 - Consumes: completed Tasks 1-4.
 - Produces: final Stage 8 evidence and commit.
 
-- [ ] Run focused checks:
+- [x] Run focused checks:
   - `node --test scripts/product-readiness-check.test.mjs`
   - `pnpm product:check`
   - `pnpm --filter @codex-remote/api-contract test`
   - relevant app/package tests touched by the implementation
-- [ ] Run project gate:
+- [x] Run project gate:
   - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm test`
   - `pnpm build`
-- [ ] Request final broad implementation review from architecture boundary, unique source of truth, DRY, modularity, security, tests, maintainability, and roadmap alignment.
-- [ ] Fix Critical/Important review findings and rerun affected tests.
-- [ ] Update Stage 8 docs, `PLAN.md`, and references with verification and remaining risks.
-- [ ] Commit Stage 8 on `main`; do not push.
+- [x] Request final broad implementation review from architecture boundary, unique source of truth, DRY, modularity, security, tests, maintainability, and roadmap alignment.
+- [x] Fix Critical/Important review findings and rerun affected tests.
+- [x] Update Stage 8 docs, `PLAN.md`, and references with verification and remaining risks.
+- [x] Commit Stage 8 on `main`; do not push.
+
+Focused verification:
+
+- `node --test scripts/product-readiness-check.test.mjs` passed 11/11.
+- `pnpm product:check` passed.
+- `pnpm --filter @codex-remote/api-contract test` passed 25/25.
+- `pnpm --filter @codex-remote/api-contract build` passed.
+
+Project gate:
+
+- `pnpm lint` passed.
+- `pnpm typecheck` passed.
+- `pnpm test` passed.
+- `pnpm build` passed.
+
+Review record:
+
+- Plan review first requested changes for readiness check coverage of OpenAPI drift and Control Plane Worker-internals boundary, then approved after spec/plan updates.
+- Task review for Tasks 1-3 requested changes for package script checks, local self-hosting scan coverage, and relative import boundary checks; fixes were applied and re-reviewed as approved.
+- Final broad implementation review requested changes for token assignment scan coverage and PLAN synchronization. Fixes added package/reference scan coverage plus env/JSON/CLI token assignment tests; `PLAN.md` and references were updated.
+
+Remaining risks:
+
+- `product:check` is static readiness, not a production security audit.
+- Loopback checks still use current-source text sentinels and should become structured config tests if config modules are refactored.
+- Real installer, keychain, pairing, token rotation/revocation, reverse WSS, external deployment, and iOS app remain post-MVP work.
 
 ## Plan Self-Review
 

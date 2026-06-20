@@ -176,14 +176,24 @@ function resolvesInside(root, file, specifier, targetDir) {
 
 function checkSensitiveShapes(root) {
   const allowedPlaceholders = new Set(["REDACTED", "example-token"]);
+  const packageJsonFiles = ["package.json", ...listFiles(root, ["apps", "packages"], ["package.json"])];
   const scannedFiles = [
     ...["AGENTS.md", "PLAN.md", "PRODUCT.md", "PROJECT_STRUCTURE.md", "DESIGN.md"].filter((file) => existsSync(join(root, file))),
+    ...packageJsonFiles,
     ...listFiles(root, ["docs/superpowers", "scripts"], [".md", ".mjs", ".sh"]).filter((file) => !file.endsWith(".test.mjs")),
-    ...listFiles(root, ["docs/references"], [".md"]).filter((file) => file === "docs/references/local-self-hosting.md" || file.includes("/product-readiness-fixtures/")),
+    ...listFiles(root, ["docs/references"], [".md"]).filter(
+      (file) =>
+        file === "docs/references/README.md" ||
+        file === "docs/references/local-self-hosting.md" ||
+        file.includes("/product-readiness-fixtures/"),
+    ),
   ];
   const patterns = [
     /\bsk-[A-Za-z0-9_-]{12,}\b/g,
     /\b(?:Bearer|token=)([A-Za-z0-9._-]{12,})\b/g,
+    /\b[A-Z0-9_]*TOKEN[A-Z0-9_]*\s*=\s*["']?([A-Za-z0-9._-]{12,})["']?/g,
+    /["'](?:token|publicToken|workerToken|controlPlaneToken|bearerToken)["']\s*:\s*["']([A-Za-z0-9._-]{12,})["']/gi,
+    /\b--(?:token|bearer-token|worker-token|control-plane-token)\s+([A-Za-z0-9._-]{12,})\b/g,
     /https?:\/\/[^/\s:@]+:[^/\s@]+@/g,
     /\/Users\/[A-Za-z0-9._-]+\/[^\s)`'"]+/g,
     /^ {2,}at .+\(.+:\d+:\d+\)$/gm,

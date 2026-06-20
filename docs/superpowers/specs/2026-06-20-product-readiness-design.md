@@ -142,3 +142,21 @@ Chrome smoke:
 - API/iOS guardrail tests pass without introducing iOS app code.
 - Focused tests, repository gate, subagent reviews, and Chrome smoke pass.
 - `PLAN.md`, `PROJECT_STRUCTURE.md`, this spec, the Stage 8 plan, and relevant references record final status, verification, review findings, remaining risks, and post-MVP work.
+
+## Completion Evidence
+
+- Implemented `pnpm product:check` with checks for scripts, loopback defaults, OpenAPI guardrails, import boundaries, and sensitive-shaped values in active docs/package scripts/readiness references.
+- Added `docs/references/local-self-hosting.md` as the local self-hosting runbook and linked it from `docs/references/README.md`.
+- Added API contract guardrail tests for `/v1` operationId stability and public object schema closedness.
+- Plan review was first changed after architecture feedback, then approved.
+- Implementation review found secret-scan coverage gaps; fixed by scanning package scripts and reference README plus env/JSON/CLI token assignment shapes, with regression tests.
+- Chrome smoke verified Control Plane-backed normal path, task board link path, and unavailable Control Plane sanitized fallback.
+- Final automated verification passed:
+  - `node --test scripts/product-readiness-check.test.mjs`
+  - `pnpm product:check`
+  - `pnpm --filter @codex-remote/api-contract test`
+  - `pnpm --filter @codex-remote/api-contract build`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build`

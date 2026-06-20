@@ -17,7 +17,7 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-The next planned stage is Stage 8: productization and expansion.
+All planned Stages 0-8 have completed local verifiable slices. New work should start from a fresh spec and should not assume installer, keychain, pairing, reverse WSS, external deployment, iOS, or production multi-tenant capabilities exist.
 
 Stage 4 completed context:
 
@@ -112,6 +112,21 @@ Stage 7 remaining limitations:
 - Task board is manual only; no automatic task inference, automatic device choice, or task migration.
 - DB does not yet own device registry, token hashes, pairing, revocation, audit log, approval registry, or idempotency durable state.
 - Product/runtime native dependency support matrix remains a Stage 8/productization concern.
+
+Stage 8 completed context:
+
+- Stage 8 productization was intentionally narrowed to local self-hosted readiness, not real packaging or cloud/product launch.
+- `docs/references/local-self-hosting.md` is the operator runbook for local topology, startup order, placeholders, validation commands, troubleshooting, and known limitations.
+- `pnpm product:check` is the static readiness guardrail. It checks local scripts, loopback defaults, OpenAPI operationId stability, public object schema closedness, import boundaries, and sensitive-shaped values in active docs, package scripts, readiness scripts, and local self-hosting references.
+- API/iOS reuse guardrails live in `packages/api-contract/src/contractGeneration.test.ts`; future iOS types must still derive from `packages/api-contract/openapi.yaml`.
+- Secret-shaped scanning covers provider key shapes, bearer/token assignment shapes, credential-bearing URLs, private local paths, and stack-trace-shaped values while allowing documented placeholders such as `REDACTED` and `example-token`.
+- Web Chrome smoke verified Control Plane-backed device/conversation/task data, task linking through the Control Plane-backed task board, and sanitized unavailable Control Plane fallback.
+
+Stage 8 remaining limitations:
+
+- Product readiness checks are static guardrails; they are not a substitute for runtime penetration testing, production threat modeling, installer testing, or OS keychain validation.
+- Loopback checks still use text sentinels over current config sources; future config refactors should move these checks to structured parser/fixture tests.
+- Local bearer token auth remains a development posture. Pairing, token rotation, revocation, sender-constrained device auth, OS keychain storage, audit log, reverse WSS, external deployment, iOS app, and auto-update remain post-MVP work.
 
 ## App-Server Integration Notes
 

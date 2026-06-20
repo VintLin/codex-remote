@@ -117,3 +117,28 @@ test("product readiness check when docs contain secret-shaped values should fail
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("product readiness check when package scripts contain token assignments should fail", () => {
+  const root = createFixture();
+  try {
+    updateJson(join(root, "package.json"), (packageJson) => {
+      packageJson.scripts["unsafe:start"] = "CODEX_REMOTE_CONTROL_PLANE_TOKEN=realbearertoken12345 pnpm web:start";
+    });
+    assert.match(runProductReadinessCheck(root).join("\n"), /package\.json contains sensitive-shaped value/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when reference docs contain token assignments should fail", () => {
+  const root = createFixture();
+  try {
+    writeFileSync(
+      join(root, "docs/references/README.md"),
+      'Unsafe examples: CODEX_REMOTE_WORKER_TOKEN=realworkertoken12345 and {"publicToken":"realpublictoken12345"}\n',
+    );
+    assert.match(runProductReadinessCheck(root).join("\n"), /docs\/references\/README\.md contains sensitive-shaped value/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
