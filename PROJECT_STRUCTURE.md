@@ -11,6 +11,13 @@ Do not create future-stage directories until a stage spec needs real files there
 ```text
 apps/
   web/
+    src/
+      app/            # Next.js app shell only
+      components/     # UI rendering and small interaction controllers
+      data/           # API clients and datasource adapters
+      domain/         # pure product logic derived from public contracts
+      contracts/      # boundary/style/source-discipline tests
+      test-support/   # test-only helpers
   worker/
   control-plane/
 
@@ -58,6 +65,23 @@ Not allowed:
 - Define parallel DTOs that duplicate `api-contract`.
 - Own Worker, Control Plane, DB, or app-server lifecycle logic.
 
+Source layout rules:
+
+- `src/app`: Next.js entrypoints, metadata, route-level composition only.
+- `src/components`: React rendering, local UI state, and thin submit controllers. Components may call Web datasource/controller functions but must not own API schemas or app-server mapping.
+- `src/data`: HTTP clients, datasource adapters, fallback classification, and public-contract response parsing. No React components.
+- `src/domain`: pure product logic such as sidebar grouping, timeline projection, identity keys, status presentation, and capability state reducers. No HTTP, React, DB, or app-server imports.
+- `src/contracts`: tests that enforce boundaries, source discipline, generated-contract use, and style-token use.
+- `src/test-support`: test helpers only.
+
+Capability module trigger:
+
+- Do not create future directories preemptively.
+- Keep a capability in the existing `components` / `data` / `domain` split while it is small.
+- Create `apps/web/src/features/<capability>/` only when one capability needs all of these at once: datasource, domain reducer/model, submit controller, and multiple UI components.
+- A feature directory must still follow the same internal split: data, domain, components, and tests. It must not become a catch-all.
+- `components/shell/codex-remote-app.tsx` should remain orchestration glue. New capability surfaces should not be implemented inline there.
+
 ### `apps/worker`
 
 Purpose:
@@ -77,6 +101,13 @@ Not allowed:
 - Expose raw app-server JSON-RPC to Web.
 - Store provider secrets in Control Plane-facing payloads.
 - Own DB schema, migrations, or task persistence.
+
+Capability adapter rule:
+
+- Worker owns app-server mapping for each product capability.
+- Each new app-server-backed capability should isolate protocol calls behind a small Worker module before exposing HTTP handlers.
+- Generated protocol types are used at the adapter boundary; public API types are used at the HTTP boundary.
+- Worker projections must redact raw prompt text, command output, full diff, raw JSON-RPC ids, raw app-server URLs, provider secrets, stack/cause, and private local paths.
 
 ### `apps/control-plane`
 
@@ -100,6 +131,12 @@ Not allowed:
 - Persist device registry, token hashes, pairing state, revocation state, or audit log before productization stages.
 - Import `packages/codex-protocol`, Web code, or Worker internals.
 
+Capability coordination rule:
+
+- Control Plane may route, aggregate, paginate, normalize device identity, persist task links, and expose degraded/empty state.
+- Control Plane must not translate raw app-server protocol or invent capability data that should come from Worker.
+- Device-scoped identities stay explicit in public shapes so duplicate project or conversation ids across devices do not merge.
+
 ## Packages
 
 ### `packages/api-contract`
@@ -120,6 +157,12 @@ Not allowed:
 - UI framework dependencies.
 - app-server generated protocol types.
 - Handwritten parallel DTOs.
+
+Capability contract rule:
+
+- New product capabilities start here before Worker, Control Plane, or Web implementation.
+- Public schemas should describe user-facing capability concepts, not raw app-server method names.
+- Opaque ids, opaque cursors, closed object schemas, stable `operationId`, and standard `ErrorEnvelope` semantics remain the default.
 
 ### `packages/codex-protocol`
 

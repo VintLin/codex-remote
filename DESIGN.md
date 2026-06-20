@@ -234,6 +234,27 @@ Codex Remote is border-led and layer-lite. Most separation comes from a shared 1
 
 - **Assistant Composer:** a large-radius input shell that anchors the main conversation workflow. It should read as a single operational field, not as a floating promotional card.
 
+## Workbench Support Surfaces
+
+Codex Remote should add new capabilities into stable workbench surfaces instead of creating one-off page designs.
+
+| Surface | Purpose |
+| --- | --- |
+| Sidebar / Navigator | Device, project, conversation, task, and capability navigation |
+| Main Conversation | Timeline, follow-up, steer, interrupt, request cards, and conversation state |
+| Right Detail Pane | Files, Git, approvals, runtime state, extension detail, and account detail |
+| Tool Surface | Shell, file browser, fuzzy search, review, MCP tools, and plugin management |
+| Status Strip / Badges | Model, account, permission, connection, running, waiting, degraded, and failure state |
+| Modal / Popover | Small choices, confirmations, configuration, and one-shot decisions |
+
+Rules:
+
+- New capability UI starts inside an existing workbench surface unless the stage spec proves that a new surface is necessary.
+- Files, Shell, Git, MCP, plugin, and config experiences are operational tool surfaces, not marketing cards.
+- Realtime or high-risk capabilities must show loading, active, waiting, accepted, failed, empty, and degraded states.
+- A disabled or unsupported capability must either be absent or visibly disabled with clear state; no clickable no-op controls.
+- Ownership context stays visible at action time: device, project, conversation, task, or account as applicable.
+
 ## Do's and Don'ts
 
 ### Do

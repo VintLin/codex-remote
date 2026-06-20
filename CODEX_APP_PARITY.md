@@ -24,6 +24,30 @@ Web Codex App-like workbench
 
 The Web product surface should expose stable capabilities such as conversation management, realtime timeline, files, shell, Git, model selection, skills, plugins, MCP, and account state. Worker maps those capabilities to app-server methods. Web and Control Plane do not pass through raw JSON-RPC, raw prompts, raw command output, raw diffs, raw local paths, provider secrets, or app-server URLs.
 
+## Capability Implementation Shape
+
+Each Codex App-like capability should be designed as a product capability, not as a raw app-server method pass-through.
+
+```text
+Capability goal
+  -> public API contract
+  -> Control Plane routing/state
+  -> Worker app-server/local adapter
+  -> Web datasource
+  -> Web domain model
+  -> Web UI surface
+  -> real local verification
+```
+
+Rules:
+
+- `packages/api-contract/openapi.yaml` defines public fields first.
+- `packages/codex-protocol` generated types define only the Worker-side app-server mapping.
+- `apps/worker` is the only app-server, filesystem, Git, and shell caller.
+- `apps/control-plane` keeps device routing and shared state separate from Worker-local execution.
+- `apps/web` consumes only Control Plane-shaped public APIs and never imports app-server protocol types.
+- A capability is not product-ready until its UI state, degraded/empty state, and real local verification are defined.
+
 ## Capability Targets
 
 | Capability area | Codex App-like target | Current Codex Remote state | Gap |
@@ -64,6 +88,31 @@ Each stage must still keep the existing architecture boundary:
 - `apps/control-plane` coordinates devices and product state.
 - `apps/worker` is the only Codex app-server, local filesystem, Git, and shell caller.
 - Generated app-server protocol and OpenAPI remain the only schema sources.
+
+## UI Support Contract
+
+Every future capability area must declare which Web support surfaces it uses before implementation.
+
+| UI support surface | Use |
+| --- | --- |
+| Sidebar / Navigator | Device, project, conversation, task, or capability navigation |
+| Main Conversation | Conversation timeline, follow-up, steer, interrupt, request cards |
+| Right Detail Pane | Files, Git, approvals, runtime state, extension detail, account detail |
+| Tool Surface | Shell, file browser, search, review, MCP tools, plugin management |
+| Status Strip / Badges | Device, model, account, permission, connection, degraded, running, waiting states |
+| Modal / Popover | Small choices, confirmations, configuration, and one-shot decisions |
+
+Minimum UI states for every supported capability:
+
+- Loading
+- Loaded empty
+- Loaded with data
+- Degraded dependency
+- Action pending
+- Action accepted
+- Action failed with sanitized error
+
+Unsupported capabilities should be absent or explicitly disabled; they must not appear as clickable no-op controls.
 
 ## Deprecated Direction
 
