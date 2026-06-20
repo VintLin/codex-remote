@@ -452,6 +452,7 @@ export function CodexRemoteApp() {
             onLinkSelectedConversation={linkSelectedConversationToTask}
             onUnlinkConversation={unlinkConversationFromTask}
             selectedConversation={conversation}
+            source={source}
             taskLoadState={taskSource.status}
             taskStatus={taskStatus}
             tasks={tasks}

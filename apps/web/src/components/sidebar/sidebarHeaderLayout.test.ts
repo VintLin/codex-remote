@@ -137,6 +137,14 @@ test("conversation main when source is not loaded, should render explicit exampl
   assert.match(mainPanelsComponent, /未连接真实 Control Plane/);
 });
 
+test("task board when source is not loaded, should render explicit example data copy", () => {
+  assert.match(mainPanelsComponent, /source: WorkbenchData\["source"\]/);
+  assert.match(mainPanelsComponent, /const isExampleData = source\.reason !== "loaded";/);
+  assert.match(mainPanelsComponent, /<section aria-label="任务数据源状态" className="conversation-source-banner">/);
+  assert.match(mainPanelsComponent, /当前显示示例任务数据/);
+  assert.match(readWebSource("components/shell/codex-remote-app.tsx"), /source=\{source\}/);
+});
+
 test("conversation composer when future controls are not implemented, should omit nonfunctional controls", () => {
   assert.doesNotMatch(conversationThreadComponent, /aria-label="添加附件"/);
   assert.doesNotMatch(conversationThreadComponent, /aria-label="语音输入"/);

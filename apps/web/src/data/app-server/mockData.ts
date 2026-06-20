@@ -91,7 +91,7 @@ export const searchRecents: SearchRecent[] = conversations.map((conversation) =>
 export const tasks: BoardTask[] = [
   {
     id: "task-worker-probe",
-    title: "codex-remote worker probe",
+    title: "Example codex-remote worker probe",
     status: "in_progress",
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
@@ -102,7 +102,7 @@ export const tasks: BoardTask[] = [
   },
   {
     id: "task-loose-notes",
-    title: "independent planning notes",
+    title: "Example independent planning notes",
     status: "done",
     createdAt: "2026-06-20T00:01:00.000Z",
     updatedAt: "2026-06-20T00:01:00.000Z",

@@ -39,3 +39,35 @@ All commands passed in this task run.
 ## Concerns
 
 - Existing unrelated Stage 9 documentation changes were present before Task 3 and were not staged.
+
+## Review Fix: Task Fallback Explicitness
+
+Status: implemented.
+
+Fix details:
+
+- Passed `workbenchData.source` into `TaskBoardPage`.
+- Reused the existing restrained `conversation-source-banner` treatment in Tasks when `source.reason !== "loaded"`.
+- Added Tasks-specific copy: `未连接真实 Control Plane` and `当前显示示例任务数据`.
+- Labeled fallback task fixture titles with an `Example ` prefix.
+
+RED evidence:
+
+```bash
+pnpm --filter @codex-remote/web test -- --test-name-pattern "fallback|source is not loaded|task"
+```
+
+Failed as expected before implementation:
+
+- `task board when source is not loaded, should render explicit example data copy`
+- `when fixture tasks are used, should label them as examples`
+
+GREEN evidence:
+
+```bash
+pnpm --filter @codex-remote/web test -- --test-name-pattern "fallback|source is not loaded|task"
+pnpm --filter @codex-remote/web test
+pnpm --filter @codex-remote/web typecheck
+```
+
+All three commands passed after the fix.

@@ -71,6 +71,7 @@ interface TaskBoardPageProps {
   onLinkSelectedConversation: (task: BoardTask) => Promise<void>;
   onUnlinkConversation: (task: BoardTask, link: TaskConversationLink) => Promise<void>;
   selectedConversation: CodexConversation | null;
+  source: WorkbenchData["source"];
   taskLoadState: WorkbenchData["taskSource"]["status"];
   taskStatus: "failed" | "idle" | "submitting";
   tasks: BoardTask[];
@@ -464,12 +465,21 @@ export function TaskBoardPage({
   onLinkSelectedConversation,
   onUnlinkConversation,
   selectedConversation,
+  source,
   taskLoadState,
   taskStatus,
   tasks,
 }: TaskBoardPageProps) {
   const [taskTitle, setTaskTitle] = useState("");
   const disabled = taskStatus === "submitting";
+  const isExampleData = source.reason !== "loaded";
+  const datasourceStatus: string[] = [source.reason];
+  if (source.error?.code) {
+    datasourceStatus.push(source.error.code);
+  }
+  if (source.error?.message) {
+    datasourceStatus.push(source.error.message);
+  }
 
   return (
     <main className="main-pane devices-page">
@@ -493,6 +503,12 @@ export function TaskBoardPage({
         </div>
       </header>
       <div className="content-scroll">
+        {isExampleData ? (
+          <section aria-label="任务数据源状态" className="conversation-source-banner">
+            <strong>未连接真实 Control Plane</strong>
+            <span>当前显示示例任务数据 · {datasourceStatus.join(" · ")}</span>
+          </section>
+        ) : null}
         <form
           className="conversation-control-strip"
           onSubmit={(event) => {

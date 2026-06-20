@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assistantThreads, conversations } from "./mockData.ts";
+import { assistantThreads, conversations, tasks } from "./mockData.ts";
 
 test("when fixture conversations are used, should label them as examples", () => {
   assert.equal(conversations.every((conversation) => conversation.title.startsWith("Example ")), true);
+});
+
+test("when fixture tasks are used, should label them as examples", () => {
+  assert.equal(tasks.every((task) => task.title.startsWith("Example ")), true);
 });
 
 test("when demo assistant threads define metadata, should derive it from conversations", () => {
