@@ -18,3 +18,52 @@ html,
 body {
   height: 100%;
 }
+
+.conversation-header-badges,
+.conversation-row-badges {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.conversation-row-badges {
+  margin-left: 6px;
+}
+
+.conversation-state-badge {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  font-weight: var(--cr-weight-emphasis);
+  line-height: 1;
+  padding: 0 5px;
+}
+
+.conversation-approval-card {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-md);
+  padding: 8px 10px;
+}
+
+.conversation-approval-card[data-state="resolved"] {
+  opacity: 0.72;
+}
+
+.conversation-approval-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cr-ink);
+  font-size: var(--cr-text-compact);
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

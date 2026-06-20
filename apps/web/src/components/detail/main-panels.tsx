@@ -7,6 +7,7 @@ import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../..
 import type {
   BoardTask,
   CodexConversation,
+  ConversationApprovalCard,
   Device,
   DeviceConnectionStatus,
   PendingApproval,
@@ -39,11 +40,15 @@ interface ConversationMainProps {
   onSubmitInterrupt: () => Promise<void>;
   onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
   onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
+  onArchiveConversation: (conversation: CodexConversation) => Promise<void>;
+  onRenameConversation: (conversation: CodexConversation) => Promise<void>;
+  onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   previousConversationKey: string | null;
   nextConversationKey: string | null;
   pendingApprovals: PendingApproval[];
+  approvalCards: ConversationApprovalCard[];
   source: WorkbenchData["source"];
   startStatus: "accepted" | "failed" | "idle" | "submitting";
   activeTurnId: string | null;
@@ -109,8 +114,12 @@ export function ConversationMain({
   onSubmitInterrupt,
   onSubmitStart,
   onSubmitSteer,
+  onArchiveConversation,
+  onRenameConversation,
+  onRestoreConversation,
   previousConversationKey,
   pendingApprovals,
+  approvalCards,
   source,
   startStatus,
   activeTurnId,
@@ -165,7 +174,18 @@ export function ConversationMain({
           ) : null}
           <div className="workspace-title conversation-title">
             <h1>{conversationTitle}</h1>
-            {!isMobile ? <ActionMenu ariaLabel="打开对话操作菜单" className="conversation-title-menu" group="conversation" /> : null}
+            <ConversationStatusBadges conversation={conversation} />
+            {!isMobile ? (
+              <ActionMenu
+                archived={conversation?.archived === true}
+                ariaLabel="打开对话操作菜单"
+                className="conversation-title-menu"
+                group="conversation"
+                {...(conversation ? { onArchive: () => void onArchiveConversation(conversation) } : {})}
+                {...(conversation ? { onRename: () => void onRenameConversation(conversation) } : {})}
+                {...(conversation ? { onRestore: () => void onRestoreConversation(conversation) } : {})}
+              />
+            ) : null}
           </div>
         </div>
         <div aria-label="Conversation controls" className="toolbar conversation-toolbar">
@@ -202,6 +222,7 @@ export function ConversationMain({
           onSubmitApprovalDecision={onSubmitApprovalDecision}
           onSubmitInterrupt={onSubmitInterrupt}
           onSubmitSteer={onSubmitSteer}
+          approvalCards={approvalCards}
           pendingApprovals={pendingApprovals}
         />
         <CodexAssistantThread
@@ -213,6 +234,20 @@ export function ConversationMain({
         />
       </div>
     </main>
+  );
+}
+
+function ConversationStatusBadges(props: { conversation: CodexConversation | null }) {
+  if (!props.conversation) {
+    return null;
+  }
+
+  return (
+    <span className="conversation-header-badges">
+      {props.conversation.loaded ? <span className="conversation-state-badge">Loaded</span> : null}
+      {props.conversation.live ? <span className="conversation-state-badge">Live</span> : null}
+      {props.conversation.archived ? <span className="conversation-state-badge">Archived</span> : null}
+    </span>
   );
 }
 
@@ -269,6 +304,7 @@ function ConversationControlStrip({
   onSubmitApprovalDecision,
   onSubmitInterrupt,
   onSubmitSteer,
+  approvalCards,
   pendingApprovals,
 }: {
   activeTurnId: string | null;
@@ -277,6 +313,7 @@ function ConversationControlStrip({
   onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   onSubmitInterrupt: () => Promise<void>;
   onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
+  approvalCards: ConversationApprovalCard[];
   pendingApprovals: PendingApproval[];
 }) {
   const [steerDraft, setSteerDraft] = useState("");
@@ -334,6 +371,14 @@ function ConversationControlStrip({
               {decision}
             </button>
           ))}
+        </div>
+      ))}
+      {approvalCards.map((card) => (
+        <div className="conversation-approval-card" data-state={card.status} key={card.id}>
+          <span className="conversation-control-meta">
+            {card.status === "resolved" ? "resolved" : "pending"} · {card.risk} · {card.title}
+          </span>
+          <span className="conversation-approval-summary">{card.summary}</span>
         </div>
       ))}
     </section>

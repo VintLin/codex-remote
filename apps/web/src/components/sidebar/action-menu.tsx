@@ -13,6 +13,7 @@ interface ActionMenuItem {
   disabled?: boolean;
   icon: IconName;
   label: string;
+  onSelect?: () => void;
 }
 
 const actionItems = {
@@ -46,11 +47,30 @@ const actionItems = {
 
 interface ActionMenuProps {
   ariaLabel?: string;
+  archived?: boolean;
   className?: string;
   group: SidebarActionGroup;
+  onArchive?: () => void;
+  onRename?: () => void;
+  onRestore?: () => void;
 }
 
-export function ActionMenu({ ariaLabel = "打开操作菜单", className, group }: ActionMenuProps) {
-  const actions = actionItems[group];
+export function ActionMenu({
+  archived = false,
+  ariaLabel = "打开操作菜单",
+  className,
+  group,
+  onArchive,
+  onRename,
+  onRestore,
+}: ActionMenuProps) {
+  const actions = group === "conversation"
+    ? [
+        { icon: "pencil", label: "重命名", disabled: !onRename, ...(onRename ? { onSelect: onRename } : {}) },
+        archived
+          ? { icon: "reload", label: "恢复", disabled: !onRestore, ...(onRestore ? { onSelect: onRestore } : {}) }
+          : { icon: "inbox", label: "归档", disabled: !onArchive, ...(onArchive ? { onSelect: onArchive } : {}) },
+      ] satisfies ActionMenuItem[]
+    : actionItems[group];
   return <PopoverMenu actions={actions} ariaLabel={ariaLabel} className={className} />;
 }

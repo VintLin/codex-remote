@@ -15,10 +15,18 @@ export interface CapturedApprovalDecision {
   result: unknown;
 }
 
+export type ResolvedApproval = Omit<PendingApproval, "status"> & {
+  status: "resolved";
+  resolvedAt: string;
+};
+
+export type ApprovalRegistryRecord = PendingApproval | ResolvedApproval;
+
 export interface WorkerApprovalRegistry {
   captureServerRequest(request: ServerRequest): PendingApproval | null;
   completeApproval(approvalRequestId: string): void;
   listPendingApprovals(conversationId: string): PendingApproval[];
+  listResolvedApprovals(conversationId: string): ResolvedApproval[];
   resolveApproval(params: {
     approvalRequestId: string;
     conversationId: string;
@@ -37,9 +45,11 @@ type CapturedApproval = {
 };
 
 const maxPendingApprovals = 100;
+const maxResolvedApprovals = 100;
 
 export function createWorkerApprovalRegistry(options: { now?: () => string } = {}): WorkerApprovalRegistry {
   const pending = new Map<string, CapturedApproval>();
+  const resolved = new Map<string, ResolvedApproval>();
   let nextApprovalId = 1;
   const now = options.now ?? (() => new Date().toISOString());
 
@@ -56,10 +66,23 @@ export function createWorkerApprovalRegistry(options: { now?: () => string } = {
       return captured.publicApproval;
     },
     completeApproval: (approvalRequestId) => {
+      const captured = pending.get(approvalRequestId);
+      if (!captured) {
+        return;
+      }
+
       pending.delete(approvalRequestId);
+      resolved.set(approvalRequestId, {
+        ...captured.publicApproval,
+        status: "resolved",
+        resolvedAt: now(),
+      });
+      trimResolvedApprovals(resolved);
     },
     listPendingApprovals: (conversationId) => Array.from(pending.values())
       .map((entry) => entry.publicApproval)
+      .filter((approval) => approval.conversationId === conversationId),
+    listResolvedApprovals: (conversationId) => Array.from(resolved.values())
       .filter((approval) => approval.conversationId === conversationId),
     resolveApproval: (params) => {
       const captured = pending.get(params.approvalRequestId);
@@ -88,6 +111,12 @@ export function createWorkerApprovalRegistry(options: { now?: () => string } = {
           captured.publicApproval.conversationId === notification.threadId
         ) {
           pending.delete(approvalId);
+          resolved.set(approvalId, {
+            ...captured.publicApproval,
+            status: "resolved",
+            resolvedAt: now(),
+          });
+          trimResolvedApprovals(resolved);
         }
       }
     },
@@ -233,6 +262,17 @@ function trimPendingApprovals(pending: Map<string, CapturedApproval>): void {
     }
 
     pending.delete(oldestKey);
+  }
+}
+
+function trimResolvedApprovals(resolved: Map<string, ResolvedApproval>): void {
+  while (resolved.size > maxResolvedApprovals) {
+    const oldestKey = resolved.keys().next().value;
+    if (typeof oldestKey !== "string") {
+      return;
+    }
+
+    resolved.delete(oldestKey);
   }
 }
 

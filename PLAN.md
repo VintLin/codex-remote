@@ -61,6 +61,7 @@ Codex App-like 能力对齐以 `CODEX_APP_PARITY.md` 为准；`FEATURE_SUPPORT.m
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 已完成本地可验证切片；approval decision 为安全 real-gap |
 | 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 已实现校准 fixture；blocked 于 app-server 未产生 safe pending approval |
+| 11. Conversation Workbench Parity | open/resume、archive/unarchive、rename、loaded/live badge、snapshot-first timeline events、approval cards | 代码与自动化验证通过；@chrome 实测被工具层阻塞，尚未完成阶段关闭 |
 
 ```mermaid
 flowchart TB
@@ -75,8 +76,9 @@ flowchart TB
   P8["8. Product Readiness + iOS Guardrails"]
   P9["9. Real Local Codex Calibration - complete with approval safety gap"]
   P10["10. Isolated Approval Fixture - blocked: no safe pending approval"]
+  P11["11. Conversation Workbench Parity - implemented, Chrome verification blocked"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11
 ```
 
 Stage 9 当前证据：
@@ -106,11 +108,22 @@ Stage 10 当前证据：
 - Focused fixes attempted：workspace-write/on-request, read-only/on-request, read-only/untrusted, stdout-only command prompt, and explicit generated-protocol `approvalsReviewer: "user"` were tested. The retained implementation is read-only/on-request with user-routed approvals because it matches Q22's safer fixture direction; no automatic accept, `acceptForSession`, policy amendment, production approval model, user-layer rules edit, or auth-copying path was added.
 - Remaining risk：current app-server behavior does not emit a pending approval for the isolated fixture prompt within the bounded polling window, so approval decision is still not product-ready. The next safe evidence source is a trusted project-local rules layer or equivalent app-server-supported rules injection; do not modify user `~/.codex/rules` automatically.
 
+Stage 11 当前证据：
+
+- Spec/plan：`docs/superpowers/specs/2026-06-21-conversation-workbench-parity-design.md` 与 `docs/superpowers/plans/2026-06-21-conversation-workbench-parity.md`。
+- Implemented in current slice：OpenAPI contract 增加 conversation lifecycle/result/event/card schema；Worker 使用生成的 `thread/resume`、`thread/archive`、`thread/unarchive`、`thread/name/set`、`thread/loaded/list` 协议类型；Control Plane 增加 device-scoped lifecycle pass-through；Web 增加 open-on-select、rename/archive/restore actions、Loaded/Live/Archived badges、snapshot timeline approval cards。
+- Review evidence：plan review 为 approve-with-fixes，已收窄 request cards 到 approval cards、明确 event schema、归档列表语义和单一 `title`；Task 1 review findings 已修复；Task 2 re-review approve。
+- Automated verification：`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build` 全部通过；focused tests 通过：api-contract 27/27、worker 185/185、control-plane 41/41、web 106/106。
+- Real stack evidence：`pnpm real:start` 启动 Worker、Control Plane、Web；`pnpm real:status` 三项 running；`pnpm real:check` 当前 summary 为 `total=19 realPass=17 fixedPass=0 realGap=2`，main Web/Control Plane/Worker/app-server path 可用，`approval decision` 和 `thread/list cwd scope` 为 real-gap；`pnpm web:e2e:smoke` 通过。
+- Real lifecycle API evidence：对真实本机栈执行 open、rename、archive、unarchive、timeline 读取，验证 loaded/archive 状态、archived row 可发现、timeline event deviceId normalize、无 token/raw URL/raw JSON-RPC/raw path/stack/cause 标记泄漏。
+- Remaining blocker：用户指定的 @chrome 真实浏览器实测未完成。Chrome 控制工具初始化失败，错误为控制通道缺少 sandbox metadata；已按 Chrome skill 重试并确认 Node-backed Chrome control tool 本身不可用。Stage 11 不应在补齐 @chrome 实测前归档为完成。
+
 当前大目标差距：
 
 - 已真实验证：Web -> Control Plane -> Worker -> Codex app-server 的本机主链，设备、项目、对话、start、follow-up、interrupt、steer、task create/link、本地 self-hosted 运行路径均有 real evidence。
+- Stage 11 已实现但未关闭：conversation lifecycle 与 workbench parity 主体已通过自动化和真实 API 验证；Chrome 页面实测因工具层阻塞待补。
 - 已纠偏：fake Worker smoke 只保留为 UI/contract/fallback 验证，不再作为 real readiness 证据。
-- 未闭环：approval decision 还没有真实 pending approval 可供 Web/Control Plane/Worker decline/cancel；因此 approval 不能宣称 product-ready。
+- 未闭环：approval decision 还没有稳定真实 pending approval 可供 Web/Control Plane/Worker decline/cancel；因此 approval decision 不能宣称 product-ready。
 - 未进入：用户可控权限模式、自动审批、production approval safety model、installer/keychain/pairing、reverse WSS、外部部署、iOS、streaming event log。
 
 当前 Codex App parity 方向：
@@ -123,7 +136,8 @@ Stage 10 当前证据：
 
 当前 active Superpowers 文档：
 
-- 无。下一阶段开始前先从 `CODEX_APP_PARITY.md` 选择一个能力面，写新的 stage spec 和 plan。
+- Stage 11：`docs/superpowers/specs/2026-06-21-conversation-workbench-parity-design.md`
+- Stage 11：`docs/superpowers/plans/2026-06-21-conversation-workbench-parity.md`
 
 已归档 Superpowers 文档：
 
@@ -199,7 +213,7 @@ flowchart LR
 
 Q29-Q33 的路线含义：
 
-1. Stage 11：Conversation Workbench Parity。产品化 `open/resume`、archive/unarchive、rename、loaded/live badge，建立 snapshot-first + Worker-projected live event schema，展示 assistant delta、command summary、diff update、approval/request pending/resolved、turn terminal state。Non-goals：rollback、raw `inject_items`、arbitrary shell/filesystem write、plugin install、account login、realtime voice。
+1. Stage 11：Conversation Workbench Parity。产品化 `open/resume`、archive/unarchive、rename、loaded/live badge，建立 snapshot-first + Worker-projected live event schema，展示 approval/request pending/resolved 的最小安全卡片。当前代码与自动化已完成，@chrome 实测阻塞待补；assistant delta、command summary、diff update、turn terminal state 仍属于后续 timeline/work-tools 切片。Non-goals：rollback、raw `inject_items`、arbitrary shell/filesystem write、plugin install、account login、realtime voice。
 2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、command history/output、turn diff/working tree diff、review findings、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps list。Non-goals：任意写文件、任意 shell、push/PR、MCP config edit、plugin install。
 3. Stage 13：Controlled Local Actions。显式用户 shell command、allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows only with local confirmation. Non-goals：automatic full access、batch destructive file ops、automatic push/PR、arbitrary MCP tool call。
 4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only, skills/plugins/MCP/apps richer management。Non-goals：token handling in Control Plane、login/logout, external agent import, feedback upload。

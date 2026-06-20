@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { BoardTask, CommandAccepted, RemoteProject, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
+import type { BoardTask, CommandAccepted, OpenConversationResult, RemoteProject, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
 
 import { WorkerApiClient } from "./client.ts";
 
@@ -238,4 +238,65 @@ test("WorkerApiClient task methods when called, should use task board routes", a
       projectId: "project-a",
     }),
   );
+});
+
+test("WorkerApiClient lifecycle methods when called, should use device-scoped lifecycle routes", async () => {
+  const lifecycleResult: OpenConversationResult = {
+    conversation: {
+      id: "thread-1",
+      title: "Thread one",
+      deviceId: "device-a",
+      projectId: "project-a",
+      projectName: "Project A",
+      status: "running",
+      updatedAt: "2026-06-21T00:00:00.000Z",
+      summary: "",
+      sandbox: "workspace-write",
+      approval: "never",
+      archived: false,
+      loaded: true,
+      live: true,
+    },
+    timeline: {
+      deviceId: "device-a",
+      conversationId: "thread-1",
+      projectId: "project-a",
+      readStartedAt: "2026-06-21T00:00:00.000Z",
+      readCompletedAt: "2026-06-21T00:00:01.000Z",
+      snapshotRevision: "r1",
+      runtimeStatus: "running",
+      latestTurnStatus: "unknown",
+      archived: false,
+      loaded: true,
+      live: true,
+      turns: [],
+      events: [],
+    },
+  };
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(lifecycleResult), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  await client.openConversation("device-a", "thread-1", { clientRequestId: "open-1" });
+  await client.archiveConversation("device-a", "thread-1", { clientRequestId: "archive-1" });
+  await client.unarchiveConversation("device-a", "thread-1", { clientRequestId: "restore-1" });
+  await client.renameConversation("device-a", "thread-1", { title: "Renamed", clientRequestId: "rename-1" });
+
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/open",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/archive",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/unarchive",
+    "PATCH http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1",
+  ]);
+  assert.equal(requests[3]?.init.body, JSON.stringify({ title: "Renamed", clientRequestId: "rename-1" }));
 });

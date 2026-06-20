@@ -4,8 +4,9 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import type { v2 } from "@codex-remote/codex-protocol";
+import type { ServerRequest, v2 } from "@codex-remote/codex-protocol";
 
+import { createWorkerApprovalRegistry, type WorkerApprovalRegistry } from "./approvalRegistry.ts";
 import { WorkerHttpError } from "./errors.ts";
 import {
   getCapabilities,
@@ -59,12 +60,61 @@ test("worker read-only handlers when listing conversations, should pass explicit
       sortDirection: "desc",
       cursor: null,
     },
+    {
+      cwd: paths.allowedRoot,
+      sourceKinds: ["cli", "vscode", "appServer"],
+      archived: true,
+      limit: 25,
+      sortDirection: "desc",
+      cursor: null,
+    },
   ]);
   assert.deepEqual(
     conversations.map((conversation) => conversation.id),
     ["allowed-thread"],
   );
   assert.equal(client.closed, true);
+});
+
+test("worker read-only handlers when listing conversations, should include archived rows and loaded live flags", async () => {
+  const paths = await createTempProjectPaths();
+  const activeLoadedThread = createThread({
+    cwd: paths.allowedChild,
+    id: "active-loaded-thread",
+    status: { type: "active", activeFlags: [] },
+  });
+  const archivedThread = createThread({
+    cwd: paths.allowedChild,
+    id: "archived-thread",
+    status: { type: "idle" },
+  });
+  const client = new FakeClient({
+    listResponses: [
+      { data: [activeLoadedThread], nextCursor: null, backwardsCursor: null },
+      { data: [archivedThread], nextCursor: null, backwardsCursor: null },
+    ],
+    loadedResponses: [{ data: ["active-loaded-thread"], nextCursor: null }],
+  });
+
+  const conversations = await listConversations(createContext(paths.allowedRoot, client));
+
+  assert.deepEqual(
+    client.listCalls.map((call) => call.archived),
+    [false, true],
+  );
+  assert.deepEqual(client.loadedCalls, [{ cursor: null, limit: 100 }]);
+  assert.deepEqual(
+    conversations.map((conversation) => ({
+      id: conversation.id,
+      archived: conversation.archived,
+      loaded: conversation.loaded,
+      live: conversation.live,
+    })),
+    [
+      { id: "active-loaded-thread", archived: false, loaded: true, live: true },
+      { id: "archived-thread", archived: true, loaded: false, live: false },
+    ],
+  );
 });
 
 test("worker read-only handlers when no allowed conversations exist, should return empty list", async () => {
@@ -90,7 +140,7 @@ test("worker read-only handlers when listing conversations, should follow cursor
 
   assert.deepEqual(
     client.listCalls.map((call) => call.cursor),
-    [null, "cursor-2"],
+    [null, "cursor-2", null],
   );
   assert.deepEqual(
     conversations.map((conversation) => conversation.id),
@@ -131,6 +181,31 @@ test("worker read-only handlers when reading timeline, should prove specific id 
   assert.equal(timeline.snapshotRevision, "thread-1:2026-06-19T10:00:01.000Z");
   assert.doesNotMatch(JSON.stringify(timeline), /LEAK_PROMPT/);
   assert.equal(client.closed, true);
+});
+
+test("worker read-only handlers when reading timeline, should include sanitized approval event cards", async () => {
+  const paths = await createTempProjectPaths();
+  const registry = createWorkerApprovalRegistry({ now: () => "2026-06-19T10:00:02.000Z" });
+  const pending = registry.captureServerRequest(createCommandExecutionRequest("jsonrpc-command"));
+  assert.ok(pending);
+  registry.completeApproval(pending.id);
+  const client = new FakeClient({
+    readResponses: {
+      "thread-1": {
+        thread: createThread({
+          cwd: paths.allowedChild,
+          id: "thread-1",
+        }),
+      },
+    },
+  });
+
+  const timeline = await readConversationTimeline(createContext(paths.allowedRoot, client, {}, registry), "thread-1");
+
+  assert.deepEqual(timeline.events?.map((event) => `${event.kind}:${event.approvalCard?.status}:${event.deviceId}`), [
+    "approval_resolved:resolved:device-local",
+  ]);
+  assert.doesNotMatch(JSON.stringify(timeline), /jsonrpc-command|SECRET_TOKEN|private\/project/);
 });
 
 test("worker read-only handlers when timeline id cannot be read, should map not found", async () => {
@@ -261,23 +336,30 @@ test("worker read-only handlers when opening client fails, should map unavailabl
 class FakeClient implements WorkerReadOnlyAppServerClient {
   closed = false;
   readonly listCalls: Parameters<WorkerReadOnlyAppServerClient["listThreads"]>[0][] = [];
+  readonly loadedCalls: v2.ThreadLoadedListParams[] = [];
   readonly readCalls: Parameters<WorkerReadOnlyAppServerClient["readThread"]>[0][] = [];
   private readonly listResponses: v2.ThreadListResponse[];
+  private readonly loadedResponses: v2.ThreadLoadedListResponse[];
   private readonly readResponses: Record<string, v2.ThreadReadResponse>;
   private readonly listError: Error | null;
+  private readonly loadedError: Error | null;
   private readonly readError: Error | null;
   private readonly codexVersion: string | null;
 
   constructor(options: {
     codexVersion?: string;
     listResponses?: v2.ThreadListResponse[];
+    loadedResponses?: v2.ThreadLoadedListResponse[];
     readResponses?: Record<string, v2.ThreadReadResponse>;
     listError?: Error;
+    loadedError?: Error;
     readError?: Error;
   } = {}) {
     this.listResponses = options.listResponses ?? [{ data: [], nextCursor: null, backwardsCursor: null }];
+    this.loadedResponses = options.loadedResponses ?? [{ data: [], nextCursor: null }];
     this.readResponses = options.readResponses ?? {};
     this.listError = options.listError ?? null;
+    this.loadedError = options.loadedError ?? null;
     this.readError = options.readError ?? null;
     this.codexVersion = options.codexVersion ?? null;
   }
@@ -298,7 +380,16 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
       throw this.listError;
     }
 
-    const response = this.listResponses[Math.min(this.listCalls.length - 1, this.listResponses.length - 1)];
+    return this.listResponses[this.listCalls.length - 1] ?? { data: [], nextCursor: null, backwardsCursor: null };
+  }
+
+  async listLoadedThreads(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse> {
+    this.loadedCalls.push(params);
+    if (this.loadedError) {
+      throw this.loadedError;
+    }
+
+    const response = this.loadedResponses[Math.min(this.loadedCalls.length - 1, this.loadedResponses.length - 1)];
     assert.ok(response);
     return response;
   }
@@ -344,6 +435,7 @@ function createContext(
   allowedProjectRoot: string,
   client: WorkerReadOnlyAppServerClient,
   configOverrides: Partial<WorkerHttpConfig> = {},
+  approvalRegistry?: WorkerApprovalRegistry,
 ): WorkerReadOnlyHandlerContext {
   const ticks = ["2026-06-19T10:00:00.000Z", "2026-06-19T10:00:01.000Z"];
 
@@ -363,8 +455,25 @@ function createContext(
       workerToken: "example-token",
       ...configOverrides,
     } satisfies WorkerHttpConfig,
+    ...(approvalRegistry ? { approvalRegistry } : {}),
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,
+  };
+}
+
+function createCommandExecutionRequest(id: string): ServerRequest {
+  return {
+    id,
+    method: "item/commandExecution/requestApproval",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "item-command",
+      startedAtMs: 1_718_791_200_000,
+      command: "echo SECRET_TOKEN",
+      cwd: "/Users/vint/private/project",
+      reason: "needs approval",
+    },
   };
 }
 

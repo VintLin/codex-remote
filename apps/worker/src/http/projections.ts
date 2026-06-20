@@ -2,18 +2,26 @@ import { basename } from "node:path";
 
 import type {
   CodexConversation,
+  ConversationApprovalCard,
   ConversationTimeline,
   ConversationTimelineTurn,
+  ConversationWorkbenchEvent,
   ConversationStatus,
   ConversationRuntimeStatus,
   LatestTurnStatus,
 } from "@codex-remote/api-contract";
 import type { v2 } from "@codex-remote/codex-protocol";
 
+import type { ApprovalRegistryRecord } from "./approvalRegistry.ts";
+
 export interface ConversationProjectionContext {
   deviceId: string;
   allowedProjectRoot: string;
   projectName: string;
+  archived?: boolean;
+  loadedThreadIds?: ReadonlySet<string>;
+  approvals?: readonly ApprovalRegistryRecord[];
+  lifecycleEventKind?: ConversationWorkbenchEvent["kind"];
   readStartedAt?: string;
   readCompletedAt?: string;
 }
@@ -29,16 +37,22 @@ export function projectThreadToConversation(
     projectName: getProjectName(context),
     status: mapConversationStatus(thread),
     updatedAt: unixSecondsToIso(thread.updatedAt),
-    summary: getSafePreview(thread.preview),
+    summary: "",
     sandbox: "unknown",
     approval: "unknown",
+    archived: context.archived ?? false,
+    loaded: isThreadLoaded(thread, context),
+    live: isThreadLive(thread, context),
   };
 }
 
 export function projectThreadToTimeline(
   thread: v2.Thread,
   context: Required<Pick<ConversationProjectionContext, "deviceId" | "readStartedAt" | "readCompletedAt">> &
-    Pick<ConversationProjectionContext, "allowedProjectRoot">,
+    Pick<
+      ConversationProjectionContext,
+      "allowedProjectRoot" | "archived" | "loadedThreadIds" | "approvals" | "lifecycleEventKind"
+    >,
 ): ConversationTimeline {
   const turns = thread.turns.map(projectTurnToTimelineTurn);
 
@@ -50,7 +64,11 @@ export function projectThreadToTimeline(
     snapshotRevision: `${thread.id}:${context.readCompletedAt}`,
     runtimeStatus: mapRuntimeStatus(thread.status),
     latestTurnStatus: getLatestTurnStatus(turns),
+    loaded: isThreadLoaded(thread, context),
+    live: isThreadLive(thread, context),
+    archived: context.archived ?? false,
     turns,
+    events: projectWorkbenchEvents(thread, context),
   };
 }
 
@@ -65,16 +83,17 @@ export function projectTurnToTimelineTurn(turn: v2.Turn): ConversationTimelineTu
 }
 
 function getConversationTitle(thread: v2.Thread, context: ConversationProjectionContext): string {
+  const threadName = normalizeText(thread.name);
+  if (threadName) {
+    return threadName;
+  }
+
   const allowedProjectBasename = normalizeText(basename(context.allowedProjectRoot));
   return allowedProjectBasename ?? "Untitled conversation";
 }
 
 function getProjectName(context: ConversationProjectionContext): string {
   return normalizeText(context.projectName) ?? normalizeText(basename(context.allowedProjectRoot)) ?? "Allowed project";
-}
-
-function getSafePreview(_preview: string): string {
-  return "";
 }
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -132,6 +151,76 @@ function mapRuntimeStatus(status: v2.Thread["status"] | { type: string; activeFl
     default:
       return "unknown";
   }
+}
+
+function isThreadLoaded(thread: v2.Thread, context: Pick<ConversationProjectionContext, "loadedThreadIds">): boolean {
+  return context.loadedThreadIds?.has(thread.id) ?? false;
+}
+
+function isThreadLive(thread: v2.Thread, context: Pick<ConversationProjectionContext, "loadedThreadIds">): boolean {
+  if (!isThreadLoaded(thread, context)) {
+    return false;
+  }
+
+  return ["running", "waiting_approval", "waiting_input"].includes(mapRuntimeStatus(thread.status));
+}
+
+function projectWorkbenchEvents(
+  thread: v2.Thread,
+  context: Required<Pick<ConversationProjectionContext, "deviceId" | "readCompletedAt">> &
+    Pick<ConversationProjectionContext, "approvals" | "lifecycleEventKind">,
+): ConversationWorkbenchEvent[] {
+  const events: ConversationWorkbenchEvent[] = [];
+  let seq = 1;
+
+  for (const approval of context.approvals ?? []) {
+    if (approval.conversationId !== thread.id) {
+      continue;
+    }
+    const resolvedAt = "resolvedAt" in approval ? approval.resolvedAt : null;
+    const statusSuffix = resolvedAt === null ? "pending" : "resolved";
+    events.push({
+      eventId: `${thread.id}:${seq}:${approval.id}:${statusSuffix}`,
+      seq,
+      deviceId: context.deviceId,
+      conversationId: thread.id,
+      kind: resolvedAt === null ? "approval_pending" : "approval_resolved",
+      createdAt: resolvedAt ?? approval.startedAt,
+      source: "snapshot",
+      approvalCard: projectApprovalCard(approval),
+    });
+    seq += 1;
+  }
+
+  if (context.lifecycleEventKind) {
+    events.push({
+      eventId: `${thread.id}:${seq}:${context.lifecycleEventKind}`,
+      seq,
+      deviceId: context.deviceId,
+      conversationId: thread.id,
+      kind: context.lifecycleEventKind,
+      createdAt: context.readCompletedAt,
+      source: "live",
+    });
+  }
+
+  return events;
+}
+
+function projectApprovalCard(approval: ApprovalRegistryRecord): ConversationApprovalCard {
+  return {
+    id: approval.id,
+    conversationId: approval.conversationId,
+    turnId: approval.turnId,
+    itemId: approval.itemId,
+    kind: approval.kind,
+    status: approval.status,
+    title: approval.summary,
+    summary: approval.summary,
+    risk: approval.risk,
+    createdAt: approval.startedAt,
+    ...("resolvedAt" in approval ? { resolvedAt: approval.resolvedAt } : {}),
+  };
 }
 
 function getLatestTurnStatus(turns: ConversationTimelineTurn[]): LatestTurnStatus {

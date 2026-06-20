@@ -28,6 +28,11 @@ const schemaTypeNames = [
   "SteerTurnInput",
   "PendingApproval",
   "ApprovalDecisionInput",
+  "ConversationLifecycleInput",
+  "RenameConversationInput",
+  "OpenConversationResult",
+  "ConversationApprovalCard",
+  "ConversationWorkbenchEvent",
   "ControlPlaneHealth",
   "CommandAccepted",
   "ErrorEnvelope",
@@ -73,6 +78,17 @@ const stage5WriteControlPaths = [
   "/v1/conversations/{conversationId}/turns/{turnId}/steer:",
   "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
 ] as const;
+const stage11WorkerLifecyclePaths = [
+  "/v1/conversations/{conversationId}/open:",
+  "/v1/conversations/{conversationId}/archive:",
+  "/v1/conversations/{conversationId}/unarchive:",
+  "/v1/conversations/{conversationId}:",
+] as const;
+const stage11WorkerLifecyclePostPaths = [
+  "/v1/conversations/{conversationId}/open:",
+  "/v1/conversations/{conversationId}/archive:",
+  "/v1/conversations/{conversationId}/unarchive:",
+] as const;
 const stage6ControlPlanePaths = [
   "/v1/control-plane/health:",
   "/v1/devices:",
@@ -83,6 +99,10 @@ const stage6ControlPlanePaths = [
   "/v1/devices/{deviceId}/worker/capabilities:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/timeline:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/approvals:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/open:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/archive:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/unarchive:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}:",
   "/v1/devices/{deviceId}/conversations:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
@@ -92,10 +112,15 @@ const stage6ControlPlanePaths = [
 const stage6ControlPlaneWritePaths = [
   "/v1/devices/{deviceId}/conversations:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/open:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/archive:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/unarchive:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
 ] as const;
+const stage11WorkerPatchPaths = ["/v1/conversations/{conversationId}:"] as const;
+const stage11ControlPlanePatchPaths = ["/v1/devices/{deviceId}/conversations/{conversationId}:"] as const;
 const stage7TaskPaths = [
   "/v1/tasks:",
   "/v1/tasks/{taskId}/conversation-links:",
@@ -600,6 +625,9 @@ test("when worker write http api is maintained, openapi should define only versi
     ...[...stage4WritePaths, ...stage5WriteControlPaths, ...stage6ControlPlaneWritePaths].map(
       (path) => `${path.slice(0, -1)}:post`,
     ),
+    ...stage11WorkerLifecyclePostPaths.map((path) => `${path.slice(0, -1)}:post`),
+    ...stage11WorkerPatchPaths.map((path) => `${path.slice(0, -1)}:patch`),
+    ...stage11ControlPlanePatchPaths.map((path) => `${path.slice(0, -1)}:patch`),
     ...stage7TaskWritePathMethodPairs,
   ];
 
@@ -627,6 +655,66 @@ test("when worker write http api is maintained, openapi should define only versi
   assert.match(followUpMethodSource, /^ {6}operationId:\s*followUpWorkerConversation$/m);
   assert.match(followUpMethodSource, /#\/components\/schemas\/FollowUpInput/);
   assert.match(followUpMethodSource, /#\/components\/schemas\/CommandAccepted/);
+});
+
+test("when stage 11 conversation lifecycle contract is maintained, openapi should define lifecycle schemas and routes", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  const conversationBlock = expectSchemaDisallowsAdditionalProperties(source, "CodexConversation");
+  for (const fieldName of ["archived", "loaded", "live"]) {
+    assert.match(conversationBlock.join("\n"), new RegExp(`^        ${fieldName}:`, "m"));
+  }
+  assert.doesNotMatch(conversationBlock.join("\n"), /^        displayTitle:/m);
+
+  const timelineBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationTimeline");
+  for (const fieldName of ["loaded", "live", "archived", "events"]) {
+    assert.match(timelineBlock.join("\n"), new RegExp(`^        ${fieldName}:`, "m"));
+  }
+
+  const eventBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationWorkbenchEvent");
+  for (const fieldName of ["eventId", "seq", "deviceId", "conversationId", "kind", "createdAt", "source"]) {
+    assert.match(eventBlock.join("\n"), new RegExp(`^        ${fieldName}:`, "m"));
+  }
+  expectPropertyEnum(eventBlock, "kind", [
+    "thread_opened",
+    "thread_archived",
+    "thread_unarchived",
+    "thread_renamed",
+    "approval_pending",
+    "approval_resolved",
+    "snapshot_reset",
+    "turn_state",
+  ]);
+  expectPropertyEnum(eventBlock, "source", ["snapshot", "live"]);
+
+  const approvalCardBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationApprovalCard");
+  expectPropertyEnum(approvalCardBlock, "status", ["pending", "resolved"]);
+
+  expectSchemaDisallowsAdditionalProperties(source, "ConversationLifecycleInput");
+  const renameBlock = expectSchemaDisallowsAdditionalProperties(source, "RenameConversationInput");
+  expectPropertyMaxLength(renameBlock, "title", 120);
+  expectSchemaDisallowsAdditionalProperties(source, "OpenConversationResult");
+
+  for (const path of stage11WorkerLifecyclePaths) {
+    assert.equal(extractVersionedPathLines(source).includes(path), true);
+  }
+  const openMethodSource = expectDefined(
+    extractMethodBlocks(extractPathBlock(source, "/v1/conversations/{conversationId}/open:")).find(
+      (methodBlock) => methodBlock.method === "post",
+    ),
+    "open lifecycle route should define POST",
+  ).lines.join("\n");
+  assert.match(openMethodSource, /#\/components\/schemas\/ConversationLifecycleInput/);
+  assert.match(openMethodSource, /#\/components\/schemas\/OpenConversationResult/);
+
+  const renameMethodSource = expectDefined(
+    extractMethodBlocks(extractPathBlock(source, "/v1/conversations/{conversationId}:")).find(
+      (methodBlock) => methodBlock.method === "patch",
+    ),
+    "rename lifecycle route should define PATCH",
+  ).lines.join("\n");
+  assert.match(renameMethodSource, /#\/components\/schemas\/RenameConversationInput/);
+  assert.match(renameMethodSource, /#\/components\/schemas\/OpenConversationResult/);
 });
 
 test("when worker control http api is maintained, openapi should define versioned stage 5 control paths", () => {
@@ -674,7 +762,7 @@ test("when control plane http api is maintained, openapi should define versioned
     assert.equal(versionedPathLines.includes(path), true);
   }
 
-  const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "get" | "post">([
+  const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "get" | "post" | "patch">([
     ["/v1/control-plane/health:", "get"],
     ["/v1/devices:", "get"],
     ["/v1/projects:", "get"],
@@ -686,6 +774,10 @@ test("when control plane http api is maintained, openapi should define versioned
     ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals:", "get"],
     ["/v1/devices/{deviceId}/conversations:", "post"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/open:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/archive:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/unarchive:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}:", "patch"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:", "post"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:", "post"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", "post"],

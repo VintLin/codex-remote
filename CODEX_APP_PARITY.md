@@ -53,7 +53,7 @@ Rules:
 
 | Capability area | Codex App-like target | Current Codex Remote state | Gap |
 | --- | --- | --- | --- |
-| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Start and list/read are supported; resume/fork/archive/rename/goals/compact/rollback are not productized | Need full conversation management surface |
+| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Start/list/read plus Stage 11 open/resume, archive/unarchive, rename, and loaded/live badges are implemented; @chrome verification is still blocked | Need fork/goals/compact later and browser verification before Stage 11 archival |
 | Turn control | Start, follow-up, steer, interrupt | Supported with real evidence for start, follow-up, steer, interrupt | Need tighter realtime state display around active turns |
 | Timeline | Live agent output, reasoning, plan, item state, tool state, diffs, warnings, completion | Snapshot/timeline read is supported; durable live stream is not | Need Worker-projected event stream and Web reconciliation |
 | Approval and input | Capture app-server requests, show user decisions, send responses, show resolved state | Approval capture is partial; decision remains real-gap; user input/MCP elicitation/tool calls are not exposed | Need request/response lifecycle parity |
@@ -76,7 +76,7 @@ Rules:
 
 Future stages should be split by product capability area, not by raw app-server method.
 
-1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline, projected live events, request cards, approval pending/resolved state.
+1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline, projected live events, request cards, approval pending/resolved state. Current implementation needs @chrome verification before archival.
 2. Local work tools read-only: filesystem preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
 3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.

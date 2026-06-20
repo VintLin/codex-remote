@@ -74,7 +74,7 @@ export function CodexRemoteApp() {
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
+  const { devices, projects, conversations, approvalCards, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
     findConversationByKey(conversations, selectedConversationKey) ??
@@ -257,6 +257,102 @@ export function CodexRemoteApp() {
     }
   }, [conversation, refreshWorkbenchData, selectedConversationKey, workerClient]);
 
+  const openConversation = useCallback(async (conversationKey: string) => {
+    const targetConversation = findConversationByKey(conversations, conversationKey);
+    if (!targetConversation || source.reason !== "loaded" || !controlPlaneToken) {
+      return;
+    }
+
+    try {
+      await workerClient.openConversation(targetConversation.deviceId, targetConversation.id, {
+        clientRequestId: crypto.randomUUID(),
+      });
+      await refreshWorkbenchData(conversationKey);
+    } catch {
+      setControlStatus("failed");
+    }
+  }, [conversations, refreshWorkbenchData, source.reason, workerClient]);
+
+  const renameConversation = useCallback(async (targetConversation: { deviceId: string; id: string; title: string }) => {
+    if (source.reason !== "loaded" || !controlPlaneToken) {
+      setControlStatus("failed");
+      return;
+    }
+    const title = window.prompt("重命名对话", targetConversation.title)?.trim();
+    if (!title) {
+      return;
+    }
+
+    setControlStatus("submitting");
+    try {
+      await workerClient.renameConversation(targetConversation.deviceId, targetConversation.id, {
+        title,
+        clientRequestId: crypto.randomUUID(),
+      });
+      await refreshWorkbenchData(createConversationKey(targetConversation));
+      setControlStatus("accepted");
+    } catch {
+      setControlStatus("failed");
+    }
+  }, [refreshWorkbenchData, source.reason, workerClient]);
+
+  const archiveConversation = useCallback(async (targetConversation: { deviceId: string; id: string }) => {
+    if (source.reason !== "loaded" || !controlPlaneToken) {
+      setControlStatus("failed");
+      return;
+    }
+
+    setControlStatus("submitting");
+    try {
+      await workerClient.archiveConversation(targetConversation.deviceId, targetConversation.id, {
+        clientRequestId: crypto.randomUUID(),
+      });
+      await refreshWorkbenchData(createConversationKey(targetConversation));
+      setControlStatus("accepted");
+    } catch {
+      setControlStatus("failed");
+    }
+  }, [refreshWorkbenchData, source.reason, workerClient]);
+
+  const unarchiveConversation = useCallback(async (targetConversation: { deviceId: string; id: string }) => {
+    if (source.reason !== "loaded" || !controlPlaneToken) {
+      setControlStatus("failed");
+      return;
+    }
+
+    setControlStatus("submitting");
+    try {
+      await workerClient.unarchiveConversation(targetConversation.deviceId, targetConversation.id, {
+        clientRequestId: crypto.randomUUID(),
+      });
+      await refreshWorkbenchData(createConversationKey(targetConversation));
+      setControlStatus("accepted");
+    } catch {
+      setControlStatus("failed");
+    }
+  }, [refreshWorkbenchData, source.reason, workerClient]);
+
+  const renameConversationByKey = useCallback(async (conversationKey: string) => {
+    const targetConversation = findConversationByKey(conversations, conversationKey);
+    if (targetConversation) {
+      await renameConversation(targetConversation);
+    }
+  }, [conversations, renameConversation]);
+
+  const archiveConversationByKey = useCallback(async (conversationKey: string) => {
+    const targetConversation = findConversationByKey(conversations, conversationKey);
+    if (targetConversation) {
+      await archiveConversation(targetConversation);
+    }
+  }, [archiveConversation, conversations]);
+
+  const restoreConversationByKey = useCallback(async (conversationKey: string) => {
+    const targetConversation = findConversationByKey(conversations, conversationKey);
+    if (targetConversation) {
+      await unarchiveConversation(targetConversation);
+    }
+  }, [conversations, unarchiveConversation]);
+
   useEffect(() => {
     let shouldIgnore = false;
     void (async () => {
@@ -411,6 +507,7 @@ export function CodexRemoteApp() {
     if (isMobileViewport) {
       setMobilePane("main");
     }
+    void openConversation(conversationKey);
   };
 
   const toggleSection = (sectionId: Parameters<typeof toggleSidebarSection>[1]) => {
@@ -518,12 +615,16 @@ export function CodexRemoteApp() {
               }
             }}
             onSelectAdjacentConversation={selectConversation}
+            onArchiveConversation={archiveConversation}
+            onRenameConversation={renameConversation}
+            onRestoreConversation={unarchiveConversation}
             onSubmitApprovalDecision={submitApprovalControl}
             onSubmitFollowUp={submitFollowUp}
             onSubmitInterrupt={submitInterruptControl}
             onSubmitStart={submitStart}
             onSubmitSteer={submitSteerControl}
             pendingApprovals={[]}
+            approvalCards={approvalCards}
             previousConversationKey={conversationNavigator.previousConversationKey}
             source={source}
             startStatus={startStatus}
@@ -566,12 +667,16 @@ export function CodexRemoteApp() {
             }
           }}
           onSelectAdjacentConversation={selectConversation}
+          onArchiveConversation={archiveConversation}
+          onRenameConversation={renameConversation}
+          onRestoreConversation={unarchiveConversation}
           onSubmitApprovalDecision={submitApprovalControl}
           onSubmitFollowUp={submitFollowUp}
           onSubmitInterrupt={submitInterruptControl}
           onSubmitStart={submitStart}
           onSubmitSteer={submitSteerControl}
           pendingApprovals={pendingApprovals}
+          approvalCards={approvalCards}
           previousConversationKey={conversationNavigator.previousConversationKey}
           source={source}
           startStatus={startStatus}
@@ -590,6 +695,9 @@ export function CodexRemoteApp() {
       model={sidebarModel}
       onCollapseSidebar={() => setIsSidebarCollapsed(true)}
       onOpenSearch={() => setIsSearchOpen(true)}
+      onArchiveConversation={archiveConversationByKey}
+      onRenameConversation={renameConversationByKey}
+      onRestoreConversation={restoreConversationByKey}
       onSelectAdjacentConversation={selectConversation}
       onSelectConversation={selectConversation}
       onSelectView={selectView}

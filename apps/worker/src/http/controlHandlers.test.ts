@@ -10,10 +10,14 @@ import type { ServerRequest, v2 } from "@codex-remote/codex-protocol";
 import { toErrorEnvelope, WorkerHttpError } from "./errors.ts";
 import { createWorkerApprovalRegistry } from "./approvalRegistry.ts";
 import {
+  archiveConversation,
   decideApproval,
   interruptTurn,
   listApprovals,
+  openConversation,
+  renameConversation,
   steerTurn,
+  unarchiveConversation,
   type WorkerControlAppServerClient,
   type WorkerControlHandlerContext,
 } from "./controlHandlers.ts";
@@ -39,6 +43,105 @@ test("worker control handlers when interrupting, should prove conversation is al
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-1");
   assert.equal(accepted.turnId, "turn-1");
+});
+
+test("worker control handlers when opening a conversation, should prove ownership before resume and return lifecycle result", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeControlClient({
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-1", status: { type: "active", activeFlags: [] } })],
+    loadedResponses: [{ data: ["thread-1"], nextCursor: null }],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  const result = await openConversation(context, "thread-1", { clientRequestId: "client-open-1" });
+
+  assert.deepEqual(client.callOrder.slice(0, 4), ["readyz", "readThread", "resumeThread", "listLoadedThreads"]);
+  assert.deepEqual(client.resumeThreadCalls, [{ threadId: "thread-1" }]);
+  assert.equal(result.conversation.id, "thread-1");
+  assert.equal(result.conversation.loaded, true);
+  assert.equal(result.conversation.live, true);
+  assert.equal(result.timeline.loaded, true);
+  assert.equal(result.timeline.live, true);
+  assert.ok(result.timeline.events);
+  assert.equal(result.timeline.events.at(-1)?.kind, "thread_opened");
+});
+
+test("worker control handlers when archiving, unarchiving, or renaming, should prove ownership before app-server write", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeControlClient({
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-1" })],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await archiveConversation(context, "thread-1", { clientRequestId: "client-archive-1" });
+  await unarchiveConversation(context, "thread-1", { clientRequestId: "client-unarchive-1" });
+  await renameConversation(context, "thread-1", { title: "  New title  ", clientRequestId: "client-rename-1" });
+
+  assert.deepEqual(client.callOrder.filter((call) => call === "readThread").length, 5);
+  assert.deepEqual(client.archiveThreadCalls, [{ threadId: "thread-1" }]);
+  assert.deepEqual(client.unarchiveThreadCalls, [{ threadId: "thread-1" }]);
+  assert.deepEqual(client.setThreadNameCalls, [{ threadId: "thread-1", name: "New title" }]);
+});
+
+test("worker control handlers when archive or rename write completes, should read fresh thread before projecting", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeControlClient({
+    threads: [
+      createThread({ cwd: paths.allowedChild, id: "thread-1", name: "Old title" }),
+      createThread({ cwd: paths.allowedChild, id: "thread-1", name: "Archived title from read-after-write" }),
+      createThread({ cwd: paths.allowedChild, id: "thread-1", name: "Old title" }),
+      createThread({ cwd: paths.allowedChild, id: "thread-1", name: "New title" }),
+    ],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  const archived = await archiveConversation(context, "thread-1", { clientRequestId: "client-archive-fresh" });
+  const renamed = await renameConversation(context, "thread-1", {
+    title: "  New title  ",
+    clientRequestId: "client-rename-fresh",
+  });
+
+  assert.deepEqual(client.callOrder, [
+    "readyz",
+    "readThread",
+    "archiveThread",
+    "readThread",
+    "listLoadedThreads",
+    "readyz",
+    "readThread",
+    "setThreadName",
+    "readThread",
+    "listLoadedThreads",
+  ]);
+  assert.equal(archived.conversation.archived, true);
+  assert.equal(archived.conversation.title, "Archived title from read-after-write");
+  assert.equal(renamed.conversation.title, "New title");
+});
+
+test("worker control handlers when rename title is blank or overlong, should reject before app-server write", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeControlClient({
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-1" })],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await assert.rejects(
+    renameConversation(context, "thread-1", { title: "   ", clientRequestId: "client-rename-blank" }),
+    (error) =>
+      error instanceof WorkerHttpError &&
+      error.status === 400 &&
+      error.code === "invalid_request" &&
+      error.details?.field === "title",
+  );
+  await assert.rejects(
+    renameConversation(context, "thread-1", { title: "x".repeat(121), clientRequestId: "client-rename-long" }),
+    (error) =>
+      error instanceof WorkerHttpError &&
+      error.status === 400 &&
+      error.code === "invalid_request" &&
+      error.details?.field === "title",
+  );
+  assert.deepEqual(client.setThreadNameCalls, []);
 });
 
 test("worker control handlers when interrupt expected turn mismatches path turn, should fail before app-server control", async () => {
@@ -207,6 +310,31 @@ test("worker control handlers when deciding approval, should send the captured a
   assert.deepEqual(await listApprovals(context, "thread-1"), []);
 });
 
+test("worker control handlers when deciding approval, should retain sanitized resolved approval for projection", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeControlClient({
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-1" })],
+  });
+  const context = createContext(paths.allowedRoot, client);
+  const pending = seedCommandApproval(context);
+  assert.ok(pending);
+
+  await decideApproval(context, "thread-1", pending.id, {
+    decision: "decline",
+    clientRequestId: "client-approval-decline",
+    expectedConversationId: "thread-1",
+    expectedTurnId: "turn-1",
+    expectedApprovalRequestId: pending.id,
+  });
+  const opened = await openConversation(context, "thread-1", { clientRequestId: "client-open-after-approval" });
+  const events = opened.timeline.events ?? [];
+
+  assert.deepEqual(await listApprovals(context, "thread-1"), []);
+  assert.equal(events.at(0)?.kind, "approval_resolved");
+  assert.equal(events.at(0)?.approvalCard?.status, "resolved");
+  assert.match(events.at(0)?.approvalCard?.resolvedAt ?? "", /^2026-06-20T10:00:/);
+});
+
 test("worker control handlers when approval response send fails, should keep pending approval for retry", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeControlClient({
@@ -278,19 +406,27 @@ class FakeControlClient implements WorkerControlAppServerClient {
   readonly readCalls: Parameters<WorkerControlAppServerClient["readThread"]>[0][] = [];
   readonly interruptTurnCalls: v2.TurnInterruptParams[] = [];
   readonly steerTurnCalls: v2.TurnSteerParams[] = [];
+  readonly resumeThreadCalls: v2.ThreadResumeParams[] = [];
+  readonly archiveThreadCalls: v2.ThreadArchiveParams[] = [];
+  readonly unarchiveThreadCalls: v2.ThreadUnarchiveParams[] = [];
+  readonly setThreadNameCalls: v2.ThreadSetNameParams[] = [];
+  readonly listLoadedThreadCalls: v2.ThreadLoadedListParams[] = [];
   readonly approvalResponses: Array<{ requestId: string | number; result: unknown }> = [];
   private readonly threads: v2.Thread[];
+  private readonly loadedResponses: v2.ThreadLoadedListResponse[];
   private readonly interruptTurnError: Error | null;
   private readonly steerTurnError: Error | null;
   private readonly approvalResponseError: Error | null;
 
   constructor(options: {
     threads?: v2.Thread[];
+    loadedResponses?: v2.ThreadLoadedListResponse[];
     approvalResponseError?: Error;
     interruptTurnError?: Error;
     steerTurnError?: Error;
   } = {}) {
     this.threads = options.threads ?? [];
+    this.loadedResponses = options.loadedResponses ?? [{ data: [], nextCursor: null }];
     this.approvalResponseError = options.approvalResponseError ?? null;
     this.interruptTurnError = options.interruptTurnError ?? null;
     this.steerTurnError = options.steerTurnError ?? null;
@@ -313,7 +449,7 @@ class FakeControlClient implements WorkerControlAppServerClient {
   async readThread(params: Parameters<WorkerControlAppServerClient["readThread"]>[0]): Promise<v2.ThreadReadResponse> {
     this.callOrder.push("readThread");
     this.readCalls.push(params);
-    const thread = this.threads.find((candidate) => candidate.id === params.threadId);
+    const thread = this.threads[Math.min(this.readCalls.length - 1, this.threads.length - 1)];
     if (!thread) {
       throw new Error("missing_fake_read_response");
     }
@@ -326,6 +462,54 @@ class FakeControlClient implements WorkerControlAppServerClient {
 
   async startTurn(): Promise<v2.TurnStartResponse> {
     throw new Error("unexpected_start_turn");
+  }
+
+  async resumeThread(params: v2.ThreadResumeParams): Promise<v2.ThreadResumeResponse> {
+    this.callOrder.push("resumeThread");
+    this.resumeThreadCalls.push(params);
+    const thread = this.threads.find((candidate) => candidate.id === params.threadId) ?? this.threads[0];
+    assert.ok(thread);
+    return {
+      thread,
+      model: "gpt-5",
+      modelProvider: "openai",
+      serviceTier: null,
+      cwd: thread.cwd,
+      instructionSources: [],
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      sandbox: { mode: "read-only" },
+      reasoningEffort: null,
+    } as unknown as v2.ThreadResumeResponse;
+  }
+
+  async archiveThread(params: v2.ThreadArchiveParams): Promise<v2.ThreadArchiveResponse> {
+    this.callOrder.push("archiveThread");
+    this.archiveThreadCalls.push(params);
+    return {};
+  }
+
+  async unarchiveThread(params: v2.ThreadUnarchiveParams): Promise<v2.ThreadUnarchiveResponse> {
+    this.callOrder.push("unarchiveThread");
+    this.unarchiveThreadCalls.push(params);
+    const thread = this.threads.find((candidate) => candidate.id === params.threadId) ?? this.threads[0];
+    assert.ok(thread);
+    return { thread };
+  }
+
+  async setThreadName(params: v2.ThreadSetNameParams): Promise<v2.ThreadSetNameResponse> {
+    this.callOrder.push("setThreadName");
+    this.setThreadNameCalls.push(params);
+    return {};
+  }
+
+  async listLoadedThreads(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse> {
+    this.callOrder.push("listLoadedThreads");
+    this.listLoadedThreadCalls.push(params);
+    return this.loadedResponses[Math.min(this.listLoadedThreadCalls.length - 1, this.loadedResponses.length - 1)] ?? {
+      data: [],
+      nextCursor: null,
+    };
   }
 
   async interruptTurn(params: v2.TurnInterruptParams): Promise<unknown> {
@@ -373,6 +557,7 @@ async function createTempProjectPaths(): Promise<{
 
 function createContext(allowedProjectRoot: string, client: WorkerControlAppServerClient): WorkerControlHandlerContext {
   const ticks = ["2026-06-20T10:00:00.000Z", "2026-06-20T10:00:01.000Z"];
+  const now = () => ticks.shift() ?? "2026-06-20T10:00:01.000Z";
 
   return {
     config: {
@@ -389,8 +574,8 @@ function createContext(allowedProjectRoot: string, client: WorkerControlAppServe
       startAppServer: false,
       workerToken: "example-token",
     } satisfies WorkerHttpConfig,
-    approvalRegistry: createWorkerApprovalRegistry(),
-    now: () => ticks.shift() ?? "2026-06-20T10:00:01.000Z",
+    approvalRegistry: createWorkerApprovalRegistry({ now }),
+    now,
     openClient: async () => client,
     writeState: createWorkerWriteHandlerState(),
   };

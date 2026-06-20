@@ -71,6 +71,7 @@ test("worker http app when browser sends preflight, should allow configured orig
   assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:5173");
   assert.match(response.headers.get("access-control-allow-headers") ?? "", /Authorization/);
   assert.match(response.headers.get("access-control-allow-methods") ?? "", /POST/);
+  assert.match(response.headers.get("access-control-allow-methods") ?? "", /PATCH/);
 });
 
 test("worker http app when timeline is requested, should return ConversationTimeline", async () => {
@@ -167,6 +168,41 @@ test("worker http app when start is accepted, should return CommandAccepted with
   assert.equal(body.status, "accepted");
   assert.equal(body.conversationId, "thread-started");
   assert.equal(body.turnId, "turn-started");
+});
+
+test("worker http app when lifecycle routes are accepted, should return OpenConversationResult", async () => {
+  const context = await createContext();
+  const app = createWorkerHttpApp(context);
+
+  const openResponse = await app.request("/v1/conversations/thread-123/open", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ clientRequestId: "client-http-open-1" }),
+  });
+  const archiveResponse = await app.request("/v1/conversations/thread-123/archive", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ clientRequestId: "client-http-archive-1" }),
+  });
+  const unarchiveResponse = await app.request("/v1/conversations/thread-123/unarchive", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ clientRequestId: "client-http-unarchive-1" }),
+  });
+  const renameResponse = await app.request("/v1/conversations/thread-123", {
+    method: "PATCH",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ title: "Renamed thread", clientRequestId: "client-http-rename-1" }),
+  });
+
+  assert.equal(openResponse.status, 200);
+  assert.equal((await openResponse.json()).timeline.events.at(-1).kind, "thread_opened");
+  assert.equal(archiveResponse.status, 200);
+  assert.equal((await archiveResponse.json()).conversation.archived, true);
+  assert.equal(unarchiveResponse.status, 200);
+  assert.equal((await unarchiveResponse.json()).conversation.archived, false);
+  assert.equal(renameResponse.status, 200);
+  assert.equal((await renameResponse.json()).timeline.events.at(-1).kind, "thread_renamed");
 });
 
 test("worker http app when interrupt and steer routes are accepted, should return CommandAccepted with 202", async () => {
@@ -300,6 +336,32 @@ test("worker http app when write body is invalid, should return 400 without app-
   assert.equal(client.startTurnCalls, 0);
 });
 
+test("worker http app when lifecycle body is invalid, should return 400 without app-server lifecycle write", async () => {
+  const client = new FakeClient();
+  const context = await createContext({ client });
+  const app = createWorkerHttpApp(context);
+
+  const openExtraFieldResponse = await app.request("/v1/conversations/thread-123/open", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ clientRequestId: "client-http-open-extra", rawJsonRpc: "{}" }),
+  });
+  const renameBlankResponse = await app.request("/v1/conversations/thread-123", {
+    method: "PATCH",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({ title: "   ", clientRequestId: "client-http-rename-blank" }),
+  });
+
+  assert.equal(openExtraFieldResponse.status, 400);
+  assert.equal((await openExtraFieldResponse.json()).code, "invalid_request");
+  assert.equal(renameBlankResponse.status, 400);
+  assert.equal((await renameBlankResponse.json()).code, "invalid_request");
+  assert.equal(client.resumeThreadCalls, 0);
+  assert.equal(client.archiveThreadCalls, 0);
+  assert.equal(client.unarchiveThreadCalls, 0);
+  assert.equal(client.setThreadNameCalls, 0);
+});
+
 test("worker http app when control body is invalid, should return 400 without app-server control", async () => {
   const client = new FakeClient();
   const context = await createContext({ client });
@@ -412,6 +474,10 @@ class FakeClient implements WorkerControlAppServerClient {
   startTurnCalls = 0;
   interruptTurnCalls = 0;
   steerTurnCalls = 0;
+  resumeThreadCalls = 0;
+  archiveThreadCalls = 0;
+  unarchiveThreadCalls = 0;
+  setThreadNameCalls = 0;
   approvalResponses: Array<{ requestId: string | number; result: unknown }> = [];
   private readonly cwd: string;
   private readonly listError: Error | null;
@@ -457,6 +523,42 @@ class FakeClient implements WorkerControlAppServerClient {
   async steerTurn(): Promise<v2.TurnSteerResponse> {
     this.steerTurnCalls += 1;
     return { turnId: "turn-123" };
+  }
+
+  async resumeThread(): Promise<v2.ThreadResumeResponse> {
+    this.resumeThreadCalls += 1;
+    const thread = createThread({ cwd: this.cwd });
+    return {
+      thread,
+      model: "gpt-5",
+      modelProvider: "openai",
+      serviceTier: null,
+      cwd: thread.cwd,
+      instructionSources: [],
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      sandbox: { mode: "read-only" },
+      reasoningEffort: null,
+    } as unknown as v2.ThreadResumeResponse;
+  }
+
+  async archiveThread(): Promise<v2.ThreadArchiveResponse> {
+    this.archiveThreadCalls += 1;
+    return {};
+  }
+
+  async unarchiveThread(): Promise<v2.ThreadUnarchiveResponse> {
+    this.unarchiveThreadCalls += 1;
+    return { thread: createThread({ cwd: this.cwd }) };
+  }
+
+  async setThreadName(): Promise<v2.ThreadSetNameResponse> {
+    this.setThreadNameCalls += 1;
+    return {};
+  }
+
+  async listLoadedThreads(): Promise<v2.ThreadLoadedListResponse> {
+    return { data: ["thread-123"], nextCursor: null };
   }
 
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {

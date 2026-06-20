@@ -6,11 +6,14 @@ import type {
   ApprovalDecisionInput,
   BoardTask,
   CodexConversation,
+  ConversationLifecycleInput,
   ConversationTimeline,
   CreateTaskInput,
   FollowUpInput,
   InterruptTurnInput,
   LinkTaskConversationInput,
+  OpenConversationResult,
+  RenameConversationInput,
   StartConversationInput,
   RemoteProject,
   SteerTurnInput,
@@ -35,7 +38,7 @@ type ControlPlaneHonoEnv = {
 
 type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 409 | 424 | 500;
 const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
-const corsAllowMethods = "GET, POST, DELETE, OPTIONS";
+const corsAllowMethods = "GET, POST, PATCH, DELETE, OPTIONS";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 const taskTitleMaxLength = 200;
@@ -198,6 +201,42 @@ export function createControlPlaneHttpApp(params: {
     );
   });
 
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/open", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const input = await readConversationLifecycleInputBody(c);
+    const result = await runForDevice(device, "conversation/open", () =>
+      params.workerClient.openConversation(device, c.req.param("conversationId"), input),
+    );
+    return c.json(normalizeOpenConversationResult(device, result));
+  });
+
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/archive", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const input = await readConversationLifecycleInputBody(c);
+    const result = await runForDevice(device, "conversation/archive", () =>
+      params.workerClient.archiveConversation(device, c.req.param("conversationId"), input),
+    );
+    return c.json(normalizeOpenConversationResult(device, result));
+  });
+
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/unarchive", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const input = await readConversationLifecycleInputBody(c);
+    const result = await runForDevice(device, "conversation/unarchive", () =>
+      params.workerClient.unarchiveConversation(device, c.req.param("conversationId"), input),
+    );
+    return c.json(normalizeOpenConversationResult(device, result));
+  });
+
+  app.patch("/v1/devices/:deviceId/conversations/:conversationId", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const input = await readRenameConversationInputBody(c);
+    const result = await runForDevice(device, "conversation/rename", () =>
+      params.workerClient.renameConversation(device, c.req.param("conversationId"), input),
+    );
+    return c.json(normalizeOpenConversationResult(device, result));
+  });
+
   app.post("/v1/devices/:deviceId/conversations/:conversationId/turns/:turnId/interrupt", async (c) => {
     const device = requireDevice(registry, c.req.param("deviceId"));
     const input = await readInterruptInputBody(c);
@@ -343,7 +382,18 @@ function normalizeProject(device: ConfiguredWorkerDevice, project: RemoteProject
 }
 
 function normalizeConversationTimeline(device: ConfiguredWorkerDevice, timeline: ConversationTimeline): ConversationTimeline {
-  return { ...timeline, deviceId: device.id };
+  return {
+    ...timeline,
+    deviceId: device.id,
+    ...(timeline.events ? { events: timeline.events.map((event) => ({ ...event, deviceId: device.id })) } : {}),
+  };
+}
+
+function normalizeOpenConversationResult(device: ConfiguredWorkerDevice, result: OpenConversationResult): OpenConversationResult {
+  return {
+    conversation: normalizeConversation(device, result.conversation),
+    timeline: normalizeConversationTimeline(device, result.timeline),
+  };
 }
 
 async function readStartInputBody(c: Context<ControlPlaneHonoEnv>): Promise<StartConversationInput> {
@@ -364,6 +414,23 @@ async function readFollowUpInputBody(c: Context<ControlPlaneHonoEnv>): Promise<F
     message: getRequiredStringField(body, "message", messageMaxLength),
     clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
     ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readConversationLifecycleInputBody(c: Context<ControlPlaneHonoEnv>): Promise<ConversationLifecycleInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["clientRequestId"]);
+  return {
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
+  };
+}
+
+async function readRenameConversationInputBody(c: Context<ControlPlaneHonoEnv>): Promise<RenameConversationInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["title", "clientRequestId"]);
+  return {
+    title: getRequiredStringField(body, "title", 120),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
   };
 }
 

@@ -1,7 +1,12 @@
+import { basename } from "node:path";
+
 import type {
   ApprovalDecisionInput,
   CommandAccepted,
+  ConversationLifecycleInput,
   InterruptTurnInput,
+  OpenConversationResult,
+  RenameConversationInput,
   PendingApproval,
   SteerTurnInput,
 } from "@codex-remote/api-contract";
@@ -11,17 +16,118 @@ import { WorkerHttpError } from "./errors.ts";
 import { mapUnknownError } from "./errors.ts";
 import type { WorkerApprovalRegistry } from "./approvalRegistry.ts";
 import { readAllowedConversationThread } from "./readOnlyHandlers.ts";
+import { projectThreadToConversation, projectThreadToTimeline } from "./projections.ts";
 import type { WorkerWriteAppServerClient, WorkerWriteHandlerContext } from "./writeHandlers.ts";
 
 export interface WorkerControlAppServerClient extends WorkerWriteAppServerClient {
   interruptTurn(params: v2.TurnInterruptParams): Promise<unknown>;
   steerTurn(params: v2.TurnSteerParams): Promise<unknown>;
+  resumeThread(params: v2.ThreadResumeParams): Promise<v2.ThreadResumeResponse>;
+  archiveThread(params: v2.ThreadArchiveParams): Promise<v2.ThreadArchiveResponse>;
+  unarchiveThread(params: v2.ThreadUnarchiveParams): Promise<v2.ThreadUnarchiveResponse>;
+  setThreadName(params: v2.ThreadSetNameParams): Promise<v2.ThreadSetNameResponse>;
+  listLoadedThreads?(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse>;
   sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void>;
 }
 
 export interface WorkerControlHandlerContext extends Omit<WorkerWriteHandlerContext, "openClient"> {
   approvalRegistry: WorkerApprovalRegistry;
   openClient(): Promise<WorkerControlAppServerClient>;
+}
+
+export async function openConversation(
+  context: WorkerControlHandlerContext,
+  conversationId: string,
+  input: ConversationLifecycleInput,
+): Promise<OpenConversationResult> {
+  validateClientRequestId(input.clientRequestId, "thread/resume");
+
+  return await withControlClient(context, "thread/resume", async (client) => {
+    await assertConversationAllowed(client, context.config.allowedProjectRoot, conversationId, "thread/resume");
+    const response = await client.resumeThread({ threadId: conversationId });
+    return await createLifecycleResult(context, client, {
+      thread: response.thread,
+      archived: false,
+      lifecycleEventKind: "thread_opened",
+    });
+  });
+}
+
+export async function archiveConversation(
+  context: WorkerControlHandlerContext,
+  conversationId: string,
+  input: ConversationLifecycleInput,
+): Promise<OpenConversationResult> {
+  validateClientRequestId(input.clientRequestId, "thread/archive");
+
+  return await withControlClient(context, "thread/archive", async (client) => {
+    await readAllowedConversationThread(
+      client,
+      context.config.allowedProjectRoot,
+      conversationId,
+      "thread/archive",
+    );
+    await client.archiveThread({ threadId: conversationId });
+    const archivedThread = await readAllowedConversationThread(
+      client,
+      context.config.allowedProjectRoot,
+      conversationId,
+      "thread/archive",
+    );
+    return await createLifecycleResult(context, client, {
+      thread: archivedThread,
+      archived: true,
+      lifecycleEventKind: "thread_archived",
+    });
+  });
+}
+
+export async function unarchiveConversation(
+  context: WorkerControlHandlerContext,
+  conversationId: string,
+  input: ConversationLifecycleInput,
+): Promise<OpenConversationResult> {
+  validateClientRequestId(input.clientRequestId, "thread/unarchive");
+
+  return await withControlClient(context, "thread/unarchive", async (client) => {
+    await assertConversationAllowed(client, context.config.allowedProjectRoot, conversationId, "thread/unarchive");
+    const response = await client.unarchiveThread({ threadId: conversationId });
+    return await createLifecycleResult(context, client, {
+      thread: response.thread,
+      archived: false,
+      lifecycleEventKind: "thread_unarchived",
+    });
+  });
+}
+
+export async function renameConversation(
+  context: WorkerControlHandlerContext,
+  conversationId: string,
+  input: RenameConversationInput,
+): Promise<OpenConversationResult> {
+  validateClientRequestId(input.clientRequestId, "thread/name/set");
+  const title = validateRenameTitle(input.title);
+
+  return await withControlClient(context, "thread/name/set", async (client) => {
+    await readAllowedConversationThread(
+      client,
+      context.config.allowedProjectRoot,
+      conversationId,
+      "thread/name/set",
+    );
+    await client.setThreadName({ threadId: conversationId, name: title });
+    const renamedThread = await readAllowedConversationThread(
+      client,
+      context.config.allowedProjectRoot,
+      conversationId,
+      "thread/name/set",
+    );
+    return await createLifecycleResult(context, client, {
+      thread: renamedThread,
+      archived: false,
+      lifecycleEventKind: "thread_renamed",
+    });
+  });
 }
 
 export async function interruptTurn(
@@ -157,6 +263,7 @@ type IdempotencyRecord = {
 
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
+const renameTitleMaxLength = 120;
 
 function validateClientRequestId(clientRequestId: string, operation: string): void {
   if (!clientRequestId.trim() || clientRequestId.length > clientRequestIdMaxLength) {
@@ -179,6 +286,20 @@ function validateMessage(message: string, operation: string): void {
       retryable: false,
     });
   }
+}
+
+function validateRenameTitle(title: string): string {
+  const trimmed = title.trim();
+  if (trimmed.length < 1 || trimmed.length > renameTitleMaxLength) {
+    throw new WorkerHttpError(400, "invalid_request", "Request validation failed.", {
+      operation: "thread/name/set",
+      field: "title",
+      limit: renameTitleMaxLength,
+      retryable: false,
+    });
+  }
+
+  return trimmed;
 }
 
 function validateExpectedTurnId(pathTurnId: string, expectedTurnId: string, operation: string): void {
@@ -251,6 +372,67 @@ function createTextUserInput(message: string): v2.UserInput {
     text: message,
     text_elements: [],
   };
+}
+
+async function createLifecycleResult(
+  context: WorkerControlHandlerContext,
+  client: WorkerControlAppServerClient,
+  params: {
+    thread: v2.Thread;
+    archived: boolean;
+    lifecycleEventKind: "thread_opened" | "thread_archived" | "thread_unarchived" | "thread_renamed";
+  },
+): Promise<OpenConversationResult> {
+  const readStartedAt = context.now();
+  const loadedThreadIds = await listLoadedThreadIds(client);
+  const readCompletedAt = context.now();
+  const approvals = [
+    ...context.approvalRegistry.listPendingApprovals(params.thread.id),
+    ...context.approvalRegistry.listResolvedApprovals(params.thread.id),
+  ];
+  const projectionContext = {
+    allowedProjectRoot: context.config.allowedProjectRoot,
+    deviceId: context.config.deviceId,
+    projectName: basename(context.config.allowedProjectRoot),
+    archived: params.archived,
+    loadedThreadIds,
+    approvals,
+    lifecycleEventKind: params.lifecycleEventKind,
+    readStartedAt,
+    readCompletedAt,
+  };
+
+  return {
+    conversation: projectThreadToConversation(params.thread, projectionContext),
+    timeline: projectThreadToTimeline(params.thread, projectionContext),
+  };
+}
+
+async function listLoadedThreadIds(client: WorkerControlAppServerClient): Promise<ReadonlySet<string>> {
+  if (!client.listLoadedThreads) {
+    return new Set();
+  }
+
+  const loadedThreadIds = new Set<string>();
+  let cursor: string | null = null;
+
+  try {
+    for (let page = 0; page < 100; page += 1) {
+      const response = await client.listLoadedThreads({ cursor, limit: 100 });
+      for (const threadId of response.data) {
+        loadedThreadIds.add(threadId);
+      }
+
+      cursor = response.nextCursor;
+      if (!cursor) {
+        break;
+      }
+    }
+  } catch {
+    return new Set();
+  }
+
+  return loadedThreadIds;
 }
 
 function getIdempotentResponse(

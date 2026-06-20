@@ -76,3 +76,33 @@ test("codex remote app when task loading fails, should render task failure separ
   assert.match(mainPanelsSource, /taskLoadState === "failed"/);
   assert.doesNotMatch(mainPanelsSource, /taskSource\.error|taskLoadError|taskError/);
 });
+
+test("codex remote app when conversation is selected, should open conversation before refreshing snapshot", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.match(shellSource, /openConversation/);
+  assert.match(shellSource, /await workerClient\.openConversation/);
+  assert.match(shellSource, /await refreshWorkbenchData\(conversationKey\)/);
+  assert.match(shellSource, /await workerClient\.openConversation[\s\S]+await refreshWorkbenchData\(conversationKey\)/);
+});
+
+test("conversation workbench UI when lifecycle state exists, should expose badges and lifecycle actions", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
+  const actionMenuSource = readWebSource("components/sidebar/action-menu.tsx");
+
+  assert.match(sidebarSource, /conversation\.loaded/);
+  assert.match(sidebarSource, /conversation\.live/);
+  assert.match(sidebarSource, /conversation\.archived/);
+  assert.match(mainPanelsSource, /Loaded|Live|Archived/);
+  assert.match(mainPanelsSource, /approvalCards/);
+  assert.match(mainPanelsSource, /status === "resolved"/);
+  assert.match(actionMenuSource, /onRename/);
+  assert.match(actionMenuSource, /onArchive/);
+  assert.match(actionMenuSource, /onRestore/);
+  assert.match(shellSource, /renameConversation/);
+  assert.match(shellSource, /archiveConversation/);
+  assert.match(shellSource, /unarchiveConversation/);
+  assert.match(shellSource, /window\.prompt/);
+});

@@ -117,7 +117,7 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   async listThreadsWithParams(params: {
     cwd: string;
     sourceKinds: readonly ["cli", "vscode", "appServer"];
-    archived: false;
+    archived: boolean;
     limit: number;
     sortDirection: "desc";
     cursor: string | null;
@@ -173,7 +173,7 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private async requestThreadList(params: {
     cwd: string;
     sourceKinds: readonly ["cli", "vscode", "appServer"];
-    archived: false;
+    archived: boolean;
     limit: number;
     sortDirection: "desc";
     cursor: string | null;
@@ -190,6 +190,10 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
 
   async readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse> {
     return (await this.rpc.request("thread/read", params)) as v2.ThreadReadResponse;
+  }
+
+  async listLoadedThreads(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse> {
+    return (await this.rpc.request("thread/loaded/list", params)) as v2.ThreadLoadedListResponse;
   }
 
   async readFirstAllowedThread(): Promise<unknown> {
@@ -242,6 +246,22 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
 
   async steerTurn(params: v2.TurnSteerParams): Promise<v2.TurnSteerResponse> {
     return (await this.rpc.request("turn/steer", params)) as v2.TurnSteerResponse;
+  }
+
+  async resumeThread(params: v2.ThreadResumeParams): Promise<v2.ThreadResumeResponse> {
+    return (await this.rpc.request("thread/resume", params)) as v2.ThreadResumeResponse;
+  }
+
+  async archiveThread(params: v2.ThreadArchiveParams): Promise<v2.ThreadArchiveResponse> {
+    return (await this.rpc.request("thread/archive", params)) as v2.ThreadArchiveResponse;
+  }
+
+  async unarchiveThread(params: v2.ThreadUnarchiveParams): Promise<v2.ThreadUnarchiveResponse> {
+    return (await this.rpc.request("thread/unarchive", params)) as v2.ThreadUnarchiveResponse;
+  }
+
+  async setThreadName(params: v2.ThreadSetNameParams): Promise<v2.ThreadSetNameResponse> {
+    return (await this.rpc.request("thread/name/set", params)) as v2.ThreadSetNameResponse;
   }
 
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {

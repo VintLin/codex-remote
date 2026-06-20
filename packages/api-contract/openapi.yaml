@@ -344,6 +344,178 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}:
+    patch:
+      operationId: renameControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameConversationInput"
+      responses:
+        "200":
+          description: Device-scoped conversation renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/open:
+    post:
+      operationId: openControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Device-scoped conversation opened.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/archive:
+    post:
+      operationId: archiveControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Device-scoped conversation archived.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/unarchive:
+    post:
+      operationId: unarchiveControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Device-scoped conversation unarchived.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/devices/{deviceId}/conversations/{conversationId}/timeline:
     get:
       operationId: getControlPlaneDeviceConversationTimeline
@@ -682,6 +854,158 @@ paths:
           $ref: "#/components/responses/ConversationNotFoundError"
         "408":
           $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}:
+    patch:
+      operationId: renameWorkerConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameConversationInput"
+      responses:
+        "200":
+          description: Conversation renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/open:
+    post:
+      operationId: openWorkerConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Conversation opened.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/archive:
+    post:
+      operationId: archiveWorkerConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Conversation archived.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/AppServerUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/conversations/{conversationId}/unarchive:
+    post:
+      operationId: unarchiveWorkerConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationLifecycleInput"
+      responses:
+        "200":
+          description: Conversation unarchived.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenConversationResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
         "424":
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
@@ -1286,10 +1610,20 @@ components:
           $ref: "#/components/schemas/ConversationRuntimeStatus"
         latestTurnStatus:
           $ref: "#/components/schemas/LatestTurnStatus"
+        loaded:
+          type: boolean
+        live:
+          type: boolean
+        archived:
+          type: boolean
         turns:
           type: array
           items:
             $ref: "#/components/schemas/ConversationTimelineTurn"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationWorkbenchEvent"
     ConversationTimelinePage:
       type: object
       additionalProperties: false
@@ -1352,6 +1686,103 @@ components:
           type: string
         turnId:
           type: string
+    ConversationApprovalCard:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - conversationId
+        - turnId
+        - itemId
+        - kind
+        - status
+        - title
+        - summary
+        - risk
+        - createdAt
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        turnId:
+          type: string
+        itemId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - command_execution
+            - file_change
+            - legacy_exec
+            - legacy_apply_patch
+        status:
+          type: string
+          enum:
+            - pending
+            - resolved
+        title:
+          type: string
+          maxLength: 120
+        summary:
+          type: string
+          maxLength: 200
+        risk:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - unknown
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+    ConversationWorkbenchEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - seq
+        - deviceId
+        - conversationId
+        - kind
+        - createdAt
+        - source
+      properties:
+        eventId:
+          type: string
+        seq:
+          type: number
+        deviceId:
+          type: string
+        conversationId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - thread_opened
+            - thread_archived
+            - thread_unarchived
+            - thread_renamed
+            - approval_pending
+            - approval_resolved
+            - snapshot_reset
+            - turn_state
+        createdAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum:
+            - snapshot
+            - live
+        gap:
+          type: boolean
+        approvalCard:
+          $ref: "#/components/schemas/ConversationApprovalCard"
     ProbeCheckResult:
       type: object
       additionalProperties: false
@@ -1525,6 +1956,12 @@ components:
           type: string
         approval:
           type: string
+        archived:
+          type: boolean
+        loaded:
+          type: boolean
+        live:
+          type: boolean
         pinned:
           type: boolean
     BoardTask:
@@ -1772,6 +2209,42 @@ components:
         expectedApprovalRequestId:
           type: string
           minLength: 1
+    ConversationLifecycleInput:
+      type: object
+      additionalProperties: false
+      required:
+        - clientRequestId
+      properties:
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    RenameConversationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - clientRequestId
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    OpenConversationResult:
+      type: object
+      additionalProperties: false
+      required:
+        - conversation
+        - timeline
+      properties:
+        conversation:
+          $ref: "#/components/schemas/CodexConversation"
+        timeline:
+          $ref: "#/components/schemas/ConversationTimeline"
     CommandAccepted:
       type: object
       additionalProperties: false

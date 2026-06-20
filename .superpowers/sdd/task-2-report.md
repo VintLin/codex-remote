@@ -1,80 +1,61 @@
-# Stage 9 Task 2 Report: Real Local Stack Lifecycle
+# Stage 11 Task 2 Report
 
 ## Status
 
-DONE_WITH_CONCERNS
+Implemented Control Plane pass-through and Web workbench UI/data wiring for conversation lifecycle actions and lifecycle state display.
 
-Concern: runtime stack execution was intentionally not run because this review-fix task explicitly forbids `pnpm real:start`. Verification is limited to script-source tests, product readiness checks, and shell syntax checks.
+## RED Evidence
 
-## Scope
+- `pnpm --filter @codex-remote/control-plane test`
+  - Failed as expected:
+    - `client.openConversation is not a function`
+    - lifecycle route returned `404` instead of `200`
+- `pnpm --filter @codex-remote/web test`
+  - Failed as expected:
+    - `client.openConversation is not a function`
+    - selected conversation source test had no `openConversation`
+    - lifecycle badges/actions were absent
+    - `data.approvalCards` was undefined for timeline event projection
 
-Changed only the allowed Stage 9 Task 2 review-fix files:
+## GREEN Tests
 
-- `scripts/start-real-local-stack.sh`
-- `scripts/status-real-local-stack.sh`
-- `scripts/product-readiness-check.mjs`
-- `scripts/product-readiness-check.test.mjs`
-- `docs/references/local-self-hosting.md`
-- `.superpowers/sdd/task-2-report.md`
+- `pnpm --filter @codex-remote/control-plane test`
+  - `41/41` pass
+- `pnpm --filter @codex-remote/web test`
+  - `106/106` pass
+- `pnpm --filter @codex-remote/worker test`
+  - `185/185` pass after reviewer fixes
+- `pnpm typecheck`
+  - `11/11` Turborepo tasks successful
 
-No Worker stdio transport implementation, Worker lifecycle changes, package script changes, push, real stack startup, or unrelated worktree cleanup was performed.
+## Changed Files
+
+- `apps/control-plane/src/client/workerClient.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.ts`
+- `apps/control-plane/src/client/workerClient.test.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
+- `apps/worker/src/http/readOnlyHandlers.ts`
+- `apps/worker/src/http/readOnlyHandlers.test.ts`
+- `apps/web/src/data/workerApi/client.ts`
+- `apps/web/src/data/workerApi/workbenchData.ts`
+- `apps/web/src/data/workerApi/client.test.ts`
+- `apps/web/src/data/workerApi/workbenchData.test.ts`
+- `apps/web/src/components/shell/codex-remote-app.tsx`
+- `apps/web/src/components/shell/codexRemoteAppWriteFlow.test.ts`
+- `apps/web/src/components/detail/main-panels.tsx`
+- `apps/web/src/components/sidebar/sidebar.tsx`
+- `apps/web/src/components/sidebar/action-menu.tsx`
+- `apps/web/src/app/globals.css`
+- `apps/web/src/domain/layout/appLayout.test.ts`
+
+## Concerns
+
+- `apps/web/src/domain/layout/appLayout.test.ts` was adjusted because its old source-shape assertion required a no-prop header `ActionMenu`, which conflicts with Task 2 lifecycle header actions. The assertion still checks the simplified header/title-menu/layout-action contract.
+- Approval decision buttons still use the existing pending approvals endpoint. Timeline `approvalCards` are rendered as pending/resolved state cards; cards without a matching pending approval are display-only.
+- Existing Task 1 / API contract files were already modified in the worktree and were not changed by this task.
 
 ## Review Fixes
 
-Conclusion: default `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` now fails closed.
-
-Reason: the current Worker lifecycle does not implement stdio app-server startup, so starting loopback WebSocket while labeling the transport as stdio misrepresents readiness.
-
-Risk: `pnpm real:start` no longer starts with defaults until Worker stdio lifecycle exists.
-
-Next step: a later Worker transport task should implement real stdio lifecycle before treating the default local stack as product-ready.
-
-Conclusion: `CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket pnpm real:start` remains available as an explicit debug fallback.
-
-Reason: Stage 9 still needs a way to exercise the existing loopback WebSocket path without silently claiming stdio readiness.
-
-Risk: debug fallback can still prove only current debug behavior, not target product readiness.
-
-Next step: keep runbook and script messages labeling it as a Stage 9 readiness gap.
-
-Conclusion: lifecycle startup no longer redirects full service stdout/stderr into `logs/*.log`.
-
-Reason: service output may include private paths, prompts, raw protocol frames, command output, stack traces, or other sensitive values.
-
-Risk: debugging background service startup has less captured output.
-
-Next step: use explicit sanitized health/status checks instead of raw service logs when later tasks add runtime diagnostics.
-
-## TDD Evidence
-
-RED:
-
-- Added script-source tests for missing stdio fail-closed guard and full service output redirection.
-- Ran `node --test scripts/product-readiness-check.test.mjs`.
-- Expected failures observed:
-  - missing `Worker stdio app-server transport is not implemented` guard
-  - existing `>"$LOG_DIR/$name.log" 2>&1` full-output redirection
-
-GREEN:
-
-- Added transport gate in `scripts/start-real-local-stack.sh`.
-- Suppressed background service output with `/dev/null` and wrote only sanitized lifecycle status lines.
-- Added product readiness checks for lifecycle shell syntax, stdio guard, debug fallback label, output suppression, and status port overrides.
-- Updated local self-hosting runbook to label the debug WebSocket path as fallback only.
-- Re-ran the required verification commands.
-
-## Verification
-
-Commands run:
-
-```bash
-node --test scripts/product-readiness-check.test.mjs
-pnpm product:check
-bash -n scripts/start-real-local-stack.sh scripts/status-real-local-stack.sh scripts/stop-real-local-stack.sh
-```
-
-Results:
-
-- `node --test scripts/product-readiness-check.test.mjs`: 16 tests, 16 pass, 0 fail.
-- `pnpm product:check`: passed with `Product readiness checks passed.`
-- `bash -n`: passed for all three lifecycle scripts.
+- Fixed Worker snapshot timeline projection so pending/resolved approval cards remain visible after the Web open -> refresh flow.
+- Fixed Control Plane timeline normalization so nested workbench events use the configured public `deviceId`.
+- Fixed Web approval-card reconciliation so duplicate/late events collapse by approval identity and keep the latest resolved state.

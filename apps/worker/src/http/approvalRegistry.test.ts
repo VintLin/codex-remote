@@ -16,11 +16,12 @@ test("worker approval registry when capturing server requests, should expose onl
     registry.captureServerRequest(createLegacyApplyPatchRequest("jsonrpc-patch")),
     registry.captureServerRequest(createPermissionsRequest("jsonrpc-permissions")),
     registry.captureServerRequest(createUnsupportedToolInputRequest("jsonrpc-tool-input")),
+    registry.captureServerRequest(createMcpElicitationRequest("jsonrpc-mcp-elicitation")),
   ];
 
   assert.deepEqual(
     captured.map((approval) => approval?.kind ?? null),
-    ["command_execution", "file_change", "legacy_exec", "legacy_apply_patch", null, null],
+    ["command_execution", "file_change", "legacy_exec", "legacy_apply_patch", null, null, null],
   );
   assert.deepEqual(
     registry.listPendingApprovals("thread-1").map((approval) => approval.kind),
@@ -137,6 +138,25 @@ test("worker approval registry when approval start time is unknown, should use c
   registry.captureServerRequest(createLegacyExecRequest("jsonrpc-exec"));
 
   assert.equal(registry.listPendingApprovals("thread-1")[0]?.startedAt, "2026-06-20T12:34:56.000Z");
+});
+
+test("worker approval registry when approval completes, should retain bounded sanitized resolved approvals", () => {
+  const registry = createWorkerApprovalRegistry({ now: () => "2026-06-20T12:34:56.000Z" });
+  const pending = registry.captureServerRequest(createCommandExecutionRequest("jsonrpc-command"));
+  assert.ok(pending);
+
+  registry.completeApproval(pending.id);
+
+  const approvals = registry.listPendingApprovals("thread-1");
+  assert.equal(approvals.length, 0);
+  const resolved = registry.listResolvedApprovals("thread-1");
+  assert.equal(resolved.length, 1);
+  assert.deepEqual(resolved[0], {
+    ...pending,
+    status: "resolved",
+    resolvedAt: "2026-06-20T12:34:56.000Z",
+  });
+  assert.doesNotMatch(JSON.stringify(resolved), /jsonrpc-command|SECRET_TOKEN|\/Users\/vint\/private|https:\/\/secret\.example/);
 });
 
 test("worker approval registry when decision guard mismatches or approval is missing or resolved, should fail closed", () => {
@@ -285,4 +305,19 @@ function createUnsupportedToolInputRequest(id: string): ServerRequest {
       questions: [],
     },
   };
+}
+
+function createMcpElicitationRequest(id: string): ServerRequest {
+  return {
+    id,
+    method: "mcpServer/elicitation/request",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "item-mcp",
+      serverName: "private-mcp",
+      message: "SECRET_TOKEN",
+      requestedSchema: {},
+    },
+  } as unknown as ServerRequest;
 }

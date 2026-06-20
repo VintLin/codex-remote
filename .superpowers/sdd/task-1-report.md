@@ -1,91 +1,88 @@
-# Task 1 Report: Versioned Project Discovery
+# Stage 11 Task 1 Report
 
-## 实现内容
+Status: DONE
 
-- 在 `packages/api-contract/openapi.yaml` 增加 `GET /v1/projects` 和 `GET /v1/devices/{deviceId}/projects`，复用既有 `RemoteProject` schema，并通过 `pnpm --filter @codex-remote/api-contract generate` 更新生成类型。
-- Worker 新增 `listProjects()` 与 `GET /v1/projects`，只公开一个安全项目：`id: "local-project"`、`path: ""`；内部 start conversation 仍使用 `allowedProjectRoot` 作为 app-server `cwd`。
-- Worker start conversation 只接受 public opaque id `local-project`，拒绝 basename public id。
-- Control Plane 新增 `WorkerUpstreamClient.listProjects()`、全局 `/v1/projects` 聚合和 `/v1/devices/:deviceId/projects` 路由，并在 Control Plane 边界规范 `deviceId`。
-- Web client 新增 `listProjects()`；Workbench datasource 在 loaded path 直接使用 `/v1/projects`，不再从 conversations 反推 projects。
-- 在允许修改的 `controlPlaneHttpApp.test.ts` 增加 `RemoteProject` schema-key guard，避免本任务的手写 projector 字段列表静默漂移。
-
-## TDD RED 证据
-
-- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：先失败，缺少 `/v1/projects` 和 `/v1/devices/{deviceId}/projects` route。
-- `pnpm --filter @codex-remote/worker test -- --test-name-pattern "projects|starting a conversation"`：先失败，`listProjects` 未导出、route 未实现、`local-project` 被旧 basename 校验拒绝。
-- `pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "projects|project fields"`：先失败，project routes 返回 404。
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "project discovery|conversations are empty and projects exist"`：先失败，`client.listProjects` 不存在，projects 仍从 empty conversations 推导为 `[]`。
-
-## GREEN / Verification
-
-- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：PASS，1/1。
-- `pnpm --filter @codex-remote/worker test -- --test-name-pattern "projects|starting a conversation"`：PASS，18/18。
-- `pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "projects|project fields"`：PASS，8/8。
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "project discovery|conversations are empty and projects exist"`：PASS，17/17。
-- `pnpm --filter @codex-remote/api-contract generate`：PASS，更新生成物。
-- `pnpm --filter @codex-remote/api-contract test`：PASS，26/26。
-- `pnpm --filter @codex-remote/api-contract build`：PASS。
-- `pnpm --filter @codex-remote/worker test`：PASS，146/146。
-- `pnpm --filter @codex-remote/control-plane test`：PASS，35/35。
-- `pnpm --filter @codex-remote/web test`：PASS，89/89。
-
-## 改动文件
+## Changed Files
 
 - `packages/api-contract/openapi.yaml`
 - `packages/api-contract/src/generated/openapi.ts`
+- `packages/api-contract/src/index.ts`
 - `packages/api-contract/src/contractGeneration.test.ts`
+- `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`
+- `apps/worker/src/http/projections.ts`
 - `apps/worker/src/http/readOnlyHandlers.ts`
-- `apps/worker/src/http/writeHandlers.ts`
+- `apps/worker/src/http/controlHandlers.ts`
 - `apps/worker/src/http/workerHttpApp.ts`
+- `apps/worker/src/http/boundary.test.ts`
+- `apps/worker/src/http/projections.test.ts`
 - `apps/worker/src/http/readOnlyHandlers.test.ts`
-- `apps/worker/src/http/writeHandlers.test.ts`
+- `apps/worker/src/http/controlHandlers.test.ts`
 - `apps/worker/src/http/workerHttpApp.test.ts`
-- `apps/control-plane/src/client/workerClient.ts`
-- `apps/control-plane/src/http/controlPlaneHttpApp.ts`
-- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
-- `apps/web/src/data/workerApi/client.ts`
-- `apps/web/src/data/workerApi/client.test.ts`
-- `apps/web/src/data/workerApi/workbenchData.ts`
-- `apps/web/src/data/workerApi/workbenchData.test.ts`
+
+## RED Verification
+
+- `pnpm --filter @codex-remote/api-contract test`
+  - Failed as expected before implementation.
+  - Summary: 24 pass, 3 fail.
+  - Failure themes: Stage 11 lifecycle paths missing, `CodexConversation` missing `archived`/`loaded`/`live`, Control Plane device-scoped lifecycle paths missing.
+- `pnpm --filter @codex-remote/worker test`
+  - Failed as expected before implementation.
+  - Summary: 160 pass, 6 fail.
+  - Failure themes: lifecycle handler exports/routes missing, timeline `events`/flags missing, archived list pass missing, CORS missing `PATCH`.
+
+## GREEN Verification
+
+- `pnpm --filter @codex-remote/api-contract generate`
+  - Passed; regenerated `packages/api-contract/src/generated/openapi.ts`.
+- `pnpm --filter @codex-remote/api-contract test`
+  - Passed: 27 tests, 0 failures.
+- `pnpm --filter @codex-remote/worker test`
+  - Passed: 179 tests, 0 failures.
+- `pnpm typecheck`
+  - Passed: 11 tasks successful, 0 failures.
+
+## Concerns
+
+- Stage 11 new fields are present in the public schemas and Worker responses, but are optional in OpenAPI to avoid forcing Web fixture/UI changes in Task 1. Task 2 can make stronger Web assumptions when Control Plane and Web are implemented.
+- Control Plane and Web lifecycle behavior are intentionally not implemented in this task.
+- Full `pnpm lint`, `pnpm test`, and `pnpm build` were not run; focused Task 1 tests plus full typecheck were run.
+
+## Reviewer Fixes - 2026-06-21
+
+Changed files:
+
+- `apps/worker/src/http/projections.ts`
+- `apps/worker/src/http/projections.test.ts`
+- `apps/worker/src/http/approvalRegistry.ts`
+- `apps/worker/src/http/approvalRegistry.test.ts`
+- `apps/worker/src/http/controlHandlers.ts`
+- `apps/worker/src/http/controlHandlers.test.ts`
+- `apps/worker/src/app-server/appServerRpcClient.ts`
+- `apps/worker/src/app-server/appServerRpcClient.test.ts`
+- `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`
 - `.superpowers/sdd/task-1-report.md`
 
-## 自审发现
+Fix summary:
 
-- `allowedProjectRoot` / `cwd` 没有进入 public id/path；public project id 固定为 `local-project`，public path 固定为空字符串。
-- Control Plane conversations 聚合继续保留旧的 degraded-to-empty 行为；projects 聚合按任务要求不吞掉 Worker failure。
-- Web loaded path 现在以 project API 为权威来源；旧的 conversations-to-projects 推导已删除，避免第二事实源。
+- Conversation projection now uses trimmed sanitized `thread.name` as public `conversation.title` when present, falls back to the allowed project basename, and never uses `thread.preview`.
+- Approval registry now retains bounded sanitized resolved approval records with `resolvedAt`; timeline projection emits `approval_resolved` events/cards while public approval list remains pending-only. `mcpServer/elicitation/request` remains unsupported and does not become a public approval card.
+- Stage 11 lifecycle app-server methods are in the typed `WorkerAppServerMethod` allowlist. `AppServerWorkerClient` now calls `this.rpc.request(...)` directly and the untyped escape helper was removed.
+- Archive and rename now read the allowed thread again after the write before projection. Archive keeps the public archived override true.
 
-## 疑虑
+RED verification:
 
-- `RemoteProject.expanded` 在 OpenAPI schema 中不是 required，但当前 Worker 和 Control Plane projector 都要求 Worker 响应包含该字段；这与现有 UI 期望和 task brief 一致，未在本任务中调整 schema required 集合。
-- 本任务没有实现 streaming、多设备实机、installer/keychain/pairing/reverse WSS/iOS/生产 auth 等 Stage 9 non-goals。
+- `pnpm --filter @codex-remote/worker test`
+  - Failed as expected before implementation.
+  - Summary: 184 tests, 178 pass, 6 fail.
+  - Failure themes: missing resolved approval registry/projection, stale archive/rename projection, and title still falling back instead of using trimmed `thread.name`.
 
-## Review Fix: Declare `/v1/projects` Device Unavailable Response
+GREEN verification:
 
-### 处理内容
+- `pnpm --filter @codex-remote/worker test`
+  - Passed: 184 tests, 0 failures.
+- `pnpm typecheck`
+  - Passed: 11 tasks successful, 0 failures.
 
-- 在 `packages/api-contract/src/contractGeneration.test.ts` 的 `project discovery` focused contract test 中增加 source-of-truth 断言：`GET /v1/projects` 必须声明 `"424": "#/components/responses/DeviceUnavailableError"`。
-- 在 `packages/api-contract/openapi.yaml` 的 `/v1/projects` responses 中补充 `424 DeviceUnavailableError`。
-- 运行 `pnpm --filter @codex-remote/api-contract generate` 更新 `packages/api-contract/src/generated/openapi.ts`。
+Concerns:
 
-### RED
-
-- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：FAIL，1/1 failed。失败点为 `extractResponseRefs(controlPlaneProjectsGet.lines).get("424")` 返回 `undefined`，证明 `/v1/projects` 未声明 424。
-
-### GREEN / Verification
-
-- `pnpm --filter @codex-remote/api-contract generate`：PASS，更新生成物。
-- `pnpm --filter @codex-remote/api-contract test -- --test-name-pattern "project discovery"`：PASS，1/1。
-- `pnpm --filter @codex-remote/api-contract test`：PASS，26/26。
-- `pnpm --filter @codex-remote/api-contract build`：PASS。
-
-### 改动文件
-
-- `packages/api-contract/openapi.yaml`
-- `packages/api-contract/src/generated/openapi.ts`
-- `packages/api-contract/src/contractGeneration.test.ts`
-- `.superpowers/sdd/task-1-report.md`
-
-### 疑虑
-
-- 未发现新增疑虑；本次只补齐 OpenAPI source-of-truth 中已存在运行时行为对应的 response 声明。
+- `pnpm --filter @codex-remote/api-contract test` was not rerun because this fix did not touch OpenAPI schemas or generated api-contract types.

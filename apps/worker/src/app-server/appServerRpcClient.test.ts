@@ -211,6 +211,37 @@ test("when sending stage 5 control requests, should serialize generated app-serv
   assert.deepEqual(await steer, { turnId: "turn-1" });
 });
 
+test("when sending stage 11 lifecycle requests, should serialize typed generated app-server methods", async () => {
+  const socket = new FakeSocket();
+  const client = new AppServerRpcClient(socket);
+
+  const resume = client.request("thread/resume", { threadId: "thread-1" });
+  assert.match(socket.sent[0] ?? "", /"method":"thread\/resume"/);
+  socket.receive(JSON.stringify({ id: 1, result: { thread: { id: "thread-1" } } }));
+  assert.deepEqual(await resume, { thread: { id: "thread-1" } });
+
+  const archive = client.request("thread/archive", { threadId: "thread-1" });
+  assert.match(socket.sent[1] ?? "", /"method":"thread\/archive"/);
+  socket.receive(JSON.stringify({ id: 2, result: {} }));
+  assert.deepEqual(await archive, {});
+
+  const unarchive = client.request("thread/unarchive", { threadId: "thread-1" });
+  assert.match(socket.sent[2] ?? "", /"method":"thread\/unarchive"/);
+  socket.receive(JSON.stringify({ id: 3, result: {} }));
+  assert.deepEqual(await unarchive, {});
+
+  const rename = client.request("thread/name/set", { threadId: "thread-1", name: "New title" });
+  assert.match(socket.sent[3] ?? "", /"method":"thread\/name\/set"/);
+  assert.match(socket.sent[3] ?? "", /"name":"New title"/);
+  socket.receive(JSON.stringify({ id: 4, result: {} }));
+  assert.deepEqual(await rename, {});
+
+  const loaded = client.request("thread/loaded/list", { cursor: null, limit: 100 });
+  assert.match(socket.sent[4] ?? "", /"method":"thread\/loaded\/list"/);
+  socket.receive(JSON.stringify({ id: 5, result: { data: ["thread-1"], nextCursor: null } }));
+  assert.deepEqual(await loaded, { data: ["thread-1"], nextCursor: null });
+});
+
 test("when sending approval responses, should serialize a JSON-RPC result for the original server request id", () => {
   const socket = new FakeSocket();
   const client = new AppServerRpcClient(socket);

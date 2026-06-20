@@ -9,10 +9,13 @@ import type {
   ApprovalDecisionInput,
   BoardTask,
   CodexConversation,
+  ConversationLifecycleInput,
   ConversationTimeline,
   FollowUpInput,
   InterruptTurnInput,
+  OpenConversationResult,
   RemoteProject,
+  RenameConversationInput,
   StartConversationInput,
   SteerTurnInput,
   TaskConversationLink,
@@ -485,6 +488,45 @@ test("control plane http app when write and control routes are used, should prox
   ]);
 });
 
+test("control plane http app when lifecycle routes are used, should proxy selected device and normalize returned identity", async () => {
+  const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
+  const app = createApp(client);
+
+  const opened = await request(app, "/v1/devices/device-b/conversations/thread-b/open", {
+    method: "POST",
+    body: JSON.stringify({ clientRequestId: "open-1" }),
+  });
+  await request(app, "/v1/devices/device-b/conversations/thread-b/archive", {
+    method: "POST",
+    body: JSON.stringify({ clientRequestId: "archive-1" }),
+  });
+  await request(app, "/v1/devices/device-b/conversations/thread-b/unarchive", {
+    method: "POST",
+    body: JSON.stringify({ clientRequestId: "restore-1" }),
+  });
+  await request(app, "/v1/devices/device-b/conversations/thread-b", {
+    method: "PATCH",
+    body: JSON.stringify({ title: "Renamed", clientRequestId: "rename-1" }),
+  });
+  const options = await app.request("http://127.0.0.1/v1/devices/device-b/conversations/thread-b", {
+    method: "OPTIONS",
+    headers: { origin: "http://127.0.0.1:5173" },
+  });
+
+  assert.equal(opened.status, 200);
+  const body = await opened.json() as OpenConversationResult;
+  assert.equal(body.conversation.deviceId, "device-b");
+  assert.equal(body.timeline.deviceId, "device-b");
+  assert.deepEqual(body.timeline.events?.map((event) => event.deviceId), ["device-b"]);
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), [
+    "openConversation:device-b",
+    "archiveConversation:device-b",
+    "unarchiveConversation:device-b",
+    "renameConversation:device-b",
+  ]);
+  assert.match(options.headers.get("Access-Control-Allow-Methods") ?? "", /PATCH/);
+});
+
 test("control plane http app when device is unknown or upstream fails, should return sanitized errors", async () => {
   const app = createApp(new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) }));
 
@@ -736,6 +778,26 @@ class FakeWorkerClient implements WorkerUpstreamClient {
     return createAccepted(device.id, input.clientRequestId);
   }
 
+  async openConversation(device: ConfiguredWorkerDevice, conversationId: string, _input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    this.record(device, "openConversation");
+    return createLifecycleResult(this.upstreamDeviceId ?? device.id, conversationId, { archived: false, loaded: true, live: true });
+  }
+
+  async archiveConversation(device: ConfiguredWorkerDevice, conversationId: string, _input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    this.record(device, "archiveConversation");
+    return createLifecycleResult(this.upstreamDeviceId ?? device.id, conversationId, { archived: true, loaded: false, live: false });
+  }
+
+  async unarchiveConversation(device: ConfiguredWorkerDevice, conversationId: string, _input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    this.record(device, "unarchiveConversation");
+    return createLifecycleResult(this.upstreamDeviceId ?? device.id, conversationId, { archived: false, loaded: false, live: false });
+  }
+
+  async renameConversation(device: ConfiguredWorkerDevice, conversationId: string, _input: RenameConversationInput): Promise<OpenConversationResult> {
+    this.record(device, "renameConversation");
+    return createLifecycleResult(this.upstreamDeviceId ?? device.id, conversationId, { archived: false, loaded: true, live: true, title: "Renamed" });
+  }
+
   private record(device: ConfiguredWorkerDevice, method: string): void {
     this.calls.push({ deviceId: device.id, method });
   }
@@ -769,6 +831,47 @@ function createAccepted(deviceId: string, clientRequestId: string) {
     conversationId: `thread-${deviceId}`,
     turnId: `turn-${deviceId}`,
     acceptedAt: "2026-06-20T00:00:02.000Z",
+  };
+}
+
+function createLifecycleResult(
+  deviceId: string,
+  conversationId: string,
+  state: { archived: boolean; live: boolean; loaded: boolean; title?: string },
+): OpenConversationResult {
+  return {
+    conversation: {
+      ...createConversation(deviceId, conversationId),
+      archived: state.archived,
+      live: state.live,
+      loaded: state.loaded,
+      title: state.title ?? conversationId,
+    },
+    timeline: {
+      deviceId,
+      conversationId,
+      projectId: "local-project",
+      readStartedAt: "2026-06-20T00:00:00.000Z",
+      readCompletedAt: "2026-06-20T00:00:01.000Z",
+      snapshotRevision: `${conversationId}:lifecycle`,
+      runtimeStatus: state.live ? "running" : "idle",
+      latestTurnStatus: "unknown",
+      archived: state.archived,
+      loaded: state.loaded,
+      live: state.live,
+      turns: [],
+      events: [
+        {
+          eventId: "event-upstream-device",
+          seq: 1,
+          deviceId: deviceId,
+          conversationId,
+          kind: "thread_opened",
+          createdAt: "2026-06-20T00:00:01.000Z",
+          source: "live",
+        },
+      ],
+    },
   };
 }
 

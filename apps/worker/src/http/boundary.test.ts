@@ -47,9 +47,12 @@ test("worker architecture boundary when stage 5 routes are maintained, should ex
   assert.deepEqual(postRoutes.sort(), [
     "/v1/conversations",
     "/v1/conversations/:conversationId/approvals/:approvalRequestId/decision",
+    "/v1/conversations/:conversationId/archive",
     "/v1/conversations/:conversationId/follow-up",
+    "/v1/conversations/:conversationId/open",
     "/v1/conversations/:conversationId/turns/:turnId/interrupt",
     "/v1/conversations/:conversationId/turns/:turnId/steer",
+    "/v1/conversations/:conversationId/unarchive",
   ]);
 
   for (const token of forbiddenRouteTokens) {

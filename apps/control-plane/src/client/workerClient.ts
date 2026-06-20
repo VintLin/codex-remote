@@ -4,11 +4,15 @@ import type {
   CodexConversation,
   ConversationTimeline,
   ConversationTimelineTurn,
+  ConversationLifecycleInput,
+  ConversationWorkbenchEvent,
   ErrorEnvelope,
   FollowUpInput,
   InterruptTurnInput,
+  OpenConversationResult,
   PendingApproval,
   RemoteProject,
+  RenameConversationInput,
   StartConversationInput,
   SteerTurnInput,
   WorkerCapabilities,
@@ -26,6 +30,10 @@ export interface WorkerUpstreamClient {
   listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
+  openConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  archiveConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  unarchiveConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  renameConversation(device: ConfiguredWorkerDevice, conversationId: string, input: RenameConversationInput): Promise<OpenConversationResult>;
   listApprovals(device: ConfiguredWorkerDevice, conversationId: string): Promise<PendingApproval[]>;
   startConversation(device: ConfiguredWorkerDevice, input: StartConversationInput): Promise<CommandAccepted>;
   followUp(device: ConfiguredWorkerDevice, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
@@ -48,7 +56,7 @@ export function createWorkerUpstreamClient(options: {
   async function request<T>(
     device: ConfiguredWorkerDevice,
     path: string,
-    init: { body?: unknown; method: "GET" | "POST"; notFoundCode?: string; project: (value: unknown) => T },
+    init: { body?: unknown; method: "GET" | "PATCH" | "POST"; notFoundCode?: string; project: (value: unknown) => T },
   ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
@@ -113,6 +121,34 @@ export function createWorkerUpstreamClient(options: {
         method: "GET",
         notFoundCode: "conversation_not_found",
         project: projectPendingApprovals,
+      }),
+    openConversation: (device, conversationId, input) =>
+      request<OpenConversationResult>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/open`, {
+        method: "POST",
+        body: input,
+        notFoundCode: "conversation_not_found",
+        project: projectOpenConversationResult,
+      }),
+    archiveConversation: (device, conversationId, input) =>
+      request<OpenConversationResult>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/archive`, {
+        method: "POST",
+        body: input,
+        notFoundCode: "conversation_not_found",
+        project: projectOpenConversationResult,
+      }),
+    unarchiveConversation: (device, conversationId, input) =>
+      request<OpenConversationResult>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/unarchive`, {
+        method: "POST",
+        body: input,
+        notFoundCode: "conversation_not_found",
+        project: projectOpenConversationResult,
+      }),
+    renameConversation: (device, conversationId, input) =>
+      request<OpenConversationResult>(device, `/v1/conversations/${encodeURIComponent(conversationId)}`, {
+        method: "PATCH",
+        body: input,
+        notFoundCode: "conversation_not_found",
+        project: projectOpenConversationResult,
       }),
     startConversation: (device, input) => request<CommandAccepted>(device, "/v1/conversations", { method: "POST", body: input, project: projectCommandAccepted }),
     followUp: (device, conversationId, input) =>
@@ -324,7 +360,7 @@ function projectRemoteProject(value: unknown): RemoteProject {
 
 function projectConversation(value: unknown): CodexConversation {
   const body = requireRecord(value);
-  assertExactFields(body, ["id", "title", "deviceId", "projectId", "projectName", "status", "updatedAt", "summary", "sandbox", "approval", "pinned"]);
+  assertExactFields(body, ["id", "title", "deviceId", "projectId", "projectName", "status", "updatedAt", "summary", "sandbox", "approval", "archived", "loaded", "live", "pinned"]);
   return {
     id: readString(body, "id"),
     title: readString(body, "title"),
@@ -336,13 +372,16 @@ function projectConversation(value: unknown): CodexConversation {
     summary: readString(body, "summary"),
     sandbox: readString(body, "sandbox"),
     approval: readString(body, "approval"),
+    ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
+    ...(typeof body.loaded === "boolean" ? { loaded: body.loaded } : {}),
+    ...(typeof body.live === "boolean" ? { live: body.live } : {}),
     ...(typeof body.pinned === "boolean" ? { pinned: body.pinned } : {}),
   };
 }
 
 function projectConversationTimeline(value: unknown): ConversationTimeline {
   const body = requireRecord(value);
-  assertExactFields(body, ["deviceId", "conversationId", "projectId", "readStartedAt", "readCompletedAt", "snapshotRevision", "runtimeStatus", "latestTurnStatus", "turns"]);
+  assertExactFields(body, ["deviceId", "conversationId", "projectId", "readStartedAt", "readCompletedAt", "snapshotRevision", "runtimeStatus", "latestTurnStatus", "loaded", "live", "archived", "turns", "events"]);
   return {
     deviceId: readString(body, "deviceId"),
     conversationId: readString(body, "conversationId"),
@@ -352,7 +391,54 @@ function projectConversationTimeline(value: unknown): ConversationTimeline {
     snapshotRevision: readString(body, "snapshotRevision"),
     runtimeStatus: readEnum(body, "runtimeStatus", ["not_loaded", "idle", "running", "waiting_approval", "waiting_input", "unknown"]),
     latestTurnStatus: readEnum(body, "latestTurnStatus", ["completed", "interrupted", "failed", "unknown"]),
+    ...(typeof body.loaded === "boolean" ? { loaded: body.loaded } : {}),
+    ...(typeof body.live === "boolean" ? { live: body.live } : {}),
+    ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
     turns: requireArray(body.turns).map(projectTimelineTurn),
+    ...(Array.isArray(body.events) ? { events: body.events.map(projectWorkbenchEvent) } : {}),
+  };
+}
+
+function projectOpenConversationResult(value: unknown): OpenConversationResult {
+  const body = requireRecord(value);
+  assertExactFields(body, ["conversation", "timeline"]);
+  return {
+    conversation: projectConversation(body.conversation),
+    timeline: projectConversationTimeline(body.timeline),
+  };
+}
+
+function projectWorkbenchEvent(value: unknown): ConversationWorkbenchEvent {
+  const body = requireRecord(value);
+  assertExactFields(body, ["eventId", "seq", "deviceId", "conversationId", "kind", "createdAt", "source", "gap", "approvalCard"]);
+  return {
+    eventId: readString(body, "eventId"),
+    seq: readNumber(body, "seq"),
+    deviceId: readString(body, "deviceId"),
+    conversationId: readString(body, "conversationId"),
+    kind: readEnum(body, "kind", ["thread_opened", "thread_archived", "thread_unarchived", "thread_renamed", "approval_pending", "approval_resolved", "snapshot_reset", "turn_state"]),
+    createdAt: readString(body, "createdAt"),
+    source: readEnum(body, "source", ["snapshot", "live"]),
+    ...(typeof body.gap === "boolean" ? { gap: body.gap } : {}),
+    ...(isRecord(body.approvalCard) ? { approvalCard: projectApprovalCard(body.approvalCard) } : {}),
+  };
+}
+
+function projectApprovalCard(value: unknown): NonNullable<ConversationWorkbenchEvent["approvalCard"]> {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "conversationId", "turnId", "itemId", "kind", "status", "title", "summary", "risk", "createdAt", "resolvedAt"]);
+  return {
+    id: readString(body, "id"),
+    conversationId: readString(body, "conversationId"),
+    turnId: readString(body, "turnId"),
+    itemId: readString(body, "itemId"),
+    kind: readEnum(body, "kind", ["command_execution", "file_change", "legacy_exec", "legacy_apply_patch"]),
+    status: readEnum(body, "status", ["pending", "resolved"]),
+    title: readString(body, "title"),
+    summary: readString(body, "summary"),
+    risk: readEnum(body, "risk", ["low", "medium", "high", "unknown"]),
+    createdAt: readString(body, "createdAt"),
+    ...(typeof body.resolvedAt === "string" ? { resolvedAt: body.resolvedAt } : {}),
   };
 }
 

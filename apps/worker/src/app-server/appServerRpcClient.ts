@@ -56,9 +56,14 @@ interface StdioSocketLikeOptions {
 type WorkerAppServerMethod =
   | "initialize"
   | "model/list"
+  | "thread/archive"
+  | "thread/loaded/list"
   | "thread/list"
+  | "thread/name/set"
   | "thread/read"
+  | "thread/resume"
   | "thread/start"
+  | "thread/unarchive"
   | "turn/start"
   | "turn/interrupt"
   | "turn/steer";

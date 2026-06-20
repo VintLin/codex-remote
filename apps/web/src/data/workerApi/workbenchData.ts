@@ -1,5 +1,7 @@
 import type {
   ConversationTimeline,
+  ConversationApprovalCard,
+  ConversationWorkbenchEvent,
   ConversationTimelineTurn,
   BoardTask,
   Device,
@@ -48,6 +50,7 @@ export interface WorkbenchData {
   devices: Device[];
   projects: RemoteProject[];
   conversations: CodexConversation[];
+  approvalCards: ConversationApprovalCard[];
   tasks: BoardTask[];
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
@@ -75,6 +78,7 @@ export function createFallbackWorkbenchData(
     devices: [...mockDevices],
     projects: [...mockProjects],
     conversations,
+    approvalCards: [],
     tasks: [...mockTasks],
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
@@ -193,6 +197,34 @@ function createAssistantThreadsFromConversations(
   });
 }
 
+function projectApprovalCards(timeline: ConversationTimeline | null): ConversationApprovalCard[] {
+  if (!timeline?.events?.length) {
+    return [];
+  }
+
+  const eventsById = new Map<string, ConversationWorkbenchEvent>();
+  for (const event of timeline.events) {
+    if (!eventsById.has(event.eventId)) {
+      eventsById.set(event.eventId, event);
+    }
+  }
+
+  const cardsById = new Map<string, { card: ConversationApprovalCard; seq: number }>();
+  for (const event of [...eventsById.values()].sort((left, right) => left.seq - right.seq)) {
+    if (!event.approvalCard) {
+      continue;
+    }
+    const existing = cardsById.get(event.approvalCard.id);
+    if (!existing || event.seq > existing.seq || (event.seq === existing.seq && event.approvalCard.status === "resolved")) {
+      cardsById.set(event.approvalCard.id, { card: event.approvalCard, seq: event.seq });
+    }
+  }
+
+  return [...cardsById.values()]
+    .sort((left, right) => left.seq - right.seq)
+    .map((entry) => entry.card);
+}
+
 function mapSourceReasonFromError(error: unknown): LoadReason {
   if (error instanceof WorkerApiRequestError) {
     if (error.status === 401 || error.envelope.code === "unauthorized") {
@@ -309,6 +341,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       timeline ?? undefined,
       timelineError && timelineConversationKey ? timelineConversationKey : null,
     );
+    const approvalCards = projectApprovalCards(timeline);
 
     if (timelineError) {
       return {
@@ -317,6 +350,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         devices,
         projects,
         conversations,
+        approvalCards: [],
         tasks,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
@@ -330,6 +364,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         devices,
         projects,
         conversations,
+        approvalCards,
         tasks: [],
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
@@ -342,6 +377,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       devices,
       projects,
       conversations,
+      approvalCards,
       tasks,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),

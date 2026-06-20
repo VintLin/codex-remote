@@ -17,6 +17,7 @@ import {
   type ThreadListProbeEvidence,
 } from "../probe/readOnlyProbe.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
+import type { WorkerApprovalRegistry } from "./approvalRegistry.ts";
 import { mapUnknownError, WorkerHttpError } from "./errors.ts";
 import {
   projectThreadToConversation,
@@ -31,11 +32,13 @@ export interface WorkerReadOnlyAppServerClient {
   initialized(): Promise<void>;
   getCodexVersion?(): string | null;
   listThreads(params: ThreadListParams): Promise<v2.ThreadListResponse>;
+  listLoadedThreads?(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse>;
   readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse>;
   close(): void;
 }
 
 export interface WorkerReadOnlyHandlerContext {
+  approvalRegistry?: WorkerApprovalRegistry;
   config: WorkerHttpConfig;
   openClient(): Promise<WorkerReadOnlyAppServerClient>;
   now(): string;
@@ -44,10 +47,15 @@ export interface WorkerReadOnlyHandlerContext {
 type ThreadListParams = {
   cwd: string;
   sourceKinds: readonly ["cli", "vscode", "appServer"];
-  archived: false;
+  archived: boolean;
   limit: number;
   sortDirection: "desc";
   cursor: string | null;
+};
+
+type ListedThread = {
+  thread: v2.Thread;
+  archived: boolean;
 };
 
 const sourceKinds = ["cli", "vscode", "appServer"] as const;
@@ -127,7 +135,16 @@ export async function runProbe(context: WorkerReadOnlyHandlerContext): Promise<W
 export async function listConversations(context: WorkerReadOnlyHandlerContext): Promise<CodexConversation[]> {
   return await withClient(context, "thread/list", async (client) => {
     const threads = await listAllowedThreads(client, context.config.allowedProjectRoot);
-    return threads.map((thread) => projectThreadToConversation(thread, createProjectionContext(context)));
+    const loadedThreadIds = await listLoadedThreadIds(client);
+    return threads.map((listedThread) =>
+      projectThreadToConversation(
+        listedThread.thread,
+        createProjectionContext(context, {
+          archived: listedThread.archived,
+          loadedThreadIds,
+        }),
+      ),
+    );
   });
 }
 
@@ -162,6 +179,12 @@ export async function readConversationTimeline(
     return projectThreadToTimeline(thread, {
       allowedProjectRoot: context.config.allowedProjectRoot,
       deviceId: context.config.deviceId,
+      archived: false,
+      loadedThreadIds: await listLoadedThreadIds(client),
+      approvals: [
+        ...(context.approvalRegistry?.listPendingApprovals(conversationId) ?? []),
+        ...(context.approvalRegistry?.listResolvedApprovals(conversationId) ?? []),
+      ],
       readStartedAt,
       readCompletedAt: context.now(),
     });
@@ -218,15 +241,28 @@ async function withClient<T>(
 async function listAllowedThreads(
   client: WorkerReadOnlyAppServerClient,
   allowedProjectRoot: string,
-): Promise<v2.Thread[]> {
-  const allowedThreads: v2.Thread[] = [];
+): Promise<ListedThread[]> {
+  const allowedThreads: ListedThread[] = [];
+  for (const archived of [false, true]) {
+    allowedThreads.push(...await listAllowedThreadsByArchiveState(client, allowedProjectRoot, archived));
+  }
+
+  return allowedThreads;
+}
+
+async function listAllowedThreadsByArchiveState(
+  client: WorkerReadOnlyAppServerClient,
+  allowedProjectRoot: string,
+  archived: boolean,
+): Promise<ListedThread[]> {
+  const allowedThreads: ListedThread[] = [];
   let cursor: string | null = null;
 
   for (let page = 0; page < maxPages; page += 1) {
-    const response = await client.listThreads(createThreadListParams(allowedProjectRoot, cursor));
+    const response = await client.listThreads(createThreadListParams(allowedProjectRoot, cursor, archived));
     for (const thread of response.data) {
       if (await isPathInsideRootRealpath(thread.cwd, allowedProjectRoot)) {
-        allowedThreads.push(thread);
+        allowedThreads.push({ thread, archived });
       }
     }
 
@@ -237,6 +273,33 @@ async function listAllowedThreads(
   }
 
   return allowedThreads;
+}
+
+async function listLoadedThreadIds(client: WorkerReadOnlyAppServerClient): Promise<ReadonlySet<string>> {
+  if (!client.listLoadedThreads) {
+    return new Set();
+  }
+
+  const loadedThreadIds = new Set<string>();
+  let cursor: string | null = null;
+
+  try {
+    for (let page = 0; page < maxPages; page += 1) {
+      const response = await client.listLoadedThreads({ cursor, limit: 100 });
+      for (const threadId of response.data) {
+        loadedThreadIds.add(threadId);
+      }
+
+      cursor = response.nextCursor;
+      if (!cursor) {
+        break;
+      }
+    }
+  } catch {
+    return new Set();
+  }
+
+  return loadedThreadIds;
 }
 
 async function collectThreadListProbeEvidence(
@@ -251,7 +314,7 @@ async function collectThreadListProbeEvidence(
   let completedUntilNextCursorNull = false;
 
   for (let page = 0; page < maxPages; page += 1) {
-    const response = await client.listThreads(createThreadListParams(allowedProjectRoot, cursor));
+    const response = await client.listThreads(createThreadListParams(allowedProjectRoot, cursor, false));
     pageCount += 1;
     count += response.data.length;
 
@@ -303,11 +366,11 @@ function isConnectionFailure(message: string): boolean {
   ].includes(message);
 }
 
-function createThreadListParams(cwd: string, cursor: string | null): ThreadListParams {
+function createThreadListParams(cwd: string, cursor: string | null, archived = false): ThreadListParams {
   return {
     cwd,
     sourceKinds,
-    archived: false,
+    archived,
     limit: listLimit,
     sortDirection: "desc",
     cursor,
@@ -321,10 +384,14 @@ function conversationNotFound(operation: string): WorkerHttpError {
   });
 }
 
-function createProjectionContext(context: WorkerReadOnlyHandlerContext): ConversationProjectionContext {
+function createProjectionContext(
+  context: WorkerReadOnlyHandlerContext,
+  overrides: Pick<ConversationProjectionContext, "archived" | "loadedThreadIds"> = {},
+): ConversationProjectionContext {
   return {
     allowedProjectRoot: context.config.allowedProjectRoot,
     deviceId: context.config.deviceId,
     projectName: basename(context.config.allowedProjectRoot),
+    ...overrides,
   };
 }

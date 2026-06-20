@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
 import type {
   ApprovalDecisionInput,
+  ConversationLifecycleInput,
   FollowUpInput,
   InterruptTurnInput,
+  RenameConversationInput,
   StartConversationInput,
   SteerTurnInput,
 } from "@codex-remote/api-contract";
@@ -25,9 +27,13 @@ import {
 } from "./writeHandlers.ts";
 import {
   decideApproval,
+  archiveConversation,
   interruptTurn,
   listApprovals,
+  openConversation,
+  renameConversation,
   steerTurn,
+  unarchiveConversation,
   type WorkerControlHandlerContext,
 } from "./controlHandlers.ts";
 
@@ -39,7 +45,7 @@ type WorkerHonoEnv = {
 
 type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 409 | 424 | 500;
 const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
-const corsAllowMethods = "GET, POST, OPTIONS";
+const corsAllowMethods = "GET, POST, PATCH, OPTIONS";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 
@@ -82,6 +88,18 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
   app.get("/v1/projects", (c) => c.json(listProjects(context)));
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
   app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));
+  app.patch("/v1/conversations/:conversationId", async (c) =>
+    c.json(await renameConversation(context, c.req.param("conversationId"), await readRenameInput(c))),
+  );
+  app.post("/v1/conversations/:conversationId/open", async (c) =>
+    c.json(await openConversation(context, c.req.param("conversationId"), await readLifecycleInput(c))),
+  );
+  app.post("/v1/conversations/:conversationId/archive", async (c) =>
+    c.json(await archiveConversation(context, c.req.param("conversationId"), await readLifecycleInput(c))),
+  );
+  app.post("/v1/conversations/:conversationId/unarchive", async (c) =>
+    c.json(await unarchiveConversation(context, c.req.param("conversationId"), await readLifecycleInput(c))),
+  );
   app.get("/v1/conversations/:conversationId/timeline", async (c) =>
     c.json(await readConversationTimeline(context, c.req.param("conversationId"))),
   );
@@ -135,6 +153,25 @@ async function readFollowUpInput(c: Context<WorkerHonoEnv>): Promise<FollowUpInp
     message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
     clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
     ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readLifecycleInput(c: Context<WorkerHonoEnv>): Promise<ConversationLifecycleInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["clientRequestId"]);
+
+  return {
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+  };
+}
+
+async function readRenameInput(c: Context<WorkerHonoEnv>): Promise<RenameConversationInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["title", "clientRequestId"]);
+
+  return {
+    title: getRequiredStringField(body, "title", { maxLength: 120 }),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
   };
 }
 

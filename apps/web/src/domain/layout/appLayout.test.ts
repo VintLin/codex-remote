@@ -84,7 +84,8 @@ test("when visual primitives are standardized, should reuse shared size, icon, a
 test("when the conversation header is simplified, should move collapsed sidebar controls into the main topbar and keep only title menu plus layout action", () => {
   assert.match(mainPanelsComponent, /className="topbar-leading conversation-topbar-leading"/);
   assert.match(mainPanelsComponent, /className="conversation-collapsed-sidebar-controls"/);
-  assert.match(mainPanelsComponent, /<ActionMenu ariaLabel="打开对话操作菜单" className="conversation-title-menu" group="conversation" \/>/);
+  assert.match(mainPanelsComponent, /className="conversation-title-menu"/);
+  assert.match(mainPanelsComponent, /group="conversation"/);
   assert.match(mainPanelsComponent, /aria-label="布局列表"/);
   assert.match(mainPanelsComponent, /<Icon name="layout-list" \/>/);
   assert.doesNotMatch(mainPanelsComponent, /aria-label="运行上下文"/);

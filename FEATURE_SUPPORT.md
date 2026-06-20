@@ -27,7 +27,12 @@ Status labels:
 | Approval decision | Partial | No | server request response path | Public route exists, but no safe real pending approval was available to decline/cancel. |
 | Approval auto cleanup | Partial | No | `serverRequest/resolved` | Process-local cleanup exists; no durable/product-ready approval lifecycle. |
 | Start conversation | Supported | Yes | `thread/start`, `turn/start` | Real-check records start as `real-pass`. |
+| Open/resume conversation | Supported | Yes | `thread/resume` | Stage 11 real lifecycle API evidence passed; Web opens selected conversations before refreshing the snapshot. |
+| Archive/unarchive conversation | Supported | Yes | `thread/archive`, `thread/unarchive` | Stage 11 real lifecycle API evidence passed; archived rows remain discoverable with `archived: true`. |
+| Rename conversation | Supported | Yes | `thread/name/set` | Stage 11 real lifecycle API evidence passed; public `title` remains the single display title. |
+| Loaded/live badges | Supported | Yes | `thread/loaded/list`, `thread/read` | Web displays Loaded/Live/Archived state from public contract fields. |
 | Timeline read | Supported | Yes | `thread/read` | Metadata-only projection; not full event replay. |
+| Snapshot workbench events | Partial | Partial | Worker projection | Stage 11 projects lifecycle and approval card events from snapshots/Worker registry; not a durable live replay stream. |
 | Conversation list pagination | Supported internally | Yes | `thread/list` | Worker drains app-server cursors; Web does not expose pagination controls. |
 | Conversation directory isolation | Supported | Yes | `thread/list`, `thread/read` | Worker uses cwd and realpath checks; local paths stay Worker-private. |
 | Degraded versus empty state | Supported | Yes | N/A | Control Plane behavior, not an app-server feature. |
@@ -52,22 +57,22 @@ Status labels:
 | --- | --- | --- |
 | `initialize` | Partial | Worker uses app-server session initialization internally. |
 | `thread/start` | Supported | Used for start conversation. |
-| `thread/resume` | Not supported | No public resume route. |
+| `thread/resume` | Supported | Used by Stage 11 open/resume route. |
 | `thread/fork` | Not supported | No fork UI/API. |
-| `thread/archive` | Not supported | No archive UI/API. |
+| `thread/archive` | Supported | Used by Stage 11 archive route and Web action. |
 | `thread/unsubscribe` | Partial | Worker session lifecycle uses connection management internally, not product UI. |
-| `thread/name/set` | Not supported | No rename UI/API. |
+| `thread/name/set` | Supported | Used by Stage 11 rename route and Web action. |
 | `thread/goal/set` | Not supported | No goal UI/API. |
 | `thread/goal/get` | Not supported | No goal UI/API. |
 | `thread/goal/clear` | Not supported | No goal UI/API. |
 | `thread/metadata/update` | Not supported | No metadata edit UI/API. |
-| `thread/unarchive` | Not supported | No unarchive UI/API. |
+| `thread/unarchive` | Supported | Used by Stage 11 restore route and Web action. |
 | `thread/compact/start` | Not supported | No compact UI/API. |
 | `thread/shellCommand` | Not supported | High-risk shell path; not exposed. |
 | `thread/approveGuardianDeniedAction` | Not supported | No guardian approval UI/API. |
 | `thread/rollback` | Not supported | No rollback UI/API. |
 | `thread/list` | Supported | Used for conversation list and pagination probe. |
-| `thread/loaded/list` | Not supported | Not exposed. |
+| `thread/loaded/list` | Supported internally | Worker projects loaded/live badges; raw loaded thread list is not exposed directly. |
 | `thread/read` | Supported | Used for timeline and allowlist proof. |
 | `thread/inject_items` | Not supported | Not exposed. |
 | `skills/list` | Not supported | Not exposed. |
@@ -161,8 +166,8 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 | `error` | Partial |
 | `thread/started` | Partial |
 | `thread/status/changed` | Not supported |
-| `thread/archived` | Not supported |
-| `thread/unarchived` | Not supported |
+| `thread/archived` | Partial |
+| `thread/unarchived` | Partial |
 | `thread/closed` | Partial |
 | `skills/changed` | Not supported |
 | `thread/name/updated` | Not supported |
@@ -229,8 +234,8 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 
 Codex Remote should not try to expose all app-server methods at once. Q29-Q33 research confirms that the next plan should prioritize product capability surfaces, not protocol coverage percentage:
 
-1. Stage 11 should start with Conversation Workbench Parity: open/resume, archive/unarchive, rename, loaded/live badge, snapshot-first timeline stream, request cards, and approval pending/resolved state.
-2. Stage 12 should expose local work tools read-only first: file preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
+1. Stage 11 conversation lifecycle is implemented but still requires @chrome verification before archival: open/resume, archive/unarchive, rename, loaded/live badge, snapshot-first workbench events, and approval pending/resolved cards.
+2. Stage 12 should expose local work tools read-only first after Stage 11 browser verification closes: file preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
 3. Controlled write actions come after read-only surfaces: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
 4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell.
 5. Keep approval as a major gap inside the conversation/request lifecycle, but do not let approval alone define the roadmap.

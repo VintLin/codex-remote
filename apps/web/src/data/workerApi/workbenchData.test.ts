@@ -560,6 +560,141 @@ test("workbench datasource when timeline loads should create metadata-only nodes
   assert.deepEqual(labels.includes(""), false);
 });
 
+test("workbench datasource when timeline includes duplicate approval events, should project latest approval card state per approval id", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-events",
+          icon: "laptop",
+          name: "Events worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "events",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([
+        {
+          id: "events-thread",
+          title: "Events thread",
+          deviceId: "w-events",
+          projectId: "p-events",
+          projectName: "events",
+          status: "waiting",
+          updatedAt: "刚刚",
+          summary: "",
+          sandbox: "workspace-write",
+          approval: "on-request",
+          archived: false,
+          loaded: true,
+          live: true,
+        },
+      ]),
+      "/v1/projects": jsonResponse([project("p-events", "events", "w-events")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/w-events/conversations/events-thread/timeline": jsonResponse({
+        deviceId: "w-events",
+        conversationId: "events-thread",
+        projectId: "p-events",
+        readStartedAt: "2026-06-21T00:00:00.000Z",
+        readCompletedAt: "2026-06-21T00:00:01.000Z",
+        snapshotRevision: "r-events",
+        runtimeStatus: "waiting_approval",
+        latestTurnStatus: "in_progress",
+        loaded: true,
+        live: true,
+        archived: false,
+        turns: [],
+        events: [
+          {
+            eventId: "event-late",
+            seq: 3,
+            deviceId: "w-events",
+            conversationId: "events-thread",
+            kind: "approval_resolved",
+            createdAt: "2026-06-21T00:00:03.000Z",
+            source: "live",
+            approvalCard: {
+              id: "approval-resolved",
+              conversationId: "events-thread",
+              turnId: "turn-1",
+              itemId: "item-2",
+              kind: "command_execution",
+              status: "resolved",
+              title: "Resolved approval",
+              summary: "resolved safely",
+              risk: "low",
+              createdAt: "2026-06-21T00:00:02.000Z",
+              resolvedAt: "2026-06-21T00:00:03.000Z",
+            },
+          },
+          {
+            eventId: "event-pending",
+            seq: 2,
+            deviceId: "w-events",
+            conversationId: "events-thread",
+            kind: "approval_pending",
+            createdAt: "2026-06-21T00:00:02.000Z",
+            source: "snapshot",
+            approvalCard: {
+              id: "approval-resolved",
+              conversationId: "events-thread",
+              turnId: "turn-1",
+              itemId: "item-2",
+              kind: "command_execution",
+              status: "pending",
+              title: "Stale pending approval",
+              summary: "pending safely",
+              risk: "medium",
+              createdAt: "2026-06-21T00:00:02.000Z",
+            },
+          },
+          {
+            eventId: "event-pending",
+            seq: 2,
+            deviceId: "w-events",
+            conversationId: "events-thread",
+            kind: "approval_pending",
+            createdAt: "2026-06-21T00:00:02.000Z",
+            source: "live",
+            approvalCard: {
+              id: "approval-pending",
+              conversationId: "events-thread",
+              turnId: "turn-1",
+              itemId: "item-1",
+              kind: "command_execution",
+              status: "pending",
+              title: "Pending approval duplicate",
+              summary: "duplicate should not show",
+              risk: "medium",
+              createdAt: "2026-06-21T00:00:02.000Z",
+            },
+          },
+          {
+            eventId: "event-reset",
+            seq: 1,
+            deviceId: "w-events",
+            conversationId: "events-thread",
+            kind: "snapshot_reset",
+            createdAt: "2026-06-21T00:00:01.000Z",
+            source: "snapshot",
+            gap: true,
+          },
+        ],
+      }),
+    }),
+  });
+
+  assert.deepEqual(data.approvalCards.map((card) => `${card.status}:${card.id}`), [
+    "resolved:approval-resolved",
+  ]);
+  assert.equal(data.approvalCards[0]?.summary, "resolved safely");
+});
+
 test("workbench datasource when fallback is returned should not reuse rich mock assistant threads", async () => {
 
   const data = await loadWorkbenchData({

@@ -228,6 +228,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/conversations/{conversationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["renameControlPlaneDeviceConversation"];
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["openControlPlaneDeviceConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archiveControlPlaneDeviceConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unarchiveControlPlaneDeviceConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{deviceId}/conversations/{conversationId}/timeline": {
         parameters: {
             query?: never;
@@ -350,6 +414,70 @@ export interface paths {
         get: operations["getConversationTimeline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["renameWorkerConversation"];
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["openWorkerConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["archiveWorkerConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversationId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unarchiveWorkerConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -557,7 +685,11 @@ export interface components {
             snapshotRevision: string;
             runtimeStatus: components["schemas"]["ConversationRuntimeStatus"];
             latestTurnStatus: components["schemas"]["LatestTurnStatus"];
+            loaded?: boolean;
+            live?: boolean;
+            archived?: boolean;
             turns: components["schemas"]["ConversationTimelineTurn"][];
+            events?: components["schemas"]["ConversationWorkbenchEvent"][];
         };
         ConversationTimelinePage: {
             deviceId: string;
@@ -578,6 +710,38 @@ export interface components {
             conversationId: string;
             projectId?: string;
             turnId?: string;
+        };
+        ConversationApprovalCard: {
+            id: string;
+            conversationId: string;
+            turnId: string;
+            itemId: string;
+            /** @enum {string} */
+            kind: "command_execution" | "file_change" | "legacy_exec" | "legacy_apply_patch";
+            /** @enum {string} */
+            status: "pending" | "resolved";
+            title: string;
+            summary: string;
+            /** @enum {string} */
+            risk: "low" | "medium" | "high" | "unknown";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            resolvedAt?: string;
+        };
+        ConversationWorkbenchEvent: {
+            eventId: string;
+            seq: number;
+            deviceId: string;
+            conversationId: string;
+            /** @enum {string} */
+            kind: "thread_opened" | "thread_archived" | "thread_unarchived" | "thread_renamed" | "approval_pending" | "approval_resolved" | "snapshot_reset" | "turn_state";
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            source: "snapshot" | "live";
+            gap?: boolean;
+            approvalCard?: components["schemas"]["ConversationApprovalCard"];
         };
         ProbeCheckResult: {
             name: string;
@@ -640,6 +804,9 @@ export interface components {
             summary: string;
             sandbox: string;
             approval: string;
+            archived?: boolean;
+            loaded?: boolean;
+            live?: boolean;
             pinned?: boolean;
         };
         BoardTask: {
@@ -717,6 +884,17 @@ export interface components {
             expectedConversationId: string;
             expectedTurnId: string;
             expectedApprovalRequestId: string;
+        };
+        ConversationLifecycleInput: {
+            clientRequestId: string;
+        };
+        RenameConversationInput: {
+            title: string;
+            clientRequestId: string;
+        };
+        OpenConversationResult: {
+            conversation: components["schemas"]["CodexConversation"];
+            timeline: components["schemas"]["ConversationTimeline"];
         };
         CommandAccepted: {
             id: string;
@@ -1218,6 +1396,146 @@ export interface operations {
             500: components["responses"]["InternalWorkerError"];
         };
     };
+    renameControlPlaneDeviceConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameConversationInput"];
+            };
+        };
+        responses: {
+            /** @description Device-scoped conversation renamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    openControlPlaneDeviceConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Device-scoped conversation opened. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    archiveControlPlaneDeviceConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Device-scoped conversation archived. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    unarchiveControlPlaneDeviceConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Device-scoped conversation unarchived. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
     getControlPlaneDeviceConversationTimeline: {
         parameters: {
             query?: never;
@@ -1503,6 +1821,142 @@ export interface operations {
             403: components["responses"]["ForbiddenError"];
             404: components["responses"]["ConversationNotFoundError"];
             408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    renameWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameConversationInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation renamed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    openWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation opened. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    archiveWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation archived. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["AppServerUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    unarchiveWorkerConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationLifecycleInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation unarchived. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenConversationResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
             424: components["responses"]["AppServerUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };

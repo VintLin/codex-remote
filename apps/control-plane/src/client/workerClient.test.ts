@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { OpenConversationResult } from "@codex-remote/api-contract";
+
 import { createWorkerUpstreamClient } from "./workerClient.ts";
 
 const device = {
@@ -155,4 +157,64 @@ test("worker upstream client when request times out, should map to request timeo
     assert.equal((error as { code?: string }).code, "app_server_timeout");
     return true;
   });
+});
+
+test("worker upstream client lifecycle methods when called, should use device worker lifecycle routes", async () => {
+  const result: OpenConversationResult = {
+    conversation: {
+      id: "thread-1",
+      title: "Thread one",
+      deviceId: "upstream-device",
+      projectId: "project-1",
+      projectName: "Project",
+      status: "running",
+      updatedAt: "2026-06-21T00:00:00.000Z",
+      summary: "",
+      sandbox: "workspace-write",
+      approval: "never",
+      archived: false,
+      loaded: true,
+      live: true,
+    },
+    timeline: {
+      deviceId: "upstream-device",
+      conversationId: "thread-1",
+      projectId: "project-1",
+      readStartedAt: "2026-06-21T00:00:00.000Z",
+      readCompletedAt: "2026-06-21T00:00:01.000Z",
+      snapshotRevision: "r1",
+      runtimeStatus: "running",
+      latestTurnStatus: "unknown",
+      archived: false,
+      loaded: true,
+      live: true,
+      turns: [],
+      events: [],
+    },
+  };
+  const requests: Array<{ body: string | null; method: string | undefined; url: string }> = [];
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async (request, init) => {
+      requests.push({
+        body: typeof init?.body === "string" ? init.body : null,
+        method: init?.method,
+        url: String(request),
+      });
+      return Response.json(result);
+    },
+  });
+
+  await client.openConversation(device, "thread-1", { clientRequestId: "open-1" });
+  await client.archiveConversation(device, "thread-1", { clientRequestId: "archive-1" });
+  await client.unarchiveConversation(device, "thread-1", { clientRequestId: "restore-1" });
+  await client.renameConversation(device, "thread-1", { title: "Renamed", clientRequestId: "rename-1" });
+
+  assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), [
+    "POST http://127.0.0.1:8788/v1/conversations/thread-1/open",
+    "POST http://127.0.0.1:8788/v1/conversations/thread-1/archive",
+    "POST http://127.0.0.1:8788/v1/conversations/thread-1/unarchive",
+    "PATCH http://127.0.0.1:8788/v1/conversations/thread-1",
+  ]);
+  assert.equal(requests[3]?.body, JSON.stringify({ title: "Renamed", clientRequestId: "rename-1" }));
 });

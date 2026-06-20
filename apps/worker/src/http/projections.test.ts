@@ -18,10 +18,10 @@ const defaultContext = {
 } as const;
 
 test("worker http projections when projecting conversations, should use safe title fallbacks and ISO updatedAt", async (t) => {
-  await t.test("when thread name and preview are present, should use project fallback and hide preview", () => {
+  await t.test("when thread name and preview are present, should use trimmed name and hide preview", () => {
     const conversation = projectThreadToConversation(
       createThread({
-        name: "Named conversation",
+        name: "  Named conversation  ",
         preview: "preview should not win",
         updatedAt: 1_718_791_234,
       }),
@@ -30,7 +30,7 @@ test("worker http projections when projecting conversations, should use safe tit
 
     assert.deepEqual(conversation, {
       id: "thread-123",
-      title: "050_codex_remote",
+      title: "Named conversation",
       deviceId: "device-local",
       projectName: "050_codex_remote",
       status: "running",
@@ -38,10 +38,13 @@ test("worker http projections when projecting conversations, should use safe tit
       summary: "",
       sandbox: "unknown",
       approval: "unknown",
+      archived: false,
+      loaded: false,
+      live: false,
     });
   });
 
-  await t.test("when thread name is empty, should fall back to project basename, then untitled", () => {
+  await t.test("when thread name is empty, should fall back to project basename, then untitled without using preview", () => {
     const previewConversation = projectThreadToConversation(
       createThread({
         name: "",
@@ -90,16 +93,16 @@ test("worker http projections when projecting conversations, should use safe tit
     assert.equal(conversation.projectName, "Display Name That Must Not Be Used For Title");
   });
 
-  await t.test("when app-server name and preview contain prompt text, should not expose them publicly", () => {
+  await t.test("when app-server preview contains prompt text, should not expose it publicly", () => {
     const conversation = projectThreadToConversation(
       createThread({
-        name: "codex-remote-calibration start: reply with one short sentence.",
+        name: "Safe thread name",
         preview: "codex-remote-calibration start: reply with one short sentence.",
       }),
       defaultContext,
     );
 
-    assert.equal(conversation.title, "050_codex_remote");
+    assert.equal(conversation.title, "Safe thread name");
     assert.equal(conversation.summary, "");
   });
 });
@@ -163,6 +166,9 @@ test("worker http projections when projecting timeline, should keep metadata onl
     snapshotRevision: "thread-123:2026-06-19T10:00:02.000Z",
     runtimeStatus: "waiting_approval",
     latestTurnStatus: "unknown",
+    loaded: false,
+    live: false,
+    archived: false,
     turns: [
       {
         id: "turn-completed",
@@ -179,6 +185,7 @@ test("worker http projections when projecting timeline, should keep metadata onl
         durationMs: null,
       },
     ],
+    events: [],
   });
 
   const serialized = JSON.stringify(timeline);
@@ -190,6 +197,110 @@ test("worker http projections when projecting timeline, should keep metadata onl
   assert.doesNotMatch(serialized, /LEAK_TOOL_ARGS/);
   assert.doesNotMatch(serialized, /LEAK_RAW_ITEM_PAYLOAD/);
   assert.doesNotMatch(serialized, /\/outside\/root\/LEAK_PATH/);
+});
+
+test("worker http projections when projecting timeline events, should include lifecycle flags and sanitized approval cards", () => {
+  const timeline = projectThreadToTimeline(
+    createThread({
+      status: { type: "active", activeFlags: ["waitingOnApproval"] },
+    }),
+    {
+      ...defaultContext,
+      archived: true,
+      loadedThreadIds: new Set(["thread-123"]),
+      approvals: [
+        {
+          id: "approval-1",
+          conversationId: "thread-123",
+          turnId: "turn-123",
+          itemId: "item-1",
+          kind: "command_execution",
+          status: "pending",
+          startedAt: "2026-06-19T09:59:59.000Z",
+          summary: "Command execution approval",
+          risk: "medium",
+        },
+      ],
+    },
+  );
+
+  assert.equal(timeline.archived, true);
+  assert.equal(timeline.loaded, true);
+  assert.equal(timeline.live, true);
+  assert.deepEqual(timeline.events, [
+    {
+      eventId: "thread-123:1:approval-1:pending",
+      seq: 1,
+      deviceId: "device-local",
+      conversationId: "thread-123",
+      kind: "approval_pending",
+      createdAt: "2026-06-19T09:59:59.000Z",
+      source: "snapshot",
+      approvalCard: {
+        id: "approval-1",
+        conversationId: "thread-123",
+        turnId: "turn-123",
+        itemId: "item-1",
+        kind: "command_execution",
+        status: "pending",
+        title: "Command execution approval",
+        summary: "Command execution approval",
+        risk: "medium",
+        createdAt: "2026-06-19T09:59:59.000Z",
+      },
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(timeline), /SECRET_TOKEN|\/Users\/vint\/private|jsonrpc|LEAK_PROMPT/);
+});
+
+test("worker http projections when projecting resolved approvals, should emit resolved events and cards", () => {
+  const timeline = projectThreadToTimeline(
+    createThread({
+      status: { type: "idle" },
+    }),
+    {
+      ...defaultContext,
+      approvals: [
+        {
+          id: "approval-1",
+          conversationId: "thread-123",
+          turnId: "turn-123",
+          itemId: "item-1",
+          kind: "command_execution",
+          status: "resolved",
+          startedAt: "2026-06-19T09:59:59.000Z",
+          resolvedAt: "2026-06-19T10:00:03.000Z",
+          summary: "Command execution approval",
+          risk: "medium",
+        },
+      ],
+    },
+  );
+
+  assert.deepEqual(timeline.events, [
+    {
+      eventId: "thread-123:1:approval-1:resolved",
+      seq: 1,
+      deviceId: "device-local",
+      conversationId: "thread-123",
+      kind: "approval_resolved",
+      createdAt: "2026-06-19T10:00:03.000Z",
+      source: "snapshot",
+      approvalCard: {
+        id: "approval-1",
+        conversationId: "thread-123",
+        turnId: "turn-123",
+        itemId: "item-1",
+        kind: "command_execution",
+        status: "resolved",
+        title: "Command execution approval",
+        summary: "Command execution approval",
+        risk: "medium",
+        createdAt: "2026-06-19T09:59:59.000Z",
+        resolvedAt: "2026-06-19T10:00:03.000Z",
+      },
+    },
+  ]);
 });
 
 test("worker http projections when statuses are unknown, should map thread and turn states to unknown", () => {

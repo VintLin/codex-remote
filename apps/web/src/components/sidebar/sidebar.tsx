@@ -26,6 +26,9 @@ interface SidebarProps {
   model: SidebarModel;
   onCollapseSidebar: () => void;
   onOpenSearch: () => void;
+  onArchiveConversation: (conversationKey: string) => void;
+  onRenameConversation: (conversationKey: string) => void;
+  onRestoreConversation: (conversationKey: string) => void;
   onSelectAdjacentConversation: (conversationKey: string) => void;
   onSelectView: (view: AppView) => void;
   onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
@@ -39,6 +42,12 @@ interface SidebarProps {
 
 interface SidebarListItemProps {
   actionGroup?: SidebarActionGroup;
+  actionMenuProps?: {
+    archived?: boolean;
+    onArchive?: () => void;
+    onRename?: () => void;
+    onRestore?: () => void;
+  };
   contentAttributes?: Record<string, string>;
   expanded?: boolean;
   inline?: React.ReactNode;
@@ -163,9 +172,12 @@ export function Sidebar(props: SidebarProps) {
       >
         <DeviceWorkspaceNav
           model={props.model}
+          onArchiveConversation={props.onArchiveConversation}
+          onRenameConversation={props.onRenameConversation}
           onSelectConversation={props.onSelectConversation}
           onToggleSection={props.onToggleSection}
           onToggleProject={props.onToggleProject}
+          onRestoreConversation={props.onRestoreConversation}
           pressedItem={props.pressedItem}
           sectionState={props.sectionState}
           selectedConversationKey={props.selectedConversationKey}
@@ -198,6 +210,9 @@ function NavButton(props: { active?: boolean; icon: IconName; label: string; onC
 
 function DeviceWorkspaceNav(props: {
   model: SidebarModel;
+  onArchiveConversation: (conversationKey: string) => void;
+  onRenameConversation: (conversationKey: string) => void;
+  onRestoreConversation: (conversationKey: string) => void;
   onSelectConversation: (conversationKey: string) => void;
   onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   onToggleSection: (sectionId: SidebarSectionId) => void;
@@ -248,6 +263,9 @@ function DeviceWorkspaceNav(props: {
               <ConversationRow
                 key={createConversationKey(conversation)}
                 conversation={conversation}
+                onArchiveConversation={props.onArchiveConversation}
+                onRenameConversation={props.onRenameConversation}
+                onRestoreConversation={props.onRestoreConversation}
                 onSelectConversation={props.onSelectConversation}
                 pressedItem={props.pressedItem}
                 selectedConversationKey={props.selectedConversationKey}
@@ -288,6 +306,9 @@ function SectionHeading(props: {
 }
 
 function ProjectGroup(props: {
+  onArchiveConversation: (conversationKey: string) => void;
+  onRenameConversation: (conversationKey: string) => void;
+  onRestoreConversation: (conversationKey: string) => void;
   onSelectConversation: (conversationKey: string) => void;
   onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   pressedItem: SidebarPressedItem;
@@ -309,6 +330,9 @@ function ProjectGroup(props: {
                   key={createConversationKey(conversation)}
                   conversation={conversation}
                   nested
+                  onArchiveConversation={props.onArchiveConversation}
+                  onRenameConversation={props.onRenameConversation}
+                  onRestoreConversation={props.onRestoreConversation}
                   onSelectConversation={props.onSelectConversation}
                   pressedItem={props.pressedItem}
                   selectedConversationKey={props.selectedConversationKey}
@@ -371,6 +395,9 @@ function ProjectRow(props: {
 function ConversationRow(props: {
   conversation: CodexConversation;
   nested?: boolean;
+  onArchiveConversation: (conversationKey: string) => void;
+  onRenameConversation: (conversationKey: string) => void;
+  onRestoreConversation: (conversationKey: string) => void;
   onSelectConversation: (conversationKey: string) => void;
   pressedItem: SidebarPressedItem;
   selectedConversationKey: string;
@@ -379,7 +406,14 @@ function ConversationRow(props: {
   return (
     <SidebarListItem
       actionGroup="conversation"
+      actionMenuProps={{
+        archived: props.conversation.archived === true,
+        onArchive: () => props.onArchiveConversation(conversationKey),
+        onRename: () => props.onRenameConversation(conversationKey),
+        onRestore: () => props.onRestoreConversation(conversationKey),
+      }}
       contentAttributes={{ "data-conversation-key": conversationKey }}
+      inline={<ConversationBadges conversation={props.conversation} />}
       kind="conversation"
       nested={props.nested ?? false}
       onClick={() => props.onSelectConversation(conversationKey)}
@@ -388,6 +422,16 @@ function ConversationRow(props: {
       title={props.conversation.title}
       trailing={props.conversation.updatedAt}
     />
+  );
+}
+
+function ConversationBadges(props: { conversation: CodexConversation }) {
+  return (
+    <span className="conversation-row-badges">
+      {props.conversation.loaded ? <span className="conversation-state-badge">Loaded</span> : null}
+      {props.conversation.live ? <span className="conversation-state-badge">Live</span> : null}
+      {props.conversation.archived ? <span className="conversation-state-badge">Archived</span> : null}
+    </span>
   );
 }
 
@@ -432,7 +476,7 @@ function SidebarListItem(props: SidebarListItemProps) {
         </span>
       )}
       <span className="sidebar-list-meta">{props.trailing ?? ""}</span>
-      <span className="sidebar-list-actions">{props.actionGroup ? <ActionMenu group={props.actionGroup} /> : null}</span>
+      <span className="sidebar-list-actions">{props.actionGroup ? <ActionMenu group={props.actionGroup} {...props.actionMenuProps} /> : null}</span>
     </div>
   );
 }

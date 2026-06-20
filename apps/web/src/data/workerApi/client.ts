@@ -8,10 +8,13 @@ import type {
   ErrorEnvelope,
   FollowUpInput,
   ApprovalDecisionInput,
+  ConversationLifecycleInput,
   InterruptTurnInput,
   LinkTaskConversationInput,
+  OpenConversationResult,
   PendingApproval,
   RemoteProject,
+  RenameConversationInput,
   StartConversationInput,
   SteerTurnInput,
   TaskConversationLink,
@@ -36,6 +39,10 @@ export interface WorkerApiClientLike {
   linkTaskConversation(taskId: string, input: LinkTaskConversationInput): Promise<TaskConversationLink>;
   unlinkTaskConversation(taskId: string, deviceId: string, conversationId: string): Promise<void>;
   getTimeline(deviceId: string, conversationId: string): Promise<ConversationTimeline>;
+  openConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  archiveConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  unarchiveConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
+  renameConversation(deviceId: string, conversationId: string, input: RenameConversationInput): Promise<OpenConversationResult>;
   startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted>;
   followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
   interruptTurn(deviceId: string, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
@@ -154,6 +161,46 @@ export class WorkerApiClient implements WorkerApiClientLike {
       method: "POST",
     });
     return response;
+  }
+
+  public async openConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    return this.request<OpenConversationResult>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/open`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
+  }
+
+  public async archiveConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    return this.request<OpenConversationResult>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/archive`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
+  }
+
+  public async unarchiveConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult> {
+    return this.request<OpenConversationResult>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/unarchive`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
+  }
+
+  public async renameConversation(deviceId: string, conversationId: string, input: RenameConversationInput): Promise<OpenConversationResult> {
+    return this.request<OpenConversationResult>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}`,
+      {
+        body: input,
+        method: "PATCH",
+      },
+    );
   }
 
   public async followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted> {
