@@ -77,10 +77,11 @@ Stage 9 当前证据：
 
 - Fake smoke evidence：Stage 3-8 的 fake Worker smoke 覆盖过 Web/Control Plane/Worker-shaped flows，但它只能证明 contract/UI/fallback 行为；Task 5/6 已实现 real calibration runner 和 smoke gate 后，fake Worker smoke 不再能作为 real readiness。
 - Real app-server evidence：Worker-owned `stdio` app-server lifecycle 已实现为当前默认路径；`pnpm real:start` 可启动 Worker、Control Plane 和 Web，`pnpm real:status` 看到三项 running。
-- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=9 fixedPass=0 realGap=10`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
+- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=12 fixedPass=0 realGap=7`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
 - Web real entrypoint evidence：`pnpm web:e2e:smoke` 在真实栈上通过，覆盖 Web -> Control Plane -> Worker 的加载、start、任务创建/关联和无外部 runtime asset 请求检查。
 - Fixed in current slice：Control Plane task conversation links now reject arbitrary invalid ids before persisting; `task link` and `task link invalid ids` both record `real-pass`.
-- Remaining real gaps：start conversation accepted 后 timeline/follow-up/approval/interrupt/steer 仍因真实 conversation lookup 未闭环而记录 `conversation_not_found` 或无 safe active turn / pending approval；Q23/Q24 仍是 explicit gap：`no_control_plane_cwd_scope_probe`、`no_control_plane_pagination_probe`、`no_all_workers_down_fixture`、`no_invalid_worker_token_fixture`。
+- Fixed in current slice：Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`; all-workers-down and invalid-worker-token make `/v1/conversations` return a sanitized dependency error instead of `200 []`, while health/devices remain sanitized degraded inventory.
+- Remaining real gaps：start conversation currently times out or is not accepted in the calibration runner, follow-up remains a sanitized Worker error, approval decision has no safe pending approval, interrupt/steer have no safe active turn, and Q23 cwd scope/pagination probes remain explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 
@@ -299,7 +300,7 @@ Chrome 验证：
 - 选择 `Project B` 的 `shared-thread` 后，Chrome CDP 捕获到 Web 请求 `/v1/devices/smoke-b/conversations/shared-thread/timeline` 与 approvals；未串到 `smoke-a`。
 - Steer 和 approval decision 均走 `/v1/devices/smoke-b/...` device-scoped routes，界面状态更新且 pending approval 消失。
 - Worker B 下线、Worker A 在线时，设备页显示 `Smoke A Connected`、`Smoke B Not connected`，可用对话仍来自 Worker A。
-- 两个 Worker 全部下线时，Web 等待远端加载完成后保留 Control Plane 返回的空 conversations 状态，显示空项目/空对话而不是 mock 对话；已补 regression 覆盖。
+- Stage 6 fake Worker smoke 曾覆盖“两台 Worker 全部下线时不回退到 mock 对话”的 UI 行为；这不是 Stage 9 real readiness 证据。Stage 9 Q24 现在要求 all-workers-down / invalid-worker-token 对 `/v1/conversations` 显示为 sanitized degraded/error，而不是 `200 []` 空真实数据。
 - Chrome DOM 检查未出现 upstream Worker 端口或示例 token。
 
 最终复审修复：
@@ -406,7 +407,7 @@ Stage 8 剩余限制：
 
 - Stage 0-8 已完成本地可验证切片；Stage 9 仍在进行中且当前是 real-gap。
 - 下一步先补 Worker stdio app-server lifecycle，使 `pnpm real:start` 默认路径能启动真实栈，再重跑 `pnpm real:check` 和 `pnpm web:e2e:smoke`。
-- Q23/Q24 的 cwd scope、pagination、all-workers-down、invalid-worker-token probes 需要真实 fixture 后才能从 explicit gap 移出。
+- Q23 的 cwd scope 和 pagination probes 需要真实 fixture 后才能从 explicit gap 移出；Q24 all-workers-down / invalid-worker-token fixture 已有 real-pass evidence。
 - 不要在 Stage 9 real readiness 之前并行铺 real installer/keychain/pairing threat model、device-bound auth、reverse WSS relay、外部部署安全模型或 iOS client。
 
 后续阶段默认设计输入：

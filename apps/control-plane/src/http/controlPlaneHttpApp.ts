@@ -106,10 +106,17 @@ export function createControlPlaneHttpApp(params: {
   });
 
   app.get("/v1/conversations", async (c) => {
-    const conversations = (await Promise.all(
-      params.config.devices.map((device) => readDeviceConversations(params.workerClient, device)),
-    ))
-      .flat()
+    const results = await Promise.all(params.config.devices.map((device) => readDeviceConversationResult(params.workerClient, device)));
+    const successfulResults = results.filter((result): result is { conversations: CodexConversation[]; ok: true } => result.ok);
+    if (successfulResults.length === 0) {
+      throw new ControlPlaneHttpError(424, "device_unavailable", "Device is unavailable.", {
+        operation: "conversation/list",
+        retryable: true,
+      });
+    }
+
+    const conversations = successfulResults
+      .flatMap((result) => result.conversations)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     return c.json(conversations);
   });
@@ -244,6 +251,20 @@ async function readDeviceConversations(client: WorkerUpstreamClient, device: Con
     return (await client.listConversations(device)).map((conversation) => normalizeConversation(device, conversation));
   } catch {
     return [];
+  }
+}
+
+async function readDeviceConversationResult(
+  client: WorkerUpstreamClient,
+  device: ConfiguredWorkerDevice,
+): Promise<{ conversations: CodexConversation[]; ok: true } | { ok: false }> {
+  try {
+    return {
+      conversations: (await client.listConversations(device)).map((conversation) => normalizeConversation(device, conversation)),
+      ok: true,
+    };
+  } catch {
+    return { ok: false };
   }
 }
 

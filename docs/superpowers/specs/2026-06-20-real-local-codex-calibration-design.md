@@ -132,6 +132,8 @@ The stage keeps the existing ownership boundaries:
 
 - When `source.reason !== "loaded"`, the Web UI must clearly say it is not connected to real Control Plane data.
 - Fallback fixtures must be labeled as examples and must not look like real current work.
+- A healthy Control Plane response with zero conversations is a real empty state, not fallback/example data.
+- A Control Plane dependency failure must not be presented as a real empty conversation list. Web may show partial data when at least one configured Worker is reachable, but it must show a degraded/error state when all configured Workers fail.
 - Primary conversation UI should prioritize real conversation title, source state, metadata timeline, start, and follow-up.
 - Interrupt, steer, and approval belong in a run-control area, not as unexplained chat content.
 - Disabled future controls such as model selection, attachment, and voice input should be hidden or clearly disabled.
@@ -142,6 +144,12 @@ The stage keeps the existing ownership boundaries:
 - Control Plane config errors stay sanitized as `invalid_config`.
 - Missing Web token is a visible `not_configured` state, not a quiet mock state.
 - app-server unavailability, timeout, and protocol drift must be surfaced as sanitized error code/message.
+- Q24 Control Plane degraded-vs-empty semantics:
+  - `/v1/control-plane/health` stays `200` and reports `status: "ok"` only when every configured Worker is connected; otherwise it reports `status: "degraded"` with sanitized counts.
+  - `/v1/devices` stays `200` and reports each configured device as connected or not connected without leaking upstream URL, Worker token, raw error, stack/cause, or private paths.
+  - `/v1/conversations` returns `200` with the reachable Workers' conversations when at least one Worker succeeds. A genuinely empty reachable Worker result is `200 []`.
+  - `/v1/conversations` returns a sanitized dependency error, not `200 []`, when every configured Worker fails because it is unreachable, rejects the Worker token, times out, or otherwise cannot serve conversation reads.
+  - Invalid Worker token and all-workers-down fixtures must be recorded by `pnpm real:check` as `real-pass`, `fixed-pass`, or `real-gap` without storing raw URLs, tokens, response bodies, stack/cause, command output, or raw ids.
 - Logs may record endpoint, status, sanitized code, conversation id, turn id, and task id.
 - Logs must not contain tokens, raw prompts, command output, full diffs, raw JSON-RPC frames, stack traces, or private paths.
 

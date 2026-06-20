@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-9 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=9 fixedPass=0 realGap=10`; remaining work is the next vertical slice for readable post-start conversations, follow-up/control/approval closure, and Q23/Q24 real probes.
+**Current gap:** Tasks 1-10 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=12 fixedPass=0 realGap=7`; remaining work is the next vertical slice for start/follow-up/control/approval closure and Q23 real probes. Q24 all-workers-down and invalid-worker-token fixtures now record `real-pass`.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -63,6 +63,17 @@ Residual risks retained for later Stage 9 slices:
 Reviewer: `019ee57f-16fb-7d30-a746-c1366f022ef5`
 
 Result: unavailable. The requested subagent review for Task 9 errored with an external usage-limit condition before returning findings. The slice stayed narrow and used existing Control Plane/API/DB boundaries only.
+
+Reviewer: `019ee5f8-7b99-7a23-b630-969d47561bb5`
+
+Result: fix plan before implementing the next slice.
+
+Findings addressed by adding Task 10:
+
+- Critical: Q24 was still a general real-check requirement and did not have a directly executable task for healthy, real-empty, all-workers-down, invalid-worker-token, and partial-worker-failure behavior.
+- Critical: endpoint semantics for `/v1/control-plane/health`, `/v1/devices`, and `/v1/conversations` were not pinned tightly enough to prevent all Worker failures from being presented as `200 []`.
+- Important: Web/source taxonomy must preserve the distinction between healthy empty data and dependency failure. Task 10 keeps Web changes minimal and only requires degraded/error visibility if the Control Plane returns a dependency error.
+- Important: historical Stage 6 wording in `PLAN.md` could be read as allowing all-workers-down to become an empty conversation state; Task 10 updates that wording as fake-smoke-only history, not Stage 9 readiness.
 
 ## Integrated Research Decisions
 
@@ -1650,6 +1661,117 @@ git commit -m "fix: reject invalid task conversation links"
 
 ---
 
+### Task 10: Control Plane Degraded Vs Empty-Data Semantics
+
+**Files:**
+- Modify: `apps/control-plane/src/http/controlPlaneHttpApp.ts`
+- Modify: `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
+- Modify: `scripts/real-local-calibration.mjs`
+- Modify: `docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keeps `packages/api-contract/openapi.yaml` and DB schema unchanged.
+- Keeps Web -> Control Plane -> Worker boundaries unchanged.
+- Keeps `/v1/control-plane/health` as a `200` status summary endpoint:
+  - `status: "ok"` only when every configured Worker health check is connected.
+  - `status: "degraded"` when one or more configured Workers fail health.
+- Keeps `/v1/devices` as a `200` device inventory endpoint:
+  - connected Workers remain available;
+  - unavailable Workers are projected as not connected with sanitized public fields only.
+- Changes `/v1/conversations` aggregation semantics:
+  - if at least one Worker conversation read succeeds, return `200` with the successful Workers' conversations, even if the result is an empty array;
+  - if every configured Worker conversation read fails, return a sanitized `424 device_unavailable` style dependency error, not `200 []`.
+- Extends `pnpm real:check` Q24 probes so `control-plane all-workers-down` and `control-plane invalid-worker-token` use temporary real Control Plane fixtures and record `real-pass`, `fixed-pass`, or `real-gap` in `logs/real-check/latest.json`.
+
+**Non-goals:**
+- No Q21/Q22 closure for post-start readable conversations, follow-up, approval, interrupt, or steer.
+- No Q23 `thread/list(cwd)` scope or pagination work.
+- No OpenAPI schema change unless an existing generated type check proves it is required.
+- No Web UI redesign; only preserve existing degraded/error visibility through the current datasource behavior.
+- No DB schema, task-link, pairing, token rotation, reverse WSS, installer, iOS, or production auth work.
+- No raw Worker URL, token, raw JSON-RPC, raw prompt, command output, full diff, stack/cause, response body, or private path in reports, logs, docs, or tests.
+
+- [x] **Step 1: Add focused failing Control Plane tests**
+
+In `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`, add tests for:
+
+- partial Worker conversation failure keeps successful conversations as `200`;
+- all configured Worker conversation reads failing returns sanitized `424`, not `200 []`;
+- response bodies do not expose upstream Worker tokens, loopback ports, upstream device ids, stack/cause, or raw internal errors.
+
+- [x] **Step 2: Implement minimal aggregation change**
+
+In `apps/control-plane/src/http/controlPlaneHttpApp.ts`, keep `readDeviceConversations()` behavior for `/v1/devices` so device inventory remains resilient.
+
+For `/v1/conversations`, aggregate each device result explicitly:
+
+- normalize successful device conversations with configured `device.id`;
+- keep partial successes;
+- if every device failed, throw `ControlPlaneHttpError(424, "device_unavailable", "Device is unavailable.", { operation: "conversation/list", retryable: true })` or the existing equivalent sanitized dependency error.
+
+- [x] **Step 3: Add real-check Q24 fixtures**
+
+In `scripts/real-local-calibration.mjs`, replace the fixed `no_all_workers_down_fixture` and `no_invalid_worker_token_fixture` records with temporary Control Plane fixtures:
+
+- all-workers-down fixture: configured Worker points at an unused loopback port;
+- invalid-worker-token fixture: configured Worker points at the real local Worker but uses a derived invalid Worker bearer value;
+- both fixtures call `/v1/control-plane/health`, `/v1/devices`, and `/v1/conversations`;
+- both fixtures record only status, duration, sanitized code, counts, and reason code;
+- both fixtures shut down their temporary Control Plane process before report write.
+
+Expected Q24 pass criteria:
+
+- `/v1/control-plane/health` is `200` and degraded when the fixture Worker cannot authenticate or cannot be reached;
+- `/v1/devices` is `200` and reports a not connected device;
+- `/v1/conversations` is a non-200 sanitized dependency error, not `200 []`;
+- `logs/real-check/latest.json` records `control-plane all-workers-down` and `control-plane invalid-worker-token` as `real-pass` or `fixed-pass` after the implementation.
+
+- [x] **Step 4: Run focused verification**
+
+```bash
+pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "conversations are listed|all configured worker|partial worker"
+pnpm --filter @codex-remote/control-plane typecheck
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+- [x] **Step 5: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: Q24 fixtures no longer use fake Worker evidence and no raw URLs, tokens, paths, prompts, command output, raw JSON-RPC, stack/cause, raw ids, response bodies, or full diffs enter `logs/real-check/latest.json` or tracked docs.
+
+- [x] **Step 6: Run full gates**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+- [x] **Step 7: Update docs and commit**
+
+Update `PLAN.md`, `docs/references/development-context.md`, and this plan with sanitized Q24 evidence counts, then commit:
+
+```bash
+git add apps/control-plane/src/http/controlPlaneHttpApp.ts apps/control-plane/src/http/controlPlaneHttpApp.test.ts scripts/real-local-calibration.mjs PLAN.md docs/references/development-context.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
+git commit -m "fix: distinguish degraded control plane reads"
+```
+
+---
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.
@@ -1664,6 +1786,8 @@ git commit -m "fix: reject invalid task conversation links"
 - [ ] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
 - [x] `pnpm web:e2e:smoke` passes against the real local stack.
 - [x] Web makes no runtime external font/static asset requests.
-- [ ] Control Plane Worker failure is visible as degraded/error state, not empty real data.
+- [x] Q24 all-workers-down is visible as a sanitized dependency error for `/v1/conversations`, not empty real data.
+- [x] Q24 invalid-worker-token is visible as a sanitized dependency error for `/v1/conversations`, not empty real data.
+- [x] Q24 partial Worker failure keeps reachable Worker conversations available while marking health/devices degraded.
 - [ ] Output streaming is explicitly out of scope and listed as the next separate stage.
 - [x] Fake Worker smoke is no longer described as real product readiness.

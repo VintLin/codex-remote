@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { join, relative } from "node:path";
 import process from "node:process";
 
@@ -8,6 +10,7 @@ const root = process.cwd();
 const reportDir = join(root, "logs/real-check");
 const reportRelativePath = "logs/real-check/latest.json";
 const baseUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? "http://127.0.0.1:8786");
+const workerBaseUrl = normalizeBaseUrl(process.env.CODEX_REMOTE_WORKER_BASE_URL ?? "http://127.0.0.1:8787");
 const token =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.CODEX_REMOTE_LOCAL_TOKEN ?? "example-token";
 const requestTimeoutMs = Number.parseInt(process.env.CODEX_REMOTE_REAL_CHECK_TIMEOUT_MS ?? "5000", 10);
@@ -254,10 +257,102 @@ async function main() {
     reasonCode: invalidLink.status >= 400 ? undefined : "invalid_ids_not_rejected",
   });
 
-  record("control-plane all-workers-down", "real-gap", { reasonCode: "no_all_workers_down_fixture" });
-  record("control-plane invalid-worker-token", "real-gap", { reasonCode: "no_invalid_worker_token_fixture" });
+  await recordControlPlaneFailureFixture("control-plane all-workers-down", {
+    baseUrl: `http://127.0.0.1:${await findUnusedLoopbackPort()}`,
+    reasonCode: "no_all_workers_down_fixture",
+    token,
+  });
+  await recordControlPlaneFailureFixture("control-plane invalid-worker-token", {
+    baseUrl: workerBaseUrl,
+    reasonCode: "no_invalid_worker_token_fixture",
+    token: `${token}-invalid`,
+  });
 
   writeReport();
+}
+
+async function recordControlPlaneFailureFixture(name, device) {
+  const fixture = await startControlPlaneFixture(device);
+  if (!fixture) {
+    record(name, "real-gap", { reasonCode: device.reasonCode });
+    return;
+  }
+
+  try {
+    const health = await request("/v1/control-plane/health", fixture);
+    const devices = await request("/v1/devices", fixture);
+    const conversations = await request("/v1/conversations", fixture);
+    const deviceList = Array.isArray(devices.value) ? devices.value : [];
+    const healthIsDegraded = health.status === 200 && health.value?.status === "degraded";
+    const devicesAreDegraded = devices.status === 200 && deviceList.some((item) => item?.status === "Not connected");
+    const conversationsFailClosed = conversations.status >= 400 && conversations.status !== 404;
+    record(name, healthIsDegraded && devicesAreDegraded && conversationsFailClosed ? "real-pass" : "real-gap", {
+      ...detailFromResponse(conversations),
+      count: deviceList.length,
+      reasonCode: healthIsDegraded && devicesAreDegraded && conversationsFailClosed ? undefined : device.reasonCode,
+    });
+  } finally {
+    await fixture.stop();
+  }
+}
+
+async function startControlPlaneFixture(device) {
+  const port = await findUnusedLoopbackPort();
+  const config = {
+    allowedOrigins: ["http://127.0.0.1:5173"],
+    bindHost: "127.0.0.1",
+    devices: [
+      {
+        id: "fixture-device",
+        name: "Fixture Device",
+        baseUrl: device.baseUrl,
+        token: device.token,
+      },
+    ],
+    port,
+    publicToken: token,
+    requestTimeoutMs: 750,
+    taskDatabasePath: ":memory:",
+  };
+  const child = spawn("pnpm", ["--filter", "@codex-remote/control-plane", "serve"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      CODEX_REMOTE_CONTROL_PLANE_CONFIG: JSON.stringify(config),
+    },
+    stdio: "ignore",
+  });
+  const fixture = {
+    baseUrlOverride: `http://127.0.0.1:${port}`,
+    tokenOverride: token,
+    async stop() {
+      if (child.exitCode !== null) {
+        return;
+      }
+      child.kill("SIGTERM");
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 1000);
+        child.once("exit", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      });
+    },
+  };
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (child.exitCode !== null) {
+      return null;
+    }
+    const health = await request("/v1/control-plane/health", fixture);
+    if (health.status > 0) {
+      return fixture;
+    }
+    await sleep(100);
+  }
+
+  await fixture.stop();
+  return null;
 }
 
 async function recordActiveTurnControls(deviceId, conversationId, activeTurnId, workerEvidence) {
@@ -521,6 +616,25 @@ function isActiveTurnStatus(status) {
 
 function normalizeBaseUrl(value) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function findUnusedLoopbackPort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("port_lookup_failed")));
+        return;
+      }
+      server.close(() => resolve(address.port));
+    });
+  });
+}
+
+function sleep(durationMs) {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
 main().catch((error) => {

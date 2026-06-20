@@ -345,6 +345,37 @@ test("control plane http app when conversations are listed, should normalize con
   assert.deepEqual(new Set(conversations.map((conversation) => conversation.deviceId)), new Set(["device-a", "device-b"]));
 });
 
+test("control plane http app when conversations are listed and one worker fails, should keep successful worker conversations", async () => {
+  const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-b"]) });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/conversations");
+
+  assert.equal(response.status, 200);
+  const conversations = await response.json() as CodexConversation[];
+  assert.deepEqual(new Set(conversations.map((conversation) => conversation.deviceId)), new Set(["device-a"]));
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), [
+    "listConversations:device-a",
+    "listConversations:device-b",
+  ]);
+});
+
+test("control plane http app when conversations are listed and all configured workers fail, should return sanitized dependency error", async () => {
+  const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a", "device-b"]) });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/conversations");
+  const body = await response.text();
+
+  assert.equal(response.status, 424);
+  assert.match(body, /device_unavailable/);
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable/);
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), [
+    "listConversations:device-a",
+    "listConversations:device-b",
+  ]);
+});
+
 test("control plane http app when projects are listed, should aggregate and normalize configured device ids", async () => {
   const app = createApp(new FakeWorkerClient({ upstreamDeviceId: "other-device" }));
 
