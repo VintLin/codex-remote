@@ -1042,6 +1042,7 @@ export interface operations {
             400: components["responses"]["BadRequestError"];
             401: components["responses"]["UnauthorizedError"];
             403: components["responses"]["ForbiddenError"];
+            424: components["responses"]["DeviceUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };
     };

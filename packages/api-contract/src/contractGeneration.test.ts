@@ -487,6 +487,15 @@ test("contract generation: when product Web needs project discovery, should expo
 
   assert.match(source, /^  \/v1\/projects:\n {4}get:\n {6}operationId: listControlPlaneProjects/m);
   assert.match(source, /^  \/v1\/devices\/\{deviceId\}\/projects:\n {4}get:\n {6}operationId: listControlPlaneDeviceProjects/m);
+
+  const controlPlaneProjectsPathBlockLines = extractPathBlock(source, "/v1/projects:");
+  const controlPlaneProjectsGet = expectDefined(
+    extractMethodBlocks(controlPlaneProjectsPathBlockLines).find((methodBlock) => methodBlock.method === "get"),
+    "/v1/projects should define GET",
+  );
+  assert.deepEqual(extractResponseRefs(controlPlaneProjectsGet.lines).get("424")?.componentResponseRefs, [
+    "DeviceUnavailableError",
+  ]);
 });
 
 test("when public object schemas are maintained, component schemas should stay closed", () => {
