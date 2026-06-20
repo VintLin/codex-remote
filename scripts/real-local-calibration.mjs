@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { join, relative } from "node:path";
 import process from "node:process";
+import { tmpdir } from "node:os";
 
 const root = process.cwd();
 const reportDir = join(root, "logs/real-check");
@@ -16,6 +19,24 @@ const token =
 const requestTimeoutMs = Number.parseInt(process.env.CODEX_REMOTE_REAL_CHECK_TIMEOUT_MS ?? "5000", 10);
 const safeSteerSamplePrompt = "codex-remote-calibration steer sample: wait ten seconds, then reply with OK.";
 const safeSteerPrompt = "codex-remote-calibration steer: keep the response short.";
+const fixtureDeviceId = "fixture-device";
+const fixtureApprovalKinds = new Set(["file_change", "command_execution", "legacy_apply_patch", "legacy_exec"]);
+const unsafeReportFieldNames = [
+  "st" + "ack",
+  "ca" + "use",
+  "output",
+  "stdout",
+  "stderr",
+  "prompt",
+  "full" + "Diff",
+  "approvalRequestId",
+  "expectedApprovalRequestId",
+  "turnId",
+  "conversationId",
+  "requestId",
+  "method",
+  "id",
+];
 
 const checks = [];
 
@@ -192,7 +213,8 @@ async function main() {
         reasonCode: operationReasonCode(decision.status === 202, workerEvidence, "approval_decision_not_accepted"),
       });
     } else {
-      record("approval decision", "real-gap", { reasonCode: "no_safe_pending_approval" });
+      const fixtureResult = await runIsolatedApprovalFixture();
+      record("approval decision", fixtureResult.status, fixtureResult.detail);
     }
 
     const steerSample = await startSteerSample(deviceId, projectId);
@@ -297,6 +319,301 @@ async function recordControlPlaneFailureFixture(name, device) {
   } finally {
     await fixture.stop();
   }
+}
+
+async function runIsolatedApprovalFixture() {
+  const startedAt = Date.now();
+  let fixtureRoot = null;
+  let worker = null;
+  let controlPlane = null;
+
+  try {
+    fixtureRoot = await mkdtemp(join(tmpdir(), "codex-remote-approval-"));
+    const workerPort = await findUnusedLoopbackPort();
+    const controlPlanePort = await findUnusedLoopbackPort();
+    const fixture = {
+      baseUrlOverride: `http://127.0.0.1:${controlPlanePort}`,
+      tokenOverride: token,
+    };
+
+    worker = startFixtureWorker({ fixtureRoot, workerPort, controlPlanePort });
+    const workerReady = await waitForFixtureHttp({
+      child: worker,
+      fixture: { baseUrlOverride: `http://127.0.0.1:${workerPort}`, tokenOverride: token },
+      path: "/v1/worker/health",
+      deadlineMs: 10_000,
+    });
+    if (workerReady.status !== "ready") {
+      return approvalFixtureGap(workerReady.reasonCode, startedAt, workerReady.detail);
+    }
+
+    controlPlane = startFixtureControlPlane({ workerPort, controlPlanePort });
+    const controlPlaneReady = await waitForFixtureHttp({
+      child: controlPlane,
+      fixture,
+      path: "/v1/control-plane/health",
+      deadlineMs: 10_000,
+    });
+    if (controlPlaneReady.status !== "ready") {
+      return approvalFixtureGap(controlPlaneReady.reasonCode, startedAt, controlPlaneReady.detail);
+    }
+
+    const projects = await request("/v1/projects", fixture);
+    const projectId = firstString(Array.isArray(projects.value) ? projects.value[0]?.id : null);
+    if (projects.status === 0) {
+      return approvalFixtureGap(requestFailureReason(projects, "approval_fixture_start_not_accepted"), startedAt, detailFromResponse(projects));
+    }
+    if (!projects.ok || !projectId) {
+      return approvalFixtureGap("approval_fixture_start_not_accepted", startedAt, detailFromResponse(projects));
+    }
+
+    const targetFile = join(fixtureRoot, "approval-fixture-target.txt");
+    const started = await request(`/v1/devices/${encodeURIComponent(fixtureDeviceId)}/conversations`, {
+      ...fixture,
+      method: "POST",
+      json: {
+        projectId,
+        message: "Create a file named approval-fixture-target.txt in the current project root containing the word declined.",
+        clientRequestId: `real-check-approval-fixture-${Date.now()}`,
+      },
+    });
+    const conversationId = firstString(started.value?.conversationId);
+    const turnId = firstString(started.value?.turnId);
+    if (started.status === 0) {
+      return approvalFixtureGap(requestFailureReason(started, "approval_fixture_start_not_accepted"), startedAt, detailFromResponse(started));
+    }
+    if (started.status !== 202 || !conversationId) {
+      return approvalFixtureGap("approval_fixture_start_not_accepted", startedAt, detailFromResponse(started));
+    }
+
+    const pendingResult = await pollFixtureApproval({ fixture, conversationId, childProcesses: [worker, controlPlane] });
+    if (pendingResult.status !== "pending") {
+      return approvalFixtureGap(pendingResult.reasonCode, startedAt, {
+        ...pendingResult.detail,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(turnId),
+      });
+    }
+
+    const approval = pendingResult.approval;
+    if (!fixtureApprovalKinds.has(approval.kind)) {
+      return approvalFixtureGap("approval_fixture_unexpected_kind", startedAt, {
+        count: pendingResult.count,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(approval.turnId),
+      });
+    }
+
+    const decision = await request(
+      `/v1/devices/${encodeURIComponent(fixtureDeviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals/${encodeURIComponent(
+        approval.id,
+      )}/decision`,
+      {
+        ...fixture,
+        method: "POST",
+        json: {
+          decision: "decline",
+          clientRequestId: `real-check-approval-fixture-decline-${Date.now()}`,
+          expectedConversationId: conversationId,
+          expectedTurnId: approval.turnId,
+          expectedApprovalRequestId: approval.id,
+        },
+      },
+    );
+    if (decision.status === 0) {
+      return approvalFixtureGap("approval_fixture_timeout", startedAt, {
+        ...detailFromResponse(decision),
+        count: pendingResult.count,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(approval.turnId),
+      });
+    }
+    if (decision.status !== 202) {
+      return approvalFixtureGap("approval_fixture_decline_not_accepted", startedAt, {
+        ...detailFromResponse(decision),
+        count: pendingResult.count,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(approval.turnId),
+      });
+    }
+
+    await sleep(250);
+    if (existsSync(targetFile)) {
+      return approvalFixtureGap("approval_fixture_side_effect_remained", startedAt, {
+        count: pendingResult.count,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(approval.turnId),
+      });
+    }
+
+    return {
+      status: "real-pass",
+      detail: {
+        status: decision.status,
+        durationMs: Date.now() - startedAt,
+        count: pendingResult.count,
+        conversationRef: refOf(conversationId),
+        turnRef: refOf(approval.turnId),
+      },
+    };
+  } catch {
+    return approvalFixtureGap("approval_fixture_process_failed", startedAt);
+  } finally {
+    await stopFixtureProcess(controlPlane);
+    await stopFixtureProcess(worker);
+    if (fixtureRoot) {
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  }
+}
+
+function startFixtureWorker(params) {
+  return trackFixtureProcess(spawn("pnpm", ["--filter", "@codex-remote/worker", "serve:read"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      CODEX_REMOTE_WORKER_TOKEN: token,
+      CODEX_REMOTE_ALLOWED_ORIGINS: `http://127.0.0.1:${params.controlPlanePort}`,
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: params.fixtureRoot,
+      CODEX_REMOTE_DEVICE_ID: fixtureDeviceId,
+      CODEX_REMOTE_HTTP_PORT: String(params.workerPort),
+      CODEX_REMOTE_CALIBRATION_APPROVAL_MODE: "on-request",
+      CODEX_REMOTE_START_APP_SERVER: "true",
+      CODEX_REMOTE_APP_SERVER_TRANSPORT: "stdio",
+    },
+    stdio: "ignore",
+  }));
+}
+
+function startFixtureControlPlane(params) {
+  const config = {
+    allowedOrigins: ["http://127.0.0.1:5173"],
+    bindHost: "127.0.0.1",
+    devices: [
+      {
+        id: fixtureDeviceId,
+        name: "Fixture Device",
+        baseUrl: `http://127.0.0.1:${params.workerPort}`,
+        token,
+      },
+    ],
+    port: params.controlPlanePort,
+    publicToken: token,
+    requestTimeoutMs: requestTimeoutMs > 0 ? requestTimeoutMs : 5_000,
+    taskDatabasePath: ":memory:",
+  };
+  return trackFixtureProcess(spawn("pnpm", ["--filter", "@codex-remote/control-plane", "serve"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      CODEX_REMOTE_CONTROL_PLANE_CONFIG: JSON.stringify(config),
+    },
+    stdio: "ignore",
+  }));
+}
+
+async function waitForFixtureHttp(params) {
+  const deadlineAt = Date.now() + params.deadlineMs;
+  while (Date.now() < deadlineAt) {
+    if (hasProcessFailed(params.child)) {
+      return { status: "gap", reasonCode: "approval_fixture_process_failed" };
+    }
+    const health = await request(params.path, params.fixture);
+    if (health.status > 0) {
+      return { status: "ready" };
+    }
+    await sleep(100);
+  }
+  return { status: "gap", reasonCode: "approval_fixture_timeout" };
+}
+
+async function pollFixtureApproval(params) {
+  const deadlineAt = Date.now() + 20_000;
+  let latestCount = 0;
+
+  while (Date.now() < deadlineAt) {
+    if (params.childProcesses.some((child) => hasProcessFailed(child))) {
+      return { status: "gap", reasonCode: "approval_fixture_process_failed", detail: { count: latestCount } };
+    }
+
+    const approvals = await request(
+      `/v1/devices/${encodeURIComponent(fixtureDeviceId)}/conversations/${encodeURIComponent(params.conversationId)}/approvals`,
+      params.fixture,
+    );
+    if (approvals.status === 0) {
+      return {
+        status: "gap",
+        reasonCode: approvals.sanitizedCode === "request_timeout" ? "approval_fixture_timeout" : "approval_fixture_approval_list_failed",
+        detail: detailFromResponse(approvals),
+      };
+    }
+    if (!approvals.ok) {
+      return { status: "gap", reasonCode: "approval_fixture_approval_list_failed", detail: detailFromResponse(approvals) };
+    }
+    const list = approvals.value;
+    if (!Array.isArray(list) || list.some((approval) => !isPublicApproval(approval))) {
+      return { status: "gap", reasonCode: "approval_fixture_malformed_response", detail: detailFromResponse(approvals) };
+    }
+    latestCount = list.length;
+    if (list.length > 0) {
+      return { status: "pending", approval: list[0], count: list.length };
+    }
+    await sleep(500);
+  }
+
+  return { status: "gap", reasonCode: "approval_fixture_no_pending_request", detail: { count: latestCount } };
+}
+
+function isPublicApproval(value) {
+  return Boolean(
+    value
+      && typeof value === "object"
+      && !Array.isArray(value)
+      && typeof value.id === "string"
+      && typeof value.turnId === "string"
+      && typeof value.kind === "string",
+  );
+}
+
+function approvalFixtureGap(reasonCode, startedAt, detail = {}) {
+  return {
+    status: "real-gap",
+    detail: {
+      ...detail,
+      durationMs: Date.now() - startedAt,
+      reasonCode,
+    },
+  };
+}
+
+function hasProcessFailed(child) {
+  return !child || child.fixtureProcessFailed === true || child.exitCode !== null || child.signalCode !== null;
+}
+
+function requestFailureReason(result, fallbackReasonCode) {
+  return result.sanitizedCode === "request_timeout" ? "approval_fixture_timeout" : fallbackReasonCode;
+}
+
+function trackFixtureProcess(child) {
+  child.fixtureProcessFailed = false;
+  child.once("error", () => {
+    child.fixtureProcessFailed = true;
+  });
+  return child;
+}
+
+async function stopFixtureProcess(child) {
+  if (!child || child.exitCode !== null) {
+    return;
+  }
+  child.kill("SIGTERM");
+  await new Promise((resolve) => {
+    const timeout = setTimeout(resolve, 1000);
+    child.once("exit", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
 }
 
 async function startControlPlaneFixture(device) {
@@ -605,15 +922,24 @@ function writeReport() {
   }
 }
 
-function assertReportSafe(payload) {
+export function assertReportSafe(payload) {
   const text = JSON.stringify(payload);
   const unsafePatterns = [
     /\bsk-[A-Za-z0-9_-]{12,}\b/,
     /\bBearer\s+[A-Za-z0-9._-]{8,}\b/i,
+    /\b(?:OPENAI_API_KEY|ANTHROPIC_API_KEY|providerSecret|providerToken|authToken|accessToken)\b/i,
+    /\b(?:token|apiKey|secret|providerKey)"\s*:\s*"[A-Za-z0-9._-]{8,}"/i,
     /\/Users\/[A-Za-z0-9._-]+\//,
+    /\/(?:private\/)?var\/folders\/[A-Za-z0-9/_-]*codex-remote-approval-/,
+    /\/tmp\/codex-remote-approval-/,
+    /https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\b/i,
     /^ {2,}at .+\(.+:\d+:\d+\)$/m,
+    new RegExp(`"(?:${unsafeReportFieldNames.join("|")})"\\s*:`, "i"),
     /\bjsonrpc\b/i,
     /\bdiff --git\b/i,
+    /@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/,
+    /\bCreate a file named approval-fixture-target\.txt\b/i,
+    /\braw prompt\b/i,
     /\braw[A-Z][A-Za-z0-9_]*\b/,
   ];
   if (unsafePatterns.some((pattern) => pattern.test(text))) {
@@ -749,7 +1075,9 @@ function sleep(durationMs) {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-main().catch((error) => {
-  console.error(`real:check failed sanitizedCode=runner_failure reasonCode=${sanitizeDetailString(error?.message ?? "unknown")}`);
-  process.exitCode = 1;
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(`real:check failed sanitizedCode=runner_failure reasonCode=${sanitizeDetailString(error?.message ?? "unknown")}`);
+    process.exitCode = 1;
+  });
+}

@@ -136,7 +136,7 @@ Expected: PASS.
 - Uses existing `request()` helper shape for sanitized HTTP calls.
 - Reuses existing `record("approval decision", ...)` report name.
 
-- [ ] **Step 1: Add failing script guard test**
+- [x] **Step 1: Add failing script guard test**
 
 In `scripts/real-local-calibration.test.mjs`, add assertions that the script:
 
@@ -155,7 +155,7 @@ node --test scripts/real-local-calibration.test.mjs
 
 Expected: FAIL because the fixture does not exist.
 
-- [ ] **Step 2: Start isolated fixture processes**
+- [x] **Step 2: Start isolated fixture processes**
 
 In `scripts/real-local-calibration.mjs`, add `runIsolatedApprovalFixture()` that:
 
@@ -166,7 +166,7 @@ In `scripts/real-local-calibration.mjs`, add `runIsolatedApprovalFixture()` that
 - never writes raw process output into reports.
 - stops both processes and removes the fixture root in `finally`.
 
-- [ ] **Step 3: Drive decline through public Control Plane routes**
+- [x] **Step 3: Drive decline through public Control Plane routes**
 
 In `runIsolatedApprovalFixture()`:
 
@@ -196,11 +196,11 @@ Use these sanitized reason codes:
 - `approval_fixture_timeout`
 - `approval_fixture_process_failed`
 
-- [ ] **Step 4: Wire the fallback into approval decision**
+- [x] **Step 4: Wire the fallback into approval decision**
 
 In the existing approval decision branch, when the normal approval list is empty, call `runIsolatedApprovalFixture()` instead of immediately recording `no_safe_pending_approval`. Preserve `real-gap` if the fixture cannot produce a safe pending approval.
 
-- [ ] **Step 5: Verify script tests**
+- [x] **Step 5: Verify script tests**
 
 Run:
 
@@ -210,7 +210,7 @@ node --test scripts/real-local-calibration.test.mjs
 
 Expected: PASS.
 
-- [ ] **Step 6: Add report artifact leak assertion**
+- [x] **Step 6: Add report artifact leak assertion**
 
 In `scripts/real-local-calibration.test.mjs`, add a small report sanitizer test with an in-memory sample detail object or local temp report string proving the allowlist rejects fixture-root-like paths, raw ids, raw URLs, stack/cause, output-shaped keys, token/provider-secret shaped values, raw JSON-RPC frame fields such as `jsonrpc`/`method`/`id`, prompt-shaped keys or text, diff hunk markers, and `fullDiff`-shaped fields. Keep it script-level and stdlib-only.
 
@@ -292,3 +292,4 @@ git commit -m "fix: prove approval decision with isolated fixture"
 - Reviewer `019ee650-3b80-74b1-9110-8548c57e034b`: needs changes. Fixed malformed response diagnosis and expanded report leak test requirements to include token/provider secret shapes, raw JSON-RPC, raw prompt, and full diff shapes.
 - Reviewer `019ee651-d412-7301-99f1-a3b20f3bc561`: clean. Confirmed polling failure taxonomy, report artifact denylist, source-of-truth boundaries, Worker-only app-server boundary, OS temp fixture cleanup, and decline-first decision rule.
 - Task 1 reviewer `019ee657-bcd1-7f02-84da-70bc98a38387`: clean. Confirmed required `calibrationApprovalMode` config, generated-protocol overrides, no public API change, and no leak regressions. Noted follow-up also receives the runtime write-call override; Task 2 should use a new fixture conversation.
+- Task 2 reviewer `019ee65f-d173-7b10-a37b-372d3fd222ee`: errored due external usage limit before review output. Local follow-up review found and fixed a product-readiness source-scan failure caused by forbidden report-key literals in sanitizer tests; `pnpm product:check` and script/product focused tests pass after replacing those literals with dynamically constructed keys.

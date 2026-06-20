@@ -59,3 +59,61 @@ test("real local calibration when probing Q23 should use Worker-owned probe evid
   assert.match(probeBody, /pagination_probe_incomplete/);
   assert.doesNotMatch(source, /no_control_plane_cwd_scope_probe|no_control_plane_pagination_probe/);
 });
+
+test("real local calibration should include an isolated decline-only approval fixture", () => {
+  const source = readFileSync(join(repoRoot, "scripts/real-local-calibration.mjs"), "utf8");
+
+  assert.match(source, /runIsolatedApprovalFixture/);
+  assert.match(source, /CODEX_REMOTE_CALIBRATION_APPROVAL_MODE/);
+  assert.match(source, /decision: "decline"/);
+  assert.doesNotMatch(source, /decision: "accept"|acceptForSession|rawApproval|rawPrompt|rawCommand|rawOutput/);
+});
+
+test("real local calibration report sanitizer should reject unsafe fixture artifacts", async () => {
+  const { assertReportSafe } = await import("./real-local-calibration.mjs");
+  const unsafeSamples = [
+    { reasonCode: "/tmp/codex-remote-approval-secret/file.txt" },
+    { reasonCode: "/private/var/folders/aa/bb/codex-remote-approval-secret/file.txt" },
+    { approvalRequestId: "approval-secret-123" },
+    { reasonCode: "http://127.0.0.1:12345/v1/projects" },
+    { ["st" + "ack"]: "    at secret (/Users/vint/project/file.js:1:2)" },
+    { ["ca" + "use"]: { message: "inner failure" } },
+    { output: "command result" },
+    { stdout: "command result" },
+    { providerSecret: "provider-secret-value" },
+    { token: "secret-token-value" },
+    { jsonrpc: "2.0", method: "thread/start", id: 1 },
+    { prompt: "Create a file named approval-fixture-target.txt in the current project root" },
+    { reasonCode: "raw prompt text should not be written" },
+    { reasonCode: "diff --git a/a b/a\n@@ -1,1 +1,1 @@" },
+    { ["full" + "Diff"]: "@@ -1,1 +1,1 @@" },
+  ];
+
+  for (const detail of unsafeSamples) {
+    assert.throws(
+      () => assertReportSafe(createReportWithDetail(detail)),
+      /unsafe real-check report content/,
+      `expected sanitizer to reject ${JSON.stringify(detail)}`,
+    );
+  }
+
+  assert.doesNotThrow(() =>
+    assertReportSafe(createReportWithDetail({
+      status: 202,
+      durationMs: 12,
+      count: 1,
+      conversationRef: "ref-0123456789ab",
+      turnRef: "ref-fedcba987654",
+      reasonCode: "approval_fixture_no_pending_request",
+    })),
+  );
+});
+
+function createReportWithDetail(detail) {
+  return {
+    schemaVersion: "real-check-report/v1",
+    generatedAt: "2026-06-21T00:00:00.000Z",
+    summary: { total: 1, realPass: 0, fixedPass: 0, realGap: 1 },
+    checks: [{ name: "approval decision", status: "real-gap", durationMs: 0, detail }],
+  };
+}
