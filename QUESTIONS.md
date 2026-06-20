@@ -50,9 +50,9 @@ Stage 9 reopened a narrower research queue for real local verification. Q21, Q23
 | Q27 | `docs/references/questions/q27-task-link-integrity-checks.md` | answered |
 | Q28 | `docs/references/questions/q28-local-self-hosted-external-asset-policy.md` | answered |
 
-## Open Stage 9 Research Questions
+## Current Open Research Questions
 
-Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。
+Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步如果进入权限控制 / approval productionization，应先写阶段 spec，再决定是否新增独立研究问题。
 
 ### Q21. Real command/control protocol compatibility
 
@@ -102,7 +102,7 @@ Archived process material:
 
 ## Local Verification Backlog
 
-These are not broad research questions. Stage 9-critical items that remain open are Q21-Q24 above; keep the remaining items with their later stage specs before coding:
+These are not broad research questions. Q21, Q23, and Q24 are answered by Stage 9 local evidence; Q22 remains partial and belongs to the next approval / permission stage. Keep the remaining items with their later stage specs before coding:
 
 - Verify whether generated protocol and local runtime support `thread/turns/list`.
 - Verify Node runtime and Hono assumptions for the Worker HTTP boundary.

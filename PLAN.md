@@ -56,7 +56,7 @@ flowchart LR
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 已完成本地可验证切片；approval decision 为安全 real-gap |
-| 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 实现中；真实验证仍有 gap |
+| 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 已实现校准 fixture；blocked 于 app-server 未产生 safe pending approval |
 
 ```mermaid
 flowchart TB
@@ -70,7 +70,7 @@ flowchart TB
   P7["7. DB + Task Board"]
   P8["8. Product Readiness + iOS Guardrails"]
   P9["9. Real Local Codex Calibration - complete with approval safety gap"]
-  P10["10. Isolated Approval Fixture - in progress"]
+  P10["10. Isolated Approval Fixture - blocked: no safe pending approval"]
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
 ```
@@ -101,6 +101,22 @@ Stage 10 当前证据：
 - Fixed in current slice：interrupt now uses an independent safe interrupt-only active-turn sample before calling the public interrupt route, avoiding the previous follow-up/interrupt race on the original conversation.
 - Focused fixes attempted：workspace-write/on-request, read-only/on-request, read-only/untrusted, stdout-only command prompt, and explicit generated-protocol `approvalsReviewer: "user"` were tested. The retained implementation is read-only/on-request with user-routed approvals because it matches Q22's safer fixture direction; no automatic accept, `acceptForSession`, policy amendment, production approval model, user-layer rules edit, or auth-copying path was added.
 - Remaining risk：current app-server behavior does not emit a pending approval for the isolated fixture prompt within the bounded polling window, so approval decision is still not product-ready. The next safe evidence source is a trusted project-local rules layer or equivalent app-server-supported rules injection; do not modify user `~/.codex/rules` automatically.
+
+当前大目标差距：
+
+- 已真实验证：Web -> Control Plane -> Worker -> Codex app-server 的本机主链，设备、项目、对话、start、follow-up、interrupt、steer、task create/link、本地 self-hosted 运行路径均有 real evidence。
+- 已纠偏：fake Worker smoke 只保留为 UI/contract/fallback 验证，不再作为 real readiness 证据。
+- 未闭环：approval decision 还没有真实 pending approval 可供 Web/Control Plane/Worker decline/cancel；因此 approval 不能宣称 product-ready。
+- 未进入：用户可控权限模式、自动审批、production approval safety model、installer/keychain/pairing、reverse WSS、外部部署、iOS、streaming event log。
+
+当前 active Superpowers 文档：
+
+- 无。下一阶段开始前先写新的权限控制 / approval productionization spec 和 plan。
+
+已归档 Superpowers 文档：
+
+- Stage 2-9 的 spec/plan 已移动到 `docs/archives/specs/` 与 `docs/archives/plans/`。
+- Stage 10 的 isolated approval fixture spec/plan 已移动到 `docs/archives/specs/` 与 `docs/archives/plans/`；归档含义是实现切片结束且 blocked，不代表 approval decision product-ready。
 
 ## 每阶段交付标准
 
@@ -164,7 +180,7 @@ flowchart LR
 | Q21-Q24 Stage 9 实机验证项 | partial，进入当前执行计划 | start/follow-up/interrupt/steer、active turn/approval、`thread/list(cwd)` scope/pagination、Control Plane degraded-vs-empty 必须由 `pnpm real:check` 和真实本机栈给出 real-pass/fixed-pass/real-gap |
 | Q25-Q28 Stage 9 readiness guardrails | 已回答 | Stage 9 需要最小 Web browser smoke；real-check 默认写 ignored `logs/real-check/`；task-link 必须验证资源/归属；self-hosted Web 不应运行时请求外部字体或静态资源 |
 
-当前不新增全网调研问题。剩余 Stage 9 工作已整合进 `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`，重点是本机实证而不是继续扩大调研面。
+当前不新增全网调研问题。Stage 9 本机实证计划已归档到 `docs/archives/plans/2026-06-20-real-local-codex-calibration.md`。
 
 ## 当前技术栈
 
@@ -189,11 +205,11 @@ flowchart LR
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-worker-write-stream-design.md`
+- `docs/archives/specs/2026-06-20-worker-write-stream-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-worker-write-stream.md`
+- `docs/archives/plans/2026-06-20-worker-write-stream.md`
 
 Stage 4 已完成：
 
@@ -229,11 +245,11 @@ Chrome 验证：
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-control-main-chain-design.md`
+- `docs/archives/specs/2026-06-20-control-main-chain-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-control-main-chain.md`
+- `docs/archives/plans/2026-06-20-control-main-chain.md`
 
 Stage 5 已完成：
 
@@ -278,11 +294,11 @@ Stage 5 剩余限制：
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-control-plane-multidevice-design.md`
+- `docs/archives/specs/2026-06-20-control-plane-multidevice-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-control-plane-multidevice.md`
+- `docs/archives/plans/2026-06-20-control-plane-multidevice.md`
 
 Stage 6 已完成：
 
@@ -333,11 +349,11 @@ Stage 6 剩余限制：
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-db-task-board-design.md`
+- `docs/archives/specs/2026-06-20-db-task-board-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-db-task-board.md`
+- `docs/archives/plans/2026-06-20-db-task-board.md`
 
 Stage 7 已完成：
 
@@ -378,11 +394,11 @@ Stage 7 剩余限制：
 
 最近完成的 Superpowers spec：
 
-- `docs/superpowers/specs/2026-06-20-product-readiness-design.md`
+- `docs/archives/specs/2026-06-20-product-readiness-design.md`
 
 最近完成的 Superpowers plan：
 
-- `docs/superpowers/plans/2026-06-20-product-readiness.md`
+- `docs/archives/plans/2026-06-20-product-readiness.md`
 
 Stage 8 已完成：
 
@@ -423,13 +439,15 @@ Stage 8 剩余限制：
 下一步建议：
 
 - Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
-- Stage 10 已进入实现中，只处理 isolated approval decision fixture；不做 streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
-- Q22 的 isolated approval fixture 已实现但当前 real run 仍未产生 pending approval；approval decision 继续保留为 safety `real-gap`。自动 accept、persistent policy amendment、user-layer rules edit、auth-copying path 和 production approval safety model 不属于当前范围。
-- Q23 的 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是 Stage 9 当前阻塞；Q24 degraded-vs-empty 当前 Stage 9 fixture 已有 real-pass evidence。
+- Stage 10 已实现 isolated approval fixture，但当前 Codex app-server 不产生 safe pending approval；Stage 10 状态为 blocked，不继续用更危险的动作补覆盖率。
+- 下一阶段应先写权限控制 / approval productionization spec。它要明确哪些权限由用户控制、哪些只在 Worker 本机保存、Web/Control Plane 能传哪些枚举、哪些高危模式需要二次确认。
+- Approval decision 的下一条最小证据路径：在临时 fixture 项目中验证 trusted project-local rules 或等价 app-server-supported rules 注入，只验证 decline/cancel；不要自动修改用户 `~/.codex/rules`，不要复制 auth 到临时 `CODEX_HOME`，不要自动 accept 或 policy amendment。
+- Q23 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是当前 approval 阻塞；Q24 degraded-vs-empty 当前已有 real-pass evidence。
 
 后续阶段默认设计输入：
 
-- Stage 6：Control Plane reverse connection 默认 WSS；必须设计应用层 `msg_id/seq/ack/lease/resume/credit`，不要把 WebSocket send 当作任务完成。
-- Stage 6：device-bound token 以 DPoP-compatible sender-constrained token 为长期方向，但实现前必须先写 threat model。
-- Stage 7 已落地：SQLite + Drizzle 使用 `better-sqlite3`，driver 隔离在 `packages/db` 边界内；Stage 8 只能通过既有 DB 边界扩展持久化能力。
+- 权限控制：先支持最小受控枚举，不开放 raw app-server JSON-RPC、raw config、raw prompt、raw command 或 raw path；高危选项必须显示明确风险状态。
+- Production approval：区分一次性 decline/cancel/accept、session 级授权、policy amendment、rules-based prompt；默认只实现最小安全子集。
+- Reverse connection：仍默认 WSS；必须设计应用层 `msg_id/seq/ack/lease/resume/credit`，不要把 WebSocket send 当作任务完成。
+- Device-bound auth：长期方向为 DPoP-compatible sender-constrained token，但实现前必须先写 threat model。
 - Productization：Worker device identity secret 默认 OS keyring；Linux/headless file fallback 必须显式 opt-in。
