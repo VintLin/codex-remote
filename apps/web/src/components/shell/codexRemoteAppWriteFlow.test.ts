@@ -20,6 +20,23 @@ test("codex remote app when follow-up submit is wired, should call Worker API an
   assert.match(shellSource, /selectedProject/);
 });
 
+test("write flow: when selected device has no project, should not fall back to another device project", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.ok(shellSource.includes("const selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? null;"));
+  assert.ok(!shellSource.includes("selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? projects[0]"));
+  assert.match(shellSource, /selectedProject !== null/);
+  assert.ok(shellSource.includes("deviceId: selectedProject?.deviceId ?? null"));
+  assert.ok(shellSource.includes("projectId: selectedProject?.id ?? null"));
+});
+
+test("write flow: when selected device or project changes, should reset start status", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.match(shellSource, /setStartStatus\("idle"\);/);
+  assert.ok(shellSource.includes("}, [selectedDeviceId, selectedProject?.id]);"));
+});
+
 test("codex remote app when selection changes, should refresh device-scoped approvals by conversation key", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
 

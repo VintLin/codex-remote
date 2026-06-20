@@ -36,3 +36,95 @@ test("start conversation submit: when project and token exist, should call start
     "refresh:local-device\u001fthread-1",
   ]);
 });
+
+test("start conversation submit: when device is missing, should fail closed without Worker call or refresh", async () => {
+  const events: string[] = [];
+  const result = await submitStartConversation({
+    createClientRequestId: () => "client-start-1",
+    deviceId: null,
+    message: "start",
+    projectId: "local-project",
+    refreshWorkbenchData: async (conversationKey) => {
+      events.push(`refresh:${conversationKey}`);
+    },
+    setStatus: (status) => events.push(`status:${status}`),
+    workerClient: {
+      startConversation: async () => {
+        events.push("worker-called");
+        throw new Error("should not call worker");
+      },
+    },
+  });
+
+  assert.equal(result, "failed");
+  assert.deepEqual(events, ["status:failed"]);
+});
+
+test("start conversation submit: when project is missing, should fail closed without Worker call or refresh", async () => {
+  const events: string[] = [];
+  const result = await submitStartConversation({
+    createClientRequestId: () => "client-start-1",
+    deviceId: "local-device",
+    message: "start",
+    projectId: null,
+    refreshWorkbenchData: async (conversationKey) => {
+      events.push(`refresh:${conversationKey}`);
+    },
+    setStatus: (status) => events.push(`status:${status}`),
+    workerClient: {
+      startConversation: async () => {
+        events.push("worker-called");
+        throw new Error("should not call worker");
+      },
+    },
+  });
+
+  assert.equal(result, "failed");
+  assert.deepEqual(events, ["status:failed"]);
+});
+
+test("start conversation submit: when trimmed message is empty, should fail closed without Worker call or refresh", async () => {
+  const events: string[] = [];
+  const result = await submitStartConversation({
+    createClientRequestId: () => "client-start-1",
+    deviceId: "local-device",
+    message: "   ",
+    projectId: "local-project",
+    refreshWorkbenchData: async (conversationKey) => {
+      events.push(`refresh:${conversationKey}`);
+    },
+    setStatus: (status) => events.push(`status:${status}`),
+    workerClient: {
+      startConversation: async () => {
+        events.push("worker-called");
+        throw new Error("should not call worker");
+      },
+    },
+  });
+
+  assert.equal(result, "failed");
+  assert.deepEqual(events, ["status:failed"]);
+});
+
+test("start conversation submit: when Worker rejects, should return failed without raw error exposure", async () => {
+  const events: string[] = [];
+  const result = await submitStartConversation({
+    createClientRequestId: () => "client-start-1",
+    deviceId: "local-device",
+    message: "start",
+    projectId: "local-project",
+    refreshWorkbenchData: async (conversationKey) => {
+      events.push(`refresh:${conversationKey}`);
+    },
+    setStatus: (status) => events.push(`status:${status}`),
+    workerClient: {
+      startConversation: async () => {
+        events.push("worker-called");
+        throw new Error("raw upstream failure");
+      },
+    },
+  });
+
+  assert.equal(result, "failed");
+  assert.deepEqual(events, ["status:submitting", "worker-called", "status:failed"]);
+});

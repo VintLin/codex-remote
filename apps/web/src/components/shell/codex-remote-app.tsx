@@ -88,7 +88,7 @@ export function CodexRemoteApp() {
     () => createSidebarModel({ conversations, expandedProjectIds, projects }),
     [expandedProjectIds, conversations, projects],
   );
-  const selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? projects[0] ?? null;
+  const selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? null;
   const conversationNavigator = useMemo(
     () =>
       selectedConversationKey
@@ -149,13 +149,13 @@ export function CodexRemoteApp() {
 
   const submitStart = useCallback(async (message: string) => submitStartConversation({
     createClientRequestId: () => crypto.randomUUID(),
-    deviceId: selectedProject?.deviceId ?? selectedDeviceId ?? null,
+    deviceId: selectedProject?.deviceId ?? null,
     message,
     projectId: selectedProject?.id ?? null,
     refreshWorkbenchData,
     setStatus: setStartStatus,
     workerClient,
-  }), [refreshWorkbenchData, selectedDeviceId, selectedProject?.deviceId, selectedProject?.id, workerClient]);
+  }), [refreshWorkbenchData, selectedProject?.deviceId, selectedProject?.id, workerClient]);
 
   const submitInterruptControl = useCallback(async () => {
     await submitInterrupt({
@@ -344,6 +344,10 @@ export function CodexRemoteApp() {
     setControlStatus("idle");
     setTaskStatus("idle");
   }, [selectedConversationKey]);
+
+  useEffect(() => {
+    setStartStatus("idle");
+  }, [selectedDeviceId, selectedProject?.id]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");

@@ -103,3 +103,69 @@ start form 与 control strip 视觉相近，后续可根据真实使用频率再
 
 - 未 push，符合用户要求。
 - 工作树存在其他人的文档改动；提交时只 stage Task 4 指定文件和本报告。
+
+## Review Fix: Device-scoped Start Guard
+
+### Scope
+
+- 只修 Important findings 和 cheap minor status reset。
+- 未改 Worker、contract、UI redesign 或无关文档。
+- 未回滚既有工作树文档改动。
+
+### RED
+
+新增 controller 负路径测试：
+
+- 缺 `deviceId`：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
+- 缺 `projectId`：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
+- trim 后空 message：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
+- Worker reject：返回 `failed`，状态顺序 `submitting -> failed`，不暴露 raw error。
+
+新增 write-flow source guard：
+
+- `selectedProject` 必须只来自 `selectedDeviceId` 对应 project，不允许 fallback 到 `projects[0]`。
+- 没有 selected-device project 时，`submitStart` 必须传 `null` device/project 让 controller fail closed。
+- selected device/project 变化时重置 `startStatus`。
+
+首次有效 RED：
+
+```bash
+pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit|startConversation|write flow"
+```
+
+结果：exit code 1，2 tests failed：
+
+- `write flow: when selected device has no project, should not fall back to another device project`
+- `write flow: when selected device or project changes, should reset start status`
+
+### GREEN
+
+实现：
+
+- `selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? null`
+- `submitStart.deviceId = selectedProject?.deviceId ?? null`
+- 新增 `[selectedDeviceId, selectedProject?.id]` effect，将 `startStatus` 重置为 `idle`
+
+Focused GREEN：
+
+```bash
+pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit|startConversation|write flow"
+```
+
+结果：exit code 0，23 tests pass。
+
+Final verification：
+
+```bash
+pnpm --filter @codex-remote/web test
+pnpm --filter @codex-remote/web typecheck
+```
+
+结果：
+
+- `pnpm --filter @codex-remote/web test`：exit code 0，102 tests pass。
+- `pnpm --filter @codex-remote/web typecheck`：exit code 0。
+
+### Commit
+
+- `fix: keep start conversation device scoped`
