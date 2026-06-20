@@ -6,6 +6,7 @@ import { readWebSource } from "../../test-support/sourcePaths.ts";
 test("codex remote app when follow-up submit is wired, should call Worker API and refresh selected conversation", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
   const controllerSource = readWebSource("components/shell/followUpSubmitController.ts");
+  const startControllerSource = readWebSource("components/shell/startConversationSubmitController.ts");
 
   assert.match(shellSource, /new WorkerApiClient/);
   assert.match(shellSource, /submitConversationFollowUp/);
@@ -15,7 +16,8 @@ test("codex remote app when follow-up submit is wired, should call Worker API an
   assert.match(controllerSource, /followUpConversation/);
   assert.match(controllerSource, /clientRequestId/);
   assert.match(controllerSource, /expectedConversationId/);
-  assert.doesNotMatch(`${shellSource}\n${controllerSource}`, /StartConversationInput|startConversation/);
+  assert.match(`${shellSource}\n${startControllerSource}`, /startConversation/);
+  assert.match(shellSource, /selectedProject/);
 });
 
 test("codex remote app when selection changes, should refresh device-scoped approvals by conversation key", () => {

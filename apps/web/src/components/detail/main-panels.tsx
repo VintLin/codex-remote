@@ -23,6 +23,7 @@ import { iconForDevice } from "../shared/icons";
 
 interface ConversationMainProps {
   assistantThread: AssistantThreadSnapshot | null;
+  canStartConversation: boolean;
   canSubmitFollowUp: boolean;
   conversation: CodexConversation | null;
   controlStatus: "accepted" | "failed" | "idle" | "submitting";
@@ -36,6 +37,7 @@ interface ConversationMainProps {
   onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   onSubmitFollowUp: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
   onSubmitInterrupt: () => Promise<void>;
+  onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
   onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
@@ -43,6 +45,7 @@ interface ConversationMainProps {
   nextConversationKey: string | null;
   pendingApprovals: PendingApproval[];
   source: WorkbenchData["source"];
+  startStatus: "accepted" | "failed" | "idle" | "submitting";
   activeTurnId: string | null;
 }
 
@@ -87,6 +90,7 @@ interface SearchDialogProps {
 
 export function ConversationMain({
   assistantThread,
+  canStartConversation,
   canSubmitFollowUp,
   conversation,
   controlStatus,
@@ -103,10 +107,12 @@ export function ConversationMain({
   onSubmitApprovalDecision,
   onSubmitFollowUp,
   onSubmitInterrupt,
+  onSubmitStart,
   onSubmitSteer,
   previousConversationKey,
   pendingApprovals,
   source,
+  startStatus,
   activeTurnId,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? "对话" : conversation.title;
@@ -184,6 +190,11 @@ export function ConversationMain({
             <span>当前显示示例数据 · {datasourceStatus.join(" · ")}</span>
           </section>
         ) : null}
+        <StartConversationStrip
+          canStart={canStartConversation}
+          onSubmitStart={onSubmitStart}
+          startStatus={startStatus}
+        />
         <ConversationControlStrip
           activeTurnId={activeTurnId}
           canControl={canSubmitFollowUp}
@@ -202,6 +213,52 @@ export function ConversationMain({
         />
       </div>
     </main>
+  );
+}
+
+function StartConversationStrip({
+  canStart,
+  onSubmitStart,
+  startStatus,
+}: {
+  canStart: boolean;
+  onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
+  startStatus: "accepted" | "failed" | "idle" | "submitting";
+}) {
+  const [draft, setDraft] = useState("");
+  const disabled = !canStart || startStatus === "submitting";
+
+  return (
+    <form
+      aria-label="Start conversation"
+      className="conversation-control-strip"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const message = draft.trim();
+        if (!message || disabled) {
+          return;
+        }
+        void (async () => {
+          if (await onSubmitStart(message) === "accepted") {
+            setDraft("");
+          }
+        })();
+      }}
+    >
+      <div className="conversation-control-row">
+        <input
+          aria-label="Start new conversation"
+          className="conversation-control-input"
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+          value={draft}
+        />
+        <button className="button secondary conversation-control-button" disabled={disabled || !draft.trim()} type="submit">
+          Start
+        </button>
+        <span className="conversation-control-meta">{startStatus}</span>
+      </div>
+    </form>
   );
 }
 

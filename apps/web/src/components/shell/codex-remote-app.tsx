@@ -16,6 +16,10 @@ import {
 } from "../../domain/sidebar/sidebarModel";
 import { submitConversationFollowUp, type FollowUpSubmitStatus } from "./followUpSubmitController";
 import {
+  submitStartConversation,
+  type StartConversationSubmitStatus,
+} from "./startConversationSubmitController";
+import {
   submitApprovalDecision,
   submitInterrupt,
   submitSteer,
@@ -63,6 +67,7 @@ export function CodexRemoteApp() {
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
   const [followUpStatus, setFollowUpStatus] = useState<FollowUpSubmitStatus>("idle");
+  const [startStatus, setStartStatus] = useState<StartConversationSubmitStatus>("idle");
   const [controlStatus, setControlStatus] = useState<ControlSubmitStatus>("idle");
   const [taskStatus, setTaskStatus] = useState<"failed" | "idle" | "submitting">("idle");
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -83,6 +88,7 @@ export function CodexRemoteApp() {
     () => createSidebarModel({ conversations, expandedProjectIds, projects }),
     [expandedProjectIds, conversations, projects],
   );
+  const selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? projects[0] ?? null;
   const conversationNavigator = useMemo(
     () =>
       selectedConversationKey
@@ -91,6 +97,7 @@ export function CodexRemoteApp() {
     [selectedConversationKey, sidebarModel],
   );
   const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(controlPlaneToken);
+  const canStartConversation = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null;
   const activeTurnId = getActiveTurnId(assistantThread);
 
   const refreshWorkbenchData = useCallback(async (conversationKey: string | null) => {
@@ -139,6 +146,16 @@ export function CodexRemoteApp() {
     baseUrl: controlPlaneBaseUrl,
     token: controlPlaneToken,
   }), []);
+
+  const submitStart = useCallback(async (message: string) => submitStartConversation({
+    createClientRequestId: () => crypto.randomUUID(),
+    deviceId: selectedProject?.deviceId ?? selectedDeviceId ?? null,
+    message,
+    projectId: selectedProject?.id ?? null,
+    refreshWorkbenchData,
+    setStatus: setStartStatus,
+    workerClient,
+  }), [refreshWorkbenchData, selectedDeviceId, selectedProject?.deviceId, selectedProject?.id, workerClient]);
 
   const submitInterruptControl = useCallback(async () => {
     await submitInterrupt({
@@ -323,6 +340,7 @@ export function CodexRemoteApp() {
   useEffect(() => {
     setSelectedDetailTarget(null);
     setFollowUpStatus("idle");
+    setStartStatus("idle");
     setControlStatus("idle");
     setTaskStatus("idle");
   }, [selectedConversationKey]);
@@ -476,6 +494,7 @@ export function CodexRemoteApp() {
         main: (
           <ConversationMain
             assistantThread={null}
+            canStartConversation={canStartConversation}
             canSubmitFollowUp={false}
             activeTurnId={null}
             controlStatus={controlStatus}
@@ -498,10 +517,12 @@ export function CodexRemoteApp() {
             onSubmitApprovalDecision={submitApprovalControl}
             onSubmitFollowUp={submitFollowUp}
             onSubmitInterrupt={submitInterruptControl}
+            onSubmitStart={submitStart}
             onSubmitSteer={submitSteerControl}
             pendingApprovals={[]}
             previousConversationKey={conversationNavigator.previousConversationKey}
             source={source}
+            startStatus={startStatus}
           />
         ),
       };
@@ -521,6 +542,7 @@ export function CodexRemoteApp() {
       main: (
         <ConversationMain
           assistantThread={assistantThread}
+          canStartConversation={canStartConversation}
           canSubmitFollowUp={canSubmitFollowUp}
           activeTurnId={activeTurnId}
           controlStatus={controlStatus}
@@ -543,10 +565,12 @@ export function CodexRemoteApp() {
           onSubmitApprovalDecision={submitApprovalControl}
           onSubmitFollowUp={submitFollowUp}
           onSubmitInterrupt={submitInterruptControl}
+          onSubmitStart={submitStart}
           onSubmitSteer={submitSteerControl}
           pendingApprovals={pendingApprovals}
           previousConversationKey={conversationNavigator.previousConversationKey}
           source={source}
+          startStatus={startStatus}
         />
       ),
     };
