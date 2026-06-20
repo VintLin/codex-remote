@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { openTaskDatabase } from "@codex-remote/db";
 
 import { createWorkerUpstreamClient } from "../client/workerClient.ts";
 import { createSafeStartupSummary, loadControlPlaneConfig } from "../config/controlPlaneConfig.ts";
@@ -7,9 +8,11 @@ import { createControlPlaneHttpApp } from "../http/controlPlaneHttpApp.ts";
 export function startControlPlaneHttpServer(env: NodeJS.ProcessEnv = process.env): void {
   try {
     const config = loadControlPlaneConfig(env);
+    const taskDatabase = openTaskDatabase(config.taskDatabasePath);
     const app = createControlPlaneHttpApp({
       config,
       now: () => new Date().toISOString(),
+      taskRepository: taskDatabase.tasks,
       workerClient: createWorkerUpstreamClient({ timeoutMs: config.requestTimeoutMs }),
     });
 

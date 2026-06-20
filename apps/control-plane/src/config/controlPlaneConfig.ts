@@ -12,6 +12,7 @@ export interface ControlPlaneConfig {
   port: number;
   publicToken: string;
   requestTimeoutMs: number;
+  taskDatabasePath: string;
 }
 
 interface ControlPlaneConfigInput {
@@ -21,6 +22,7 @@ interface ControlPlaneConfigInput {
   port?: unknown;
   publicToken?: unknown;
   requestTimeoutMs?: unknown;
+  taskDatabasePath?: unknown;
 }
 
 export function loadControlPlaneConfig(env: NodeJS.ProcessEnv): ControlPlaneConfig {
@@ -36,6 +38,7 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv): ControlPlaneConf
     port: readPort(input.port),
     publicToken,
     requestTimeoutMs: readPositiveInteger(input.requestTimeoutMs, 5_000),
+    taskDatabasePath: readTaskDatabasePath(input.taskDatabasePath),
   };
 }
 
@@ -177,6 +180,18 @@ function readPort(value: unknown): number {
   }
 
   return readPositiveInteger(value, 8786, 65_535);
+}
+
+function readTaskDatabasePath(value: unknown): string {
+  if (value === undefined) {
+    return ":memory:";
+  }
+
+  if (typeof value !== "string" || !value.trim() || value.includes("\0")) {
+    throw new Error("control_plane_config_invalid");
+  }
+
+  return value.trim();
 }
 
 function readPositiveInteger(value: unknown, fallback: number, max = 60_000): number {

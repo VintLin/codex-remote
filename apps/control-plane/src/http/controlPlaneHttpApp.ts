@@ -1,14 +1,20 @@
 import { randomUUID } from "node:crypto";
 
 import { Hono, type Context } from "hono";
+import type { TaskRepository } from "@codex-remote/db";
 import type {
   ApprovalDecisionInput,
+  BoardTask,
   CodexConversation,
   ConversationTimeline,
+  CreateTaskInput,
   FollowUpInput,
   InterruptTurnInput,
+  LinkTaskConversationInput,
   StartConversationInput,
   SteerTurnInput,
+  TaskConversationLink,
+  TaskStatus,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -17,7 +23,7 @@ import type { ControlPlaneConfig, ConfiguredWorkerDevice } from "../config/contr
 import { createDeviceRegistry } from "../registry/deviceRegistry.ts";
 import { projectDevice } from "../registry/deviceRegistry.ts";
 import type { WorkerUpstreamClient } from "../client/workerClient.ts";
-import { ControlPlaneHttpError, mapUnknownError, toErrorEnvelope } from "./errors.ts";
+import { ControlPlaneHttpError, mapMissingTaskLink, mapTaskError, mapUnknownError, toErrorEnvelope } from "./errors.ts";
 
 type ControlPlaneHonoEnv = {
   Variables: {
@@ -27,13 +33,15 @@ type ControlPlaneHonoEnv = {
 
 type ErrorStatus = 400 | 401 | 403 | 404 | 408 | 409 | 424 | 500;
 const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
-const corsAllowMethods = "GET, POST, OPTIONS";
+const corsAllowMethods = "GET, POST, DELETE, OPTIONS";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
+const taskTitleMaxLength = 200;
 
 export function createControlPlaneHttpApp(params: {
   config: ControlPlaneConfig;
   now: () => string;
+  taskRepository: TaskRepository;
   workerClient: WorkerUpstreamClient;
 }): Hono<ControlPlaneHonoEnv> {
   const app = new Hono<ControlPlaneHonoEnv>();
@@ -103,6 +111,29 @@ export function createControlPlaneHttpApp(params: {
       .flat()
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     return c.json(conversations);
+  });
+
+  app.get("/v1/tasks", (c) => c.json(runTaskOperation(params.taskRepository, "task/list", (repository) => repository.listTasks())));
+
+  app.post("/v1/tasks", async (c) => {
+    const input = await readCreateTaskInputBody(c);
+    const task = runTaskOperation(params.taskRepository, "task/create", (repository) => repository.createTask(input));
+    return c.json(task, 201);
+  });
+
+  app.post("/v1/tasks/:taskId/conversation-links", async (c) => {
+    const taskId = c.req.param("taskId");
+    const input = await readLinkTaskConversationInputBody(c);
+    const task = runTaskOperation(params.taskRepository, "task/link", (repository) => repository.linkConversation(taskId, input));
+    return c.json(requireLinkedConversation(task, input), 201);
+  });
+
+  app.delete("/v1/tasks/:taskId/conversation-links/:deviceId/:conversationId", (c) => {
+    const taskId = c.req.param("taskId");
+    const deviceId = c.req.param("deviceId");
+    const conversationId = c.req.param("conversationId");
+    runTaskOperation(params.taskRepository, "task/unlink", (repository) => repository.unlinkConversation(taskId, deviceId, conversationId));
+    return c.body(null, 204);
   });
 
   app.get("/v1/devices/:deviceId/worker/health", async (c) => {
@@ -286,6 +317,25 @@ async function readApprovalDecisionInputBody(c: Context<ControlPlaneHonoEnv>): P
   };
 }
 
+async function readCreateTaskInputBody(c: Context<ControlPlaneHonoEnv>): Promise<CreateTaskInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["title", "status"]);
+  const status = getOptionalTaskStatusField(body, "status");
+  return {
+    title: getRequiredStringField(body, "title", taskTitleMaxLength),
+    ...(status === undefined ? {} : { status }),
+  };
+}
+
+async function readLinkTaskConversationInputBody(c: Context<ControlPlaneHonoEnv>): Promise<LinkTaskConversationInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["deviceId", "conversationId"]);
+  return {
+    deviceId: getRequiredStringField(body, "deviceId"),
+    conversationId: getRequiredStringField(body, "conversationId"),
+  };
+}
+
 async function readBody(c: Context<ControlPlaneHonoEnv>): Promise<Record<string, unknown>> {
   let body: unknown;
   try {
@@ -329,6 +379,36 @@ function getApprovalDecisionField(body: Record<string, unknown>, field: string):
     throw new ControlPlaneHttpError(400, "invalid_request", "Request validation failed.", { field, retryable: false });
   }
   return value;
+}
+
+function getOptionalTaskStatusField(body: Record<string, unknown>, field: string): TaskStatus | undefined {
+  if (!(field in body)) {
+    return undefined;
+  }
+
+  const value = getRequiredStringField(body, field);
+  if (value !== "in_progress" && value !== "waiting" && value !== "done") {
+    throw new ControlPlaneHttpError(400, "invalid_request", "Request validation failed.", { field, retryable: false });
+  }
+  return value;
+}
+
+function runTaskOperation<T>(repository: TaskRepository, operation: string, run: (repository: TaskRepository) => T): T {
+  try {
+    return run(repository);
+  } catch (error) {
+    throw mapTaskError(error, operation);
+  }
+}
+
+function requireLinkedConversation(task: BoardTask, input: LinkTaskConversationInput): TaskConversationLink {
+  const link = task.linkedConversations.find((candidate) =>
+    candidate.deviceId === input.deviceId && candidate.conversationId === input.conversationId
+  );
+  if (link === undefined) {
+    throw mapMissingTaskLink("task/link");
+  }
+  return link;
 }
 
 function isOriginAllowed(origin: string | undefined, allowedOrigins: readonly string[]): boolean {

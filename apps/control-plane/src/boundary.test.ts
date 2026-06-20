@@ -9,10 +9,10 @@ test("control plane source when importing workspace packages, should stay on pub
   const source = readSourceFiles(sourceRoot);
 
   assert.match(source, /@codex-remote\/api-contract/);
+  assert.match(source, /@codex-remote\/db/);
   assert.doesNotMatch(source, /@codex-remote\/codex-protocol/);
   assert.doesNotMatch(source, /from ["']\.\.\/\.\.\/worker\//);
   assert.doesNotMatch(source, /from ["']\.\.\/\.\.\/web\//);
-  assert.doesNotMatch(source, /@codex-remote\/db/);
 });
 
 function readSourceFiles(root: URL): string {

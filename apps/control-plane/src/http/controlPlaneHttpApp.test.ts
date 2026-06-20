@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
+import { openTaskDatabase, type TaskDatabase, type TaskRepository } from "@codex-remote/db";
 import type {
   ApprovalDecisionInput,
+  BoardTask,
   CodexConversation,
   ConversationTimeline,
   FollowUpInput,
@@ -27,10 +32,17 @@ const config: ControlPlaneConfig = {
   port: 8786,
   publicToken: "public-token",
   requestTimeoutMs: 5_000,
+  taskDatabasePath: ":memory:",
 };
 
+const sharedTaskDatabase = openTaskDatabase(":memory:");
+
+test.after(() => {
+  sharedTaskDatabase.close();
+});
+
 test("control plane http app when auth is missing or invalid, should return sanitized 401", async () => {
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: new FakeWorkerClient() });
+  const app = createApp();
 
   const response = await app.request("http://127.0.0.1/v1/devices");
 
@@ -38,8 +50,193 @@ test("control plane http app when auth is missing or invalid, should return sani
   assert.equal((await response.json() as { code: string }).code, "unauthorized");
 });
 
+test("control plane http app when task auth is missing, should return sanitized 401", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+
+    const response = await app.request("http://127.0.0.1/v1/tasks");
+
+    assert.equal(response.status, 401);
+    assert.equal((await response.json() as { code: string }).code, "unauthorized");
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when tasks are created and listed, should return board tasks from the repository", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+
+    const created = await request(app, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Stage 7 task route", status: "waiting" }),
+    });
+    const listed = await request(app, "/v1/tasks");
+
+    assert.equal(created.status, 201);
+    const createdTask = await created.json() as BoardTask;
+    assert.equal(createdTask.title, "Stage 7 task route");
+    assert.equal(createdTask.status, "waiting");
+    assert.deepEqual(await listed.json(), [createdTask]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when backed by a file database, should persist task routes across reopen", async () => {
+  const fixture = TaskDatabaseFixture.createFile();
+  try {
+    const firstApp = createTaskApp(fixture.database.tasks);
+    const created = await request(firstApp, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Persist through Control Plane" }),
+    });
+    const task = await created.json() as BoardTask;
+    await request(firstApp, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-persisted" }),
+    });
+    fixture.database.close();
+
+    const reopened = openTaskDatabase(fixture.databasePath);
+    try {
+      const secondApp = createTaskApp(reopened.tasks);
+      const listed = await request(secondApp, "/v1/tasks");
+
+      assert.deepEqual(await listed.json(), [
+        {
+          id: task.id,
+          title: "Persist through Control Plane",
+          status: "in_progress",
+          linkedConversations: [{ deviceId: "device-a", conversationId: "thread-persisted" }],
+        },
+      ] satisfies BoardTask[]);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    fixture.remove();
+  }
+});
+
+test("control plane http app when a conversation is linked twice, should return the same link without duplicating it", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+    const task = await (await request(app, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Idempotent link" }),
+    })).json() as BoardTask;
+
+    const first = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+    });
+    const second = await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+    });
+    const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
+
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 201);
+    assert.deepEqual(await first.json(), { deviceId: "device-a", conversationId: "thread-1" });
+    assert.deepEqual(await second.json(), { deviceId: "device-a", conversationId: "thread-1" });
+    assert.deepEqual(listed[0]?.linkedConversations, [{ deviceId: "device-a", conversationId: "thread-1" }]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when same conversation id is linked from two devices, should keep device-scoped links", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+    const task = await (await request(app, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Device scoped link" }),
+    })).json() as BoardTask;
+
+    await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-shared" }),
+    });
+    await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-b", conversationId: "thread-shared" }),
+    });
+
+    const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
+    assert.deepEqual(listed[0]?.linkedConversations, [
+      { deviceId: "device-a", conversationId: "thread-shared" },
+      { deviceId: "device-b", conversationId: "thread-shared" },
+    ]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when a linked conversation is deleted, should remove only that device-scoped link", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+    const task = await (await request(app, "/v1/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Delete one link" }),
+    })).json() as BoardTask;
+    await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-shared" }),
+    });
+    await request(app, `/v1/tasks/${task.id}/conversation-links`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-b", conversationId: "thread-shared" }),
+    });
+
+    const deleted = await request(app, `/v1/tasks/${task.id}/conversation-links/device-a/thread-shared`, { method: "DELETE" });
+    const listed = await (await request(app, "/v1/tasks")).json() as BoardTask[];
+
+    assert.equal(deleted.status, 204);
+    assert.deepEqual(listed[0]?.linkedConversations, [{ deviceId: "device-b", conversationId: "thread-shared" }]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when a task is missing, should return a sanitized 404", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createTaskApp(fixture.database.tasks);
+
+    const response = await request(app, "/v1/tasks/missing-task/conversation-links", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: "device-a", conversationId: "thread-1" }),
+    });
+
+    assert.equal(response.status, 404);
+    assert.equal((await response.json() as { code: string }).code, "task_not_found");
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when task repository fails, should not expose raw url stack cause or private paths", async () => {
+  const privatePath = "/Users/Vint/private/tasks.sqlite";
+  const app = createTaskApp(new ThrowingTaskRepository(privatePath) as unknown as TaskRepository);
+
+  const response = await request(app, "/v1/tasks");
+
+  assert.equal(response.status, 500);
+  const body = await response.text();
+  assert.doesNotMatch(body, /https:\/\/worker\.example\/secret/);
+  assert.doesNotMatch(body, /raw stack|cause marker|TaskRepository exploded/);
+  assert.doesNotMatch(body, /\/Users\/Vint\/private|tasks\.sqlite/);
+});
+
 test("control plane http app when browser origin is unexpected, should return sanitized 403", async () => {
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: new FakeWorkerClient() });
+  const app = createApp();
 
   const response = await app.request("http://127.0.0.1/v1/devices", {
     headers: { authorization: "Bearer public-token", origin: "http://evil.example" },
@@ -52,7 +249,7 @@ test("control plane http app when browser origin is unexpected, should return sa
 
 test("control plane http app when devices are listed, should isolate one unavailable worker", async () => {
   const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-b"]) });
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: client });
+  const app = createApp(client);
 
   const response = await request(app, "/v1/devices");
 
@@ -66,7 +263,7 @@ test("control plane http app when devices are listed, should isolate one unavail
 
 test("control plane http app when health is read, should aggregate connected device counts", async () => {
   const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-b"]) });
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: client });
+  const app = createApp(client);
 
   const response = await request(app, "/v1/control-plane/health");
 
@@ -80,7 +277,7 @@ test("control plane http app when health is read, should aggregate connected dev
 });
 
 test("control plane http app when conversations are listed, should normalize configured device ids", async () => {
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: new FakeWorkerClient({ upstreamDeviceId: "other-device" }) });
+  const app = createApp(new FakeWorkerClient({ upstreamDeviceId: "other-device" }));
 
   const response = await request(app, "/v1/conversations");
 
@@ -91,7 +288,7 @@ test("control plane http app when conversations are listed, should normalize con
 
 test("control plane http app when device scoped routes are used, should call selected upstream and normalize identity", async () => {
   const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: client });
+  const app = createApp(client);
 
   const health = await (await request(app, "/v1/devices/device-a/worker/health")).json() as WorkerHealth;
   const capabilities = await (await request(app, "/v1/devices/device-a/worker/capabilities")).json() as WorkerCapabilities;
@@ -105,7 +302,7 @@ test("control plane http app when device scoped routes are used, should call sel
 
 test("control plane http app when approvals are listed, should proxy selected device", async () => {
   const client = new FakeWorkerClient();
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: client });
+  const app = createApp(client);
 
   const response = await request(app, "/v1/devices/device-a/conversations/thread-a/approvals");
 
@@ -119,7 +316,7 @@ test("control plane http app when approvals are listed, should proxy selected de
 
 test("control plane http app when write and control routes are used, should proxy public bodies to selected device", async () => {
   const client = new FakeWorkerClient();
-  const app = createControlPlaneHttpApp({ config, now: nowFixed, workerClient: client });
+  const app = createApp(client);
 
   await request(app, "/v1/devices/device-b/conversations", {
     method: "POST",
@@ -158,11 +355,7 @@ test("control plane http app when write and control routes are used, should prox
 });
 
 test("control plane http app when device is unknown or upstream fails, should return sanitized errors", async () => {
-  const app = createControlPlaneHttpApp({
-    config,
-    now: nowFixed,
-    workerClient: new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) }),
-  });
+  const app = createApp(new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) }));
 
   const missing = await request(app, "/v1/devices/missing/worker/health");
   const unavailable = await request(app, "/v1/devices/device-a/worker/health");
@@ -186,6 +379,85 @@ function request(app: ReturnType<typeof createControlPlaneHttpApp>, path: string
       ...(init.headers ?? {}),
     },
   }));
+}
+
+function createApp(workerClient: WorkerUpstreamClient = new FakeWorkerClient()): ReturnType<typeof createControlPlaneHttpApp> {
+  return createControlPlaneHttpApp({
+    config,
+    now: nowFixed,
+    taskRepository: sharedTaskDatabase.tasks,
+    workerClient,
+  });
+}
+
+function createTaskApp(taskRepository: TaskRepository): ReturnType<typeof createControlPlaneHttpApp> {
+  const params = {
+    config,
+    now: nowFixed,
+    workerClient: new FakeWorkerClient(),
+    taskRepository,
+  };
+  return createControlPlaneHttpApp(params);
+}
+
+class TaskDatabaseFixture {
+  readonly temporaryDirectory: string | null;
+  readonly databasePath: string;
+  readonly database: TaskDatabase;
+
+  private constructor(temporaryDirectory: string | null, databasePath: string, database: TaskDatabase) {
+    this.temporaryDirectory = temporaryDirectory;
+    this.databasePath = databasePath;
+    this.database = database;
+  }
+
+  static createMemory(): TaskDatabaseFixture {
+    return new TaskDatabaseFixture(null, ":memory:", openTaskDatabase(":memory:"));
+  }
+
+  static createFile(): TaskDatabaseFixture {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), "codex-remote-control-plane-"));
+    const databasePath = join(temporaryDirectory, "tasks.sqlite");
+    return new TaskDatabaseFixture(temporaryDirectory, databasePath, openTaskDatabase(databasePath));
+  }
+
+  close(): void {
+    this.database.close();
+    this.remove();
+  }
+
+  remove(): void {
+    if (this.temporaryDirectory !== null) {
+      rmSync(this.temporaryDirectory, { force: true, recursive: true });
+    }
+  }
+}
+
+class ThrowingTaskRepository {
+  private readonly privatePath: string;
+
+  constructor(privatePath: string) {
+    this.privatePath = privatePath;
+  }
+
+  listTasks(): BoardTask[] {
+    const cause = new Error(`cause marker ${this.privatePath}`);
+    const error = new Error(`TaskRepository exploded at https://worker.example/secret ${this.privatePath}`, { cause });
+    error.stack = `raw stack ${this.privatePath}`;
+    throw error;
+  }
+
+  createTask(): BoardTask {
+    return this.listTasks()[0] as BoardTask;
+  }
+
+  linkConversation(): BoardTask {
+    return this.listTasks()[0] as BoardTask;
+  }
+
+  unlinkConversation(): BoardTask {
+    return this.listTasks()[0] as BoardTask;
+  }
 }
 
 class FakeWorkerClient implements WorkerUpstreamClient {

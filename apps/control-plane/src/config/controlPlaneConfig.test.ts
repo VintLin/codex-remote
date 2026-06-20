@@ -21,9 +21,21 @@ test("control plane config when env json is valid, should parse configured devic
   });
 
   assert.equal(config.publicToken, "example-public-token");
+  assert.equal(config.taskDatabasePath, ":memory:");
   assert.equal(config.devices[0]?.id, "device-a");
   assert.equal(config.devices[0]?.baseUrl, "http://127.0.0.1:8788");
   assert.deepEqual(config.allowedOrigins, ["http://127.0.0.1:5173"]);
+});
+
+test("control plane config when task database path is configured, should accept a file path", () => {
+  const config = loadControlPlaneConfig({
+    CODEX_REMOTE_CONTROL_PLANE_CONFIG: JSON.stringify({
+      ...validConfig,
+      taskDatabasePath: "/tmp/codex-remote-control-plane/tasks.sqlite",
+    }),
+  });
+
+  assert.equal(config.taskDatabasePath, "/tmp/codex-remote-control-plane/tasks.sqlite");
 });
 
 test("control plane config when required fields are invalid, should fail closed", () => {

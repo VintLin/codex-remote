@@ -59,6 +59,31 @@ export function mapUnknownError(error: unknown, operation: string, deviceId?: st
   }, deviceId));
 }
 
+export function mapTaskError(error: unknown, operation: string): ControlPlaneHttpError {
+  if (error instanceof ControlPlaneHttpError) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.startsWith("task_not_found:")) {
+    return new ControlPlaneHttpError(404, "task_not_found", "Task was not found.", {
+      operation,
+      retryable: false,
+    });
+  }
+
+  return new ControlPlaneHttpError(500, "control_plane_unavailable", "Control Plane request failed.", {
+    operation,
+    retryable: true,
+  });
+}
+
+export function mapMissingTaskLink(operation: string): ControlPlaneHttpError {
+  return new ControlPlaneHttpError(500, "control_plane_unavailable", "Control Plane request failed.", {
+    operation,
+    retryable: true,
+  });
+}
+
 function safeDetails(details: NonNullable<ErrorEnvelope["details"]>, deviceId: string | undefined): NonNullable<ErrorEnvelope["details"]> {
   return {
     ...details,
@@ -82,6 +107,8 @@ function getSafeMessage(code: string): string {
       return "Conversation was not found.";
     case "turn_not_found":
       return "Turn was not found.";
+    case "task_not_found":
+      return "Task was not found.";
     case "approval_not_found":
       return "Approval request was not found.";
     case "app_server_timeout":
