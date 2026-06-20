@@ -271,7 +271,7 @@ function hasRealWorkerProofDetail(workerProof) {
   }
   return (
     detail.appServerConnected === true &&
-    (detail.transport === "stdio" || detail.transport === "loopbackWebSocket") &&
+    detail.transport === "stdio" &&
     typeof detail.codexVersion === "string" &&
     detail.codexVersion.length > 0
   );

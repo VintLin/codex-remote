@@ -455,7 +455,7 @@ function inspectWorkerEvidence(health, capabilities) {
   const capabilityTransport = allowedTransport(capabilities.value?.appServerTransport);
   const appServerConnected = health.ok && health.value?.appServer?.readyz === true;
   const transportAgrees = healthTransport !== "unknown" && healthTransport === capabilityTransport;
-  const stage9Transport = healthTransport === "stdio" || healthTransport === "loopbackWebSocket";
+  const stage9Transport = healthTransport === "stdio";
   const proven = appServerConnected && capabilities.ok && transportAgrees && stage9Transport;
   return {
     proven,
@@ -489,6 +489,9 @@ function workerEvidenceReasonCode(evidence) {
   }
   if (!evidence.transportAgrees) {
     return "worker_transport_mismatch";
+  }
+  if (evidence.healthTransport === "loopbackWebSocket") {
+    return "debug_websocket_fallback_not_readiness";
   }
   if (!evidence.stage9Transport) {
     return "unsupported_stage9_transport";

@@ -6,6 +6,7 @@ import type { AppServerTransport } from "@codex-remote/api-contract";
 import { assertLoopbackWebSocketUrl } from "../app-server/appServerProcessService.ts";
 
 interface WorkerHttpConfigInput {
+  appServerTransport: string | undefined;
   appServerUrl: string | undefined;
   allowedOrigins: string | undefined;
   allowedProjectRoot: string | undefined;
@@ -64,6 +65,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
   const requestTimeoutMs = parsePositiveBoundedInteger(input.requestTimeoutMs, 5_000);
   const appServerUrl = parseAppServerUrl(input.appServerUrl);
   const startAppServer = parseBooleanFlag(input.startAppServer);
+  const appServerTransport = parseAppServerTransport(input.appServerTransport, appServerUrl);
 
   return {
     deviceId: input.deviceId?.trim() || "local-device",
@@ -74,7 +76,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
     port,
     appServerUrl,
     startAppServer,
-    appServerTransport: appServerUrl ? "loopbackWebSocket" : "stdio",
+    appServerTransport,
     connectTimeoutMs,
     requestTimeoutMs,
   };
@@ -88,6 +90,7 @@ function parseWorkerHttpConfigInput(env: NodeJS.ProcessEnv): WorkerHttpConfigInp
     allowedProjectRoot: env.CODEX_REMOTE_ALLOWED_PROJECT_ROOT,
     host: env.CODEX_REMOTE_HTTP_HOST,
     port: env.CODEX_REMOTE_HTTP_PORT,
+    appServerTransport: env.CODEX_REMOTE_APP_SERVER_TRANSPORT,
     appServerUrl: env.CODEX_APP_SERVER_URL,
     startAppServer: env.CODEX_REMOTE_START_APP_SERVER,
     connectTimeoutMs: env.CODEX_REMOTE_CONNECT_TIMEOUT_MS,
@@ -186,6 +189,27 @@ function parseAppServerUrl(value: string | undefined): string | null {
   } catch {
     throw new Error("worker_config_invalid");
   }
+}
+
+function parseAppServerTransport(value: string | undefined, appServerUrl: string | null): AppServerTransport {
+  if (!value || !value.trim()) {
+    return appServerUrl ? "loopbackWebSocket" : "stdio";
+  }
+
+  const transport = value.trim();
+  if (transport === "stdio") {
+    if (appServerUrl) {
+      throw new Error("worker_config_invalid");
+    }
+
+    return "stdio";
+  }
+
+  if (transport === "debug-websocket") {
+    return "loopbackWebSocket";
+  }
+
+  throw new Error("worker_config_invalid");
 }
 
 function parseBooleanFlag(value: string | undefined): boolean {

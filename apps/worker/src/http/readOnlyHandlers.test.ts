@@ -169,6 +169,17 @@ test("worker read-only handlers when health and capabilities are requested, shou
   assert.equal(client.closed, true);
 });
 
+test("worker read-only handlers when health is requested, should report the configured app-server transport", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeClient();
+  const context = createContext(paths.allowedRoot, client, { appServerTransport: "stdio", appServerUrl: null });
+
+  const health = await getHealth(context);
+
+  assert.equal(health.appServer.transport, "stdio");
+  assert.equal(getCapabilities(context).appServerTransport, "stdio");
+});
+
 test("worker read-only handlers when probe runs, should close client through probe lifecycle", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
@@ -271,7 +282,11 @@ async function createTempProjectPaths(): Promise<{
   return { allowedRoot, allowedChild, outside, symlinkEscape };
 }
 
-function createContext(allowedProjectRoot: string, client: WorkerReadOnlyAppServerClient): WorkerReadOnlyHandlerContext {
+function createContext(
+  allowedProjectRoot: string,
+  client: WorkerReadOnlyAppServerClient,
+  configOverrides: Partial<WorkerHttpConfig> = {},
+): WorkerReadOnlyHandlerContext {
   const ticks = ["2026-06-19T10:00:00.000Z", "2026-06-19T10:00:01.000Z"];
 
   return {
@@ -287,6 +302,7 @@ function createContext(allowedProjectRoot: string, client: WorkerReadOnlyAppServ
       requestTimeoutMs: 5_000,
       startAppServer: false,
       workerToken: "example-token",
+      ...configOverrides,
     } satisfies WorkerHttpConfig,
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,

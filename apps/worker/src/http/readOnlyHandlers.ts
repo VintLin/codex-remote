@@ -58,7 +58,7 @@ export async function getHealth(context: WorkerReadOnlyHandlerContext): Promise<
       checkedAt,
       codexVersion: null,
       appServer: {
-        transport: "loopbackWebSocket",
+        transport: context.config.appServerTransport,
         readyz: true,
       },
     };

@@ -196,6 +196,37 @@ test("worker http config when config is valid should return canonical project ro
   assert.equal(config.requestTimeoutMs, 5000);
 });
 
+test("worker http config when app-server transport is explicit should expose the requested transport", async (t) => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
+
+  await t.test("when stdio is requested", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "stdio";
+
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.appServerTransport, "stdio");
+    assert.equal(config.appServerUrl, null);
+  });
+
+  await t.test("when debug websocket is requested", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "debug-websocket";
+
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.appServerTransport, "loopbackWebSocket");
+    assert.equal(config.appServerUrl, null);
+  });
+
+  await t.test("when transport is unsupported", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "websocket";
+
+    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+  });
+});
+
 test("worker http config when project root validation fails should not leak sensitive input", async () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "worker-http-config-"));
   const outsideRoot = join(fixtureRoot, "outside");
