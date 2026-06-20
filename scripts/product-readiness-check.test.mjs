@@ -123,6 +123,69 @@ test("product readiness check when real-check report contains unsafe fields shou
   }
 });
 
+test("product readiness check when real operation passes without worker proof should fail", () => {
+  const root = createFixture();
+  try {
+    mkdirSync(join(root, "logs/real-check"), { recursive: true });
+    writeFileSync(
+      join(root, "logs/real-check/latest.json"),
+      JSON.stringify({
+        schemaVersion: "real-check-report/v1",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        summary: { total: 2, realPass: 1, fixedPass: 0, realGap: 1 },
+        checks: [
+          {
+            name: "worker app-server proof",
+            status: "real-gap",
+            durationMs: 1,
+            detail: { status: 200, reasonCode: "real_app_server_not_proven" },
+          },
+          {
+            name: "start conversation",
+            status: "real-pass",
+            durationMs: 1,
+            detail: { status: 202 },
+          },
+        ],
+      }),
+    );
+    assert.match(
+      runProductReadinessCheck(root).join("\n"),
+      /logs\/real-check\/latest\.json contains real-pass start conversation without real worker proof/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when calibration runner uses weak Q23 proof should fail", () => {
+  const root = createFixture();
+  try {
+    const runnerPath = join(root, "scripts/real-local-calibration.mjs");
+    writeFileSync(
+      runnerPath,
+      readFileSync(runnerPath, "utf8")
+        .replace("no_control_plane_cwd_scope_probe", "no_conversations_to_compare_cwd_scope")
+        .replace("no_control_plane_pagination_probe", "conversationList.length > 0 ? \"real-pass\""),
+    );
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /missing Q23 cwd-scope gap reason/);
+    assert.match(failures, /contains weak Q23 conversation-count pass pattern/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when Web smoke skips missing real stack should fail", () => {
+  const root = createFixture();
+  try {
+    writeFileSync(join(root, "apps/web/e2e/real-local-smoke.spec.ts"), 'import { test } from "@playwright/test";\ntest.skip(true);\n');
+    assert.match(runProductReadinessCheck(root).join("\n"), /apps\/web\/e2e\/real-local-smoke\.spec\.ts contains test\.skip/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("product readiness check when calibration runner writes dangerous report keys should fail", () => {
   const root = createFixture();
   try {

@@ -8,7 +8,7 @@ const controlPlaneToken =
 
 test("real local stack smoke: should load real Control Plane data and submit through the UI", async ({ page, request }) => {
   const realState = await readRealState(request);
-  test.skip(realState.status !== "ready", realState.reason);
+  expect(realState, realState.reason).toEqual({ status: "ready", reason: "ready" });
 
   const externalRequests = new Set<string>();
   page.on("request", (requestEvent) => {
@@ -52,9 +52,9 @@ test("real local stack smoke: should load real Control Plane data and submit thr
 async function readRealState(request) {
   const headers = { authorization: `Bearer ${controlPlaneToken}` };
   try {
-    const health = await request.get(`${controlPlaneBaseUrl}/v1/control-plane/health`, { headers, timeout: 3_000 });
-    if (!health.ok()) {
-      return { status: "gap", reason: `real-gap: control-plane health returned ${health.status()}` };
+    const controlPlaneHealth = await request.get(`${controlPlaneBaseUrl}/v1/control-plane/health`, { headers, timeout: 3_000 });
+    if (!controlPlaneHealth.ok()) {
+      return { status: "gap", reason: `real-gap: control-plane health returned ${controlPlaneHealth.status()}` };
     }
 
     const devicesResponse = await request.get(`${controlPlaneBaseUrl}/v1/devices`, { headers, timeout: 3_000 });
@@ -67,20 +67,25 @@ async function readRealState(request) {
       return { status: "gap", reason: "real-gap: no real device returned" };
     }
 
-    const proofResponse = await request.get(
+    const healthResponse = await request.get(
       `${controlPlaneBaseUrl}/v1/devices/${encodeURIComponent(deviceId)}/worker/health`,
       { headers, timeout: 3_000 },
     );
-    if (!proofResponse.ok()) {
-      return { status: "gap", reason: `real-gap: worker proof returned ${proofResponse.status()}` };
+    if (!healthResponse.ok()) {
+      return { status: "gap", reason: `real-gap: worker health returned ${healthResponse.status()}` };
     }
-    const proof = await proofResponse.json();
-    if (
-      proof?.appServerConnected !== true ||
-      (proof?.transport !== "stdio" && proof?.transport !== "debug-websocket") ||
-      typeof proof?.codexVersion !== "string" ||
-      typeof proof?.protocolGeneratedAt !== "string"
-    ) {
+    const capabilitiesResponse = await request.get(
+      `${controlPlaneBaseUrl}/v1/devices/${encodeURIComponent(deviceId)}/worker/capabilities`,
+      { headers, timeout: 3_000 },
+    );
+    if (!capabilitiesResponse.ok()) {
+      return { status: "gap", reason: `real-gap: worker capabilities returned ${capabilitiesResponse.status()}` };
+    }
+    const health = await healthResponse.json();
+    const capabilities = await capabilitiesResponse.json();
+    const healthTransport = normalizeTransport(health?.appServer?.transport);
+    const capabilitiesTransport = normalizeTransport(capabilities?.appServerTransport);
+    if (health?.appServer?.readyz !== true || healthTransport !== capabilitiesTransport || !isStage9EvidenceTransport(healthTransport)) {
       return { status: "gap", reason: "real-gap: real app-server proof is missing" };
     }
 
@@ -96,4 +101,12 @@ function withoutTrailingSlash(value: string): string {
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+}
+
+function normalizeTransport(value: unknown): string {
+  return value === "stdio" || value === "loopbackWebSocket" || value === "unixSocket" ? value : "unknown";
+}
+
+function isStage9EvidenceTransport(value: string): boolean {
+  return value === "stdio" || value === "loopbackWebSocket";
 }

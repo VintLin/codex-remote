@@ -122,7 +122,7 @@ function checkGitignore(root) {
 }
 
 function checkRealCheckSafety(root) {
-  return [...checkRealCheckRunnerSource(root), ...checkRealCheckLatestReport(root)];
+  return [...checkRealCheckRunnerSource(root), ...checkWebSmokeSource(root), ...checkRealCheckLatestReport(root)];
 }
 
 function checkRealCheckRunnerSource(root) {
@@ -147,7 +147,23 @@ function checkRealCheckRunnerSource(root) {
   ];
   return unsafeReportKeys.flatMap((key) =>
     new RegExp(`\\b${key}\\b`, "i").test(source) ? [`${path} contains unsafe real-check report key ${key}`] : [],
-  );
+  )
+    .concat(source.includes("/worker/capabilities") ? [] : [`${path} missing worker capabilities proof`])
+    .concat(source.includes("appServerTransport") ? [] : [`${path} missing WorkerCapabilities appServerTransport proof`])
+    .concat(source.includes("no_control_plane_cwd_scope_probe") ? [] : [`${path} missing Q23 cwd-scope gap reason`])
+    .concat(source.includes("no_control_plane_pagination_probe") ? [] : [`${path} missing Q23 pagination gap reason`])
+    .concat(source.includes("no_all_workers_down_fixture") ? [] : [`${path} missing Q24 all-workers-down fixture gap reason`])
+    .concat(source.includes("no_invalid_worker_token_fixture") ? [] : [`${path} missing Q24 invalid-worker-token fixture gap reason`])
+    .concat(/conversationList\.length\s*>\s*0\s*\?\s*["']real-pass["']/.test(source) ? [`${path} contains weak Q23 conversation-count pass pattern`] : []);
+}
+
+function checkWebSmokeSource(root) {
+  const path = "apps/web/e2e/real-local-smoke.spec.ts";
+  if (!existsSync(join(root, path))) {
+    return [`${path} missing`];
+  }
+  const source = readText(root, path);
+  return /\btest\.skip\s*\(/.test(source) ? [`${path} contains test.skip`] : [];
 }
 
 function checkRealCheckLatestReport(root) {
@@ -210,6 +226,9 @@ function checkRealCheckLatestReport(root) {
   }
 
   if (Array.isArray(report.checks)) {
+    const workerProof = report.checks.find((check) => check?.name === "worker app-server proof");
+    const hasRealWorkerProof = workerProof?.status === "real-pass";
+    const workerProofGatedChecks = new Set(["start conversation", "follow-up", "interrupt", "steer", "approval decision", "task link"]);
     for (const check of report.checks) {
       const record = requireRecordForScan(check, failures, reportPath);
       for (const key of Object.keys(record)) {
@@ -219,6 +238,9 @@ function checkRealCheckLatestReport(root) {
       }
       if (!["real-pass", "fixed-pass", "real-gap"].includes(record.status)) {
         failures.push(`${reportPath} contains invalid real-check status`);
+      }
+      if (!hasRealWorkerProof && workerProofGatedChecks.has(record.name) && record.status === "real-pass") {
+        failures.push(`${reportPath} contains real-pass ${record.name} without real worker proof`);
       }
       if (record.detail !== undefined) {
         const detail = requireRecordForScan(record.detail, failures, reportPath);

@@ -54,6 +54,8 @@ const allowedDetailKeys = new Set([
   "cursorCount",
 ]);
 
+const workerProofGatedChecks = new Set(["start conversation", "follow-up", "interrupt", "steer", "approval decision", "task link"]);
+
 async function main() {
   const health = await request("/v1/control-plane/health");
   record("control-plane health", health.ok ? "real-pass" : "real-gap", detailFromResponse(health));
@@ -66,14 +68,15 @@ async function main() {
     count: deviceList.length,
   });
 
-  const workerProof = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/health`);
-  record("worker app-server proof", isRealWorkerProof(workerProof.value) ? "real-pass" : "real-gap", {
-    ...detailFromResponse(workerProof),
-    appServerConnected: workerProof.value?.appServerConnected === true,
-    transport: allowedTransport(workerProof.value?.transport),
-    codexVersion: safeShortString(workerProof.value?.codexVersion) ?? "unknown",
-    protocolGeneratedAt: safeShortString(workerProof.value?.protocolGeneratedAt) ?? "unknown",
-    reasonCode: isRealWorkerProof(workerProof.value) ? undefined : "real_app_server_not_proven",
+  const workerHealth = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/health`);
+  const workerCapabilities = await request(`/v1/devices/${encodeURIComponent(deviceId)}/worker/capabilities`);
+  const workerEvidence = inspectWorkerEvidence(workerHealth, workerCapabilities);
+  record("worker app-server proof", workerEvidence.proven ? "real-pass" : "real-gap", {
+    ...detailFromResponse(workerHealth),
+    appServerConnected: workerEvidence.appServerConnected,
+    transport: workerEvidence.transport,
+    codexVersion: workerEvidence.codexVersion,
+    reasonCode: workerEvidence.proven ? undefined : workerEvidence.reasonCode,
   });
 
   const projects = await request("/v1/projects");
@@ -93,17 +96,18 @@ async function main() {
     count: conversationList.length,
   });
 
-  record("thread/list cwd scope", conversationList.length > 0 ? "real-pass" : "real-gap", {
+  record("thread/list cwd scope", "real-gap", {
     count: conversationList.length,
-    reasonCode: conversationList.length > 0 ? undefined : "no_conversations_to_compare_cwd_scope",
+    reasonCode: "no_control_plane_cwd_scope_probe",
   });
-  record("thread/list pagination", conversations.ok ? "real-pass" : "real-gap", {
+  record("thread/list pagination", "real-gap", {
     pageCount: conversations.ok ? 1 : 0,
     cursorCount: 0,
     count: conversationList.length,
+    reasonCode: "no_control_plane_pagination_probe",
   });
 
-  if (deviceId && projectId) {
+  if (workerEvidence.proven && deviceId && projectId) {
     const started = await request(`/v1/devices/${encodeURIComponent(deviceId)}/conversations`, {
       method: "POST",
       json: {
@@ -113,19 +117,19 @@ async function main() {
       },
     });
     conversationId = firstString(started.value?.conversationId) ?? conversationId;
-    record("start conversation", started.status === 202 ? "real-pass" : "real-gap", {
+    record("start conversation", operationStatus("start conversation", started.status === 202, workerEvidence), {
       ...detailFromResponse(started),
       conversationRef: refOf(conversationId),
-      reasonCode: started.status === 202 ? undefined : "start_not_accepted",
+      reasonCode: operationReasonCode(started.status === 202, workerEvidence, "start_not_accepted"),
     });
   } else {
     record("start conversation", "real-gap", {
-      reasonCode: projectId ? "no_device" : "no_project",
+      reasonCode: workerEvidence.proven ? (projectId ? "no_device" : "no_project") : "real_app_server_not_proven",
     });
   }
 
   let activeTurnId = null;
-  if (deviceId && conversationId) {
+  if (workerEvidence.proven && deviceId && conversationId) {
     const timeline = await request(
       `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/timeline`,
     );
@@ -148,10 +152,10 @@ async function main() {
         },
       },
     );
-    record("follow-up", followUp.status === 202 ? "real-pass" : "real-gap", {
+    record("follow-up", operationStatus("follow-up", followUp.status === 202, workerEvidence), {
       ...detailFromResponse(followUp),
       turnRef: refOf(followUp.value?.turnId),
-      reasonCode: followUp.status === 202 ? undefined : "follow_up_not_accepted",
+      reasonCode: operationReasonCode(followUp.status === 202, workerEvidence, "follow_up_not_accepted"),
     });
 
     const approvals = await request(
@@ -180,26 +184,28 @@ async function main() {
           },
         },
       );
-      record("approval decision", decision.status === 202 ? "real-pass" : "real-gap", {
+      record("approval decision", operationStatus("approval decision", decision.status === 202, workerEvidence), {
         ...detailFromResponse(decision),
         turnRef: refOf(approval.turnId),
-        reasonCode: decision.status === 202 ? undefined : "approval_decision_not_accepted",
+        reasonCode: operationReasonCode(decision.status === 202, workerEvidence, "approval_decision_not_accepted"),
       });
     } else {
       record("approval decision", "real-gap", { reasonCode: "no_safe_pending_approval" });
     }
   } else {
-    record("timeline", "real-gap", { reasonCode: "no_conversation" });
-    record("follow-up", "real-gap", { reasonCode: "no_conversation" });
-    record("approval pending scenario", "real-gap", { reasonCode: "no_conversation" });
-    record("approval decision", "real-gap", { reasonCode: "no_conversation" });
+    const reasonCode = workerEvidence.proven ? "no_conversation" : "real_app_server_not_proven";
+    record("timeline", "real-gap", { reasonCode });
+    record("follow-up", "real-gap", { reasonCode });
+    record("approval pending scenario", "real-gap", { reasonCode });
+    record("approval decision", "real-gap", { reasonCode });
   }
 
-  if (deviceId && conversationId && activeTurnId) {
-    await recordActiveTurnControls(deviceId, conversationId, activeTurnId);
+  if (workerEvidence.proven && deviceId && conversationId && activeTurnId) {
+    await recordActiveTurnControls(deviceId, conversationId, activeTurnId, workerEvidence);
   } else {
-    record("interrupt", "real-gap", { reasonCode: "no_safe_active_turn" });
-    record("steer", "real-gap", { reasonCode: "no_safe_active_turn" });
+    const reasonCode = workerEvidence.proven ? "no_safe_active_turn" : "real_app_server_not_proven";
+    record("interrupt", "real-gap", { reasonCode });
+    record("steer", "real-gap", { reasonCode });
   }
 
   const task = await request("/v1/tasks", {
@@ -216,19 +222,19 @@ async function main() {
     reasonCode: task.status === 201 ? undefined : "task_not_created",
   });
 
-  if (taskId && deviceId && projectId && conversationId) {
+  if (workerEvidence.proven && taskId && deviceId && projectId && conversationId) {
     const link = await request(`/v1/tasks/${encodeURIComponent(taskId)}/conversation-links`, {
       method: "POST",
       json: { deviceId, projectId, conversationId },
     });
-    record("task link", link.status === 201 ? "real-pass" : "real-gap", {
+    record("task link", operationStatus("task link", link.status === 201, workerEvidence), {
       ...detailFromResponse(link),
       taskRef: refOf(taskId),
       conversationRef: refOf(conversationId),
-      reasonCode: link.status === 201 ? undefined : "task_link_not_created",
+      reasonCode: operationReasonCode(link.status === 201, workerEvidence, "task_link_not_created"),
     });
   } else {
-    record("task link", "real-gap", { reasonCode: "missing_task_or_conversation" });
+    record("task link", "real-gap", { reasonCode: workerEvidence.proven ? "missing_task_or_conversation" : "real_app_server_not_proven" });
   }
 
   const invalidLink = taskId
@@ -246,22 +252,13 @@ async function main() {
     reasonCode: invalidLink.status >= 400 ? undefined : "invalid_ids_not_rejected",
   });
 
-  const down = await request("/v1/conversations", { baseUrlOverride: "http://127.0.0.1:9" });
-  record("control-plane all-workers-down", down.ok ? "real-gap" : "real-pass", {
-    ...detailFromResponse(down),
-    reasonCode: down.ok ? "unexpected_success" : undefined,
-  });
-
-  const invalidToken = await request("/v1/devices", { tokenOverride: "invalid-token" });
-  record("control-plane invalid-worker-token", invalidToken.status === 401 || invalidToken.status === 403 ? "real-pass" : "real-gap", {
-    ...detailFromResponse(invalidToken),
-    reasonCode: invalidToken.status === 401 || invalidToken.status === 403 ? undefined : "invalid_token_not_rejected",
-  });
+  record("control-plane all-workers-down", "real-gap", { reasonCode: "no_all_workers_down_fixture" });
+  record("control-plane invalid-worker-token", "real-gap", { reasonCode: "no_invalid_worker_token_fixture" });
 
   writeReport();
 }
 
-async function recordActiveTurnControls(deviceId, conversationId, activeTurnId) {
+async function recordActiveTurnControls(deviceId, conversationId, activeTurnId, workerEvidence) {
   const interrupt = await request(
     `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
       activeTurnId,
@@ -274,10 +271,10 @@ async function recordActiveTurnControls(deviceId, conversationId, activeTurnId) 
       },
     },
   );
-  record("interrupt", interrupt.status === 202 ? "real-pass" : "real-gap", {
+  record("interrupt", operationStatus("interrupt", interrupt.status === 202, workerEvidence), {
     ...detailFromResponse(interrupt),
     turnRef: refOf(activeTurnId),
-    reasonCode: interrupt.status === 202 ? undefined : "interrupt_not_accepted",
+    reasonCode: operationReasonCode(interrupt.status === 202, workerEvidence, "interrupt_not_accepted"),
   });
 
   const steer = await request(
@@ -293,10 +290,10 @@ async function recordActiveTurnControls(deviceId, conversationId, activeTurnId) 
       },
     },
   );
-  record("steer", steer.status === 202 ? "real-pass" : "real-gap", {
+  record("steer", operationStatus("steer", steer.status === 202, workerEvidence), {
     ...detailFromResponse(steer),
     turnRef: refOf(activeTurnId),
-    reasonCode: steer.status === 202 ? undefined : "steer_not_accepted",
+    reasonCode: operationReasonCode(steer.status === 202, workerEvidence, "steer_not_accepted"),
   });
 }
 
@@ -450,18 +447,67 @@ function safeErrorCode(value) {
 }
 
 function allowedTransport(value) {
-  return value === "stdio" || value === "debug-websocket" ? value : "unknown";
+  return value === "stdio" || value === "loopbackWebSocket" || value === "unixSocket" ? value : "unknown";
 }
 
-function isRealWorkerProof(value) {
-  return (
-    value?.appServerConnected === true &&
-    (value?.transport === "stdio" || value?.transport === "debug-websocket") &&
-    typeof value?.codexVersion === "string" &&
-    value.codexVersion.length > 0 &&
-    typeof value?.protocolGeneratedAt === "string" &&
-    value.protocolGeneratedAt.length > 0
-  );
+function inspectWorkerEvidence(health, capabilities) {
+  const healthTransport = allowedTransport(health.value?.appServer?.transport);
+  const capabilityTransport = allowedTransport(capabilities.value?.appServerTransport);
+  const appServerConnected = health.ok && health.value?.appServer?.readyz === true;
+  const transportAgrees = healthTransport !== "unknown" && healthTransport === capabilityTransport;
+  const stage9Transport = healthTransport === "stdio" || healthTransport === "loopbackWebSocket";
+  const proven = appServerConnected && capabilities.ok && transportAgrees && stage9Transport;
+  return {
+    proven,
+    appServerConnected,
+    transport: healthTransport,
+    codexVersion: safeShortString(health.value?.codexVersion) ?? "unknown",
+    reasonCode: workerEvidenceReasonCode({
+      health,
+      capabilities,
+      appServerConnected,
+      healthTransport,
+      capabilityTransport,
+      transportAgrees,
+      stage9Transport,
+    }),
+  };
+}
+
+function workerEvidenceReasonCode(evidence) {
+  if (!evidence.health.ok) {
+    return "worker_health_unavailable";
+  }
+  if (!evidence.capabilities.ok) {
+    return "worker_capabilities_unavailable";
+  }
+  if (!evidence.appServerConnected) {
+    return "worker_app_server_readyz_not_proven";
+  }
+  if (evidence.healthTransport === "unknown" || evidence.capabilityTransport === "unknown") {
+    return "unknown_worker_transport";
+  }
+  if (!evidence.transportAgrees) {
+    return "worker_transport_mismatch";
+  }
+  if (!evidence.stage9Transport) {
+    return "unsupported_stage9_transport";
+  }
+  return "real_app_server_not_proven";
+}
+
+function operationStatus(name, accepted, workerEvidence) {
+  if (!workerProofGatedChecks.has(name)) {
+    throw new Error(`operation status gate missing check: ${name}`);
+  }
+  return accepted && workerEvidence.proven ? "real-pass" : "real-gap";
+}
+
+function operationReasonCode(accepted, workerEvidence, failureReasonCode) {
+  if (!workerEvidence.proven) {
+    return "real_app_server_not_proven";
+  }
+  return accepted ? undefined : failureReasonCode;
 }
 
 function isActiveTurnStatus(status) {
