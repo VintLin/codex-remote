@@ -13,9 +13,10 @@ test("real local calibration when probing active-turn controls should require ac
     source.indexOf("async function request("),
   );
 
-  assert.match(mainBody, /steerTurnId = followUp\.status === 202 \? firstString\(followUp\.value\?\.turnId\) : null/);
-  assert.match(mainBody, /steerActiveTurnId = steerTurnId \? await waitForActiveTurn\(deviceId, conversationId, steerTurnId\) : null/);
-  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{ interruptTurnId: activeTurnId, steerTurnId, steerActiveTurnId \}, workerEvidence\)/);
+  assert.match(mainBody, /const steerSample = await startSteerSample\(deviceId, projectId\)/);
+  assert.match(mainBody, /steerTurnId = steerSample\.turnId/);
+  assert.match(mainBody, /steerActiveTurnId = steerTurnId && steerConversationId \? await waitForActiveTurn\(deviceId, steerConversationId, steerTurnId\) : null/);
+  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{ interruptTurnId: activeTurnId, steerConversationId, steerTurnId, steerActiveTurnId \}, workerEvidence\)/);
   assert.match(controlsBody, /turnIds\.steerTurnId/);
   assert.match(controlsBody, /turnIds\.steerActiveTurnId/);
   assert.match(controlsBody, /activeTurnProven: true/);
@@ -38,7 +39,11 @@ test("real local calibration should use only safe public steer probes", () => {
   const source = readFileSync(join(repoRoot, "scripts/real-local-calibration.mjs"), "utf8");
   assert.doesNotMatch(source, /thread\/shellCommand|dangerously-bypass|--yolo|rawOutput|commandOutput|processOutput/);
   assert.match(source, /safeSteerPrompt/);
-  assert.doesNotMatch(source.match(/const safeSteerPrompt = "([^"]+)"/)?.[1] ?? "", /read|write|file|command|network|environment|token|path|output/i);
+  const prompt = source.match(/const safeSteerSamplePrompt = "([^"]+)"/)?.[1] ?? "";
+  assert.equal(prompt, "codex-remote-calibration steer sample: wait ten seconds, then reply with OK.");
+  assert.doesNotMatch(prompt, /read|write|file|command|network|environment|env|token|path|output|tool|approval|sandbox|shell|terminal|bash|run|execute/i);
+  assert.match(source, /startSteerSample/);
+  assert.match(source, /steerConversationId/);
 });
 
 test("real local calibration when probing Q23 should use Worker-owned probe evidence", () => {

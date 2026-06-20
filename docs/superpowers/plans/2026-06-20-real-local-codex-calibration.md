@@ -2332,6 +2332,108 @@ Task 15 implementation notes:
 - Real runtime verification passed: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, and `pnpm real:status`.
 - Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
+---
+
+### Task 16: Create Safe Public Active-Turn Steer Sample
+
+**Files:**
+- Modify: `scripts/real-local-calibration.mjs`
+- Modify: `scripts/real-local-calibration.test.mjs`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keep public API, OpenAPI, DB schema, Worker handlers, Control Plane routes, and Codex protocol generated files unchanged unless real evidence proves a route/payload bug.
+- Use only Control Plane public routes from the runner, including device-scoped Worker-shaped routes exposed through Control Plane.
+- Keep Worker as the only app-server caller.
+- Keep report schema allowlisted and sanitized.
+
+**Non-goals:**
+- No approval decision scenario construction.
+- No shell command, file read/write, network, tool use, bypass flags, provider secrets, raw prompt logging, raw ids, raw app-server frames, command output, stack/cause, or private path.
+- No direct app-server event subscription from the calibration runner.
+- No long-running external service, host UI automation, or destructive action.
+- No UI change.
+
+**Pre-review evidence:**
+- Current `logs/real-check/latest.json` records `steer` as `real-gap` with `active-turn-gap`.
+- Task 14 already prevents `steer` `real-pass` unless public timeline proves the target turn is active and public steer returns accepted.
+- The current follow-up sample asks for a brief acknowledgement, so the target turn often completes before timeline can prove it active.
+- Exact allowlisted steer sample prompt: `codex-remote-calibration steer sample: wait ten seconds, then reply with OK.`
+
+Reviewer: `019ee635-5587-77c3-9566-1bfc76fcdd58`
+
+Result: needs changes; plan updated to require an exact allowlisted prompt, an independent steer-only sample, and direct readiness guard tests.
+
+Findings addressed by Task 16:
+
+- High: The steer sample prompt is now exact and must be tested as a constant.
+- High: The delayed steer sample must be an independent steer-only conversation/turn; it must not replace the existing start/follow-up/interrupt evidence chain.
+- Medium: Focused verification now includes `scripts/product-readiness-check.test.mjs`.
+- Low: Runner route wording now requires Control Plane public routes, including device-scoped Worker-shaped routes exposed through Control Plane.
+
+Review focus:
+
+- Is a text-only delayed response sample safe enough for Stage 9 calibration?
+- Does the plan keep the runner on public Control Plane/Worker-shaped APIs?
+- Does it avoid weakening Task 14’s active-turn proof guard?
+- Does it preserve existing follow-up and interrupt evidence if steer remains a real gap?
+
+- [x] **Step 1: Add focused steer sample tests**
+
+Extend `scripts/real-local-calibration.test.mjs` to require:
+
+- the steer sample prompt is a separate named safe prompt;
+- the prompt equals `codex-remote-calibration steer sample: wait ten seconds, then reply with OK.`;
+- the prompt does not mention files, commands, network, environment/env, tokens, paths, output, tools, approvals, sandbox, shell, terminal, bash, run, or execute;
+- the steer sample is independent from the existing follow-up and interrupt evidence chain;
+- the runner waits for public active-turn proof before steer;
+- `steer` still records `active-turn-gap` or `steer-rpc-gap` instead of `real-pass` if active proof or RPC acceptance is missing;
+- `steer` `real-pass` still requires `activeTurnProven=true` and an accepted public steer response.
+
+- [x] **Step 2: Implement safe delayed steer sample**
+
+Update the real-check runner to create a separate steer-only calibration conversation/turn with the exact allowlisted prompt. Keep the existing start, follow-up, approval, and interrupt probing unchanged. If this causes start/follow-up/interrupt evidence to regress, treat the slice as failed and split the steer sample further instead of accepting the regression.
+
+- [x] **Step 3: Run focused and real verification**
+
+```bash
+node --test scripts/real-local-calibration.test.mjs
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: `steer` becomes `real-pass` if the delayed steer-only turn is publicly active and steer is accepted; otherwise it remains a narrower sanitized `real-gap`. Existing start, follow-up, and interrupt evidence must not regress.
+
+Actual: `pnpm real:check` generated `logs/real-check/latest.json` with `total=19 realPass=18 fixedPass=0 realGap=1`. `steer` is now `real-pass` with `activeTurnProven=true` and accepted public steer status. Existing start, follow-up, and interrupt remained `real-pass`.
+
+- [x] **Step 4: Run full gates and commit**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git commit -m "fix: calibrate safe real steer sample"
+```
+
+Task 16 implementation notes:
+
+- Added an exact allowlisted steer sample prompt: `codex-remote-calibration steer sample: wait ten seconds, then reply with OK.`
+- The runner now creates a separate steer-only calibration conversation/turn before attempting steer.
+- The runner still requires public active-turn proof and accepted public steer response before recording `steer` as `real-pass`.
+- Focused verification passed: `node --test scripts/real-local-calibration.test.mjs`, `node --test scripts/product-readiness-check.test.mjs`, and `pnpm product:check`.
+- Real runtime verification passed: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, and `pnpm real:status`.
+- Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.
@@ -2343,7 +2445,7 @@ Task 15 implementation notes:
 - [x] Web has a minimal start conversation entrypoint.
 - [x] `pnpm real:check` creates or uses a `codex-remote-calibration` real conversation.
 - [x] Real read/timeline/start/follow-up/task-link are `real-pass` or `fixed-pass`.
-- [ ] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
+- [x] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
 - [x] `pnpm web:e2e:smoke` passes against the real local stack.
 - [x] Web makes no runtime external font/static asset requests.
 - [x] Q24 all-workers-down is visible as a sanitized dependency error for `/v1/conversations`, not empty real data.

@@ -14,6 +14,8 @@ const workerBaseUrl = normalizeBaseUrl(process.env.CODEX_REMOTE_WORKER_BASE_URL 
 const token =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.CODEX_REMOTE_LOCAL_TOKEN ?? "example-token";
 const requestTimeoutMs = Number.parseInt(process.env.CODEX_REMOTE_REAL_CHECK_TIMEOUT_MS ?? "5000", 10);
+const safeSteerSamplePrompt = "codex-remote-calibration steer sample: wait ten seconds, then reply with OK.";
+const safeSteerPrompt = "codex-remote-calibration steer: keep the response short.";
 
 const checks = [];
 
@@ -128,6 +130,7 @@ async function main() {
   }
 
   let activeTurnId = null;
+  let steerConversationId = null;
   let steerTurnId = null;
   let steerActiveTurnId = null;
   if (workerEvidence.proven && deviceId && conversationId) {
@@ -156,8 +159,6 @@ async function main() {
       turnRef: refOf(followUp.value?.turnId),
       reasonCode: operationReasonCode(followUp.status === 202, workerEvidence, "follow_up_not_accepted"),
     });
-    steerTurnId = followUp.status === 202 ? firstString(followUp.value?.turnId) : null;
-    steerActiveTurnId = steerTurnId ? await waitForActiveTurn(deviceId, conversationId, steerTurnId) : null;
 
     const approvals = await request(
       `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals`,
@@ -193,6 +194,11 @@ async function main() {
     } else {
       record("approval decision", "real-gap", { reasonCode: "no_safe_pending_approval" });
     }
+
+    const steerSample = await startSteerSample(deviceId, projectId);
+    steerConversationId = steerSample.conversationId;
+    steerTurnId = steerSample.turnId;
+    steerActiveTurnId = steerTurnId && steerConversationId ? await waitForActiveTurn(deviceId, steerConversationId, steerTurnId) : null;
   } else {
     const reasonCode = workerEvidence.proven ? "no_conversation" : "real_app_server_not_proven";
     record("timeline", "real-gap", { reasonCode });
@@ -202,7 +208,7 @@ async function main() {
   }
 
   if (workerEvidence.proven && deviceId && conversationId && (activeTurnId || steerTurnId)) {
-    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerTurnId, steerActiveTurnId }, workerEvidence);
+    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerConversationId, steerTurnId, steerActiveTurnId }, workerEvidence);
   } else {
     const reasonCode = workerEvidence.proven ? "no_safe_active_turn" : "real_app_server_not_proven";
     record("interrupt", "real-gap", { reasonCode });
@@ -387,6 +393,26 @@ function recordThreadListProbe(workerProbe) {
   });
 }
 
+async function startSteerSample(deviceId, projectId) {
+  if (!deviceId || !projectId) {
+    return { conversationId: null, turnId: null };
+  }
+
+  const started = await request(`/v1/devices/${encodeURIComponent(deviceId)}/conversations`, {
+    method: "POST",
+    json: {
+      projectId,
+      message: safeSteerSamplePrompt,
+      clientRequestId: `real-check-steer-sample-${Date.now()}`,
+    },
+  });
+
+  return {
+    conversationId: firstString(started.value?.conversationId),
+    turnId: started.status === 202 ? firstString(started.value?.turnId) : null,
+  };
+}
+
 async function waitForTimeline(deviceId, conversationId) {
   let latest = null;
 
@@ -420,10 +446,10 @@ async function waitForActiveTurn(deviceId, conversationId, expectedTurnId) {
 }
 
 async function recordActiveTurnControls(deviceId, conversationId, turnIds, workerEvidence) {
-  const safeSteerPrompt = "codex-remote-calibration steer: keep the response short.";
   if (turnIds.steerTurnId && turnIds.steerActiveTurnId === turnIds.steerTurnId) {
+    const targetSteerConversationId = turnIds.steerConversationId ?? conversationId;
     const steer = await request(
-      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(targetSteerConversationId)}/turns/${encodeURIComponent(
         turnIds.steerTurnId,
       )}/steer`,
       {
