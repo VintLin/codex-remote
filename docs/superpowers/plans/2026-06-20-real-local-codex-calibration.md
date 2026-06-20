@@ -2087,6 +2087,113 @@ git commit -m "fix: stabilize real control calibration"
 
 ---
 
+### Task 14: Build A Safe Real Steer Probe
+
+**Files:**
+- Modify: `scripts/real-local-calibration.mjs`
+- Modify: `scripts/real-local-calibration.test.mjs`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keeps public API, DB schema, Worker handlers, and Codex protocol generated types unchanged unless real evidence proves the Worker payload shape is wrong.
+- Uses only Control Plane-shaped public APIs for the calibration runner.
+- Keeps Worker as the only app-server caller.
+- Keeps report schema allowlisted and sanitized.
+
+**Non-goals:**
+- No approval decision scenario construction.
+- No Q23 cwd-scope or pagination probe implementation.
+- No unsafe `thread/shellCommand`, no bypass approvals/sandbox, no host UI automation, no external services.
+- No raw ids, prompts, command output, raw JSON-RPC, token, raw URL, stack/cause, or private path in reports/docs.
+- No direct app-server event subscription from the calibration runner.
+- No steer sample from interrupted, completed, stored-only, read-only, approval-consumed, or interrupt-consumed turns.
+
+**Pre-review evidence:**
+- Latest real-check records `steer` as sanitized `worker_internal_error` while start, timeline, follow-up, approval pending list, and interrupt record `real-pass`.
+- Q21/Q22 say `turn/steer` only works on a currently in-flight regular turn and must use `expectedTurnId`.
+- The current runner steers a normal accepted follow-up turn without proving it is still in-flight or steerable.
+- Q22 recommends a fresh long-running safe turn and records `steer-rpc-gap` if `turn/steer` is rejected.
+
+Reviewer: `019ee61e-02d4-75d3-9d2b-3ab77ea489b1`
+
+Result: clean enough to execute after safety/readiness guard clarifications.
+
+Findings addressed by Task 14:
+
+- Important: Do not fix Worker steer payload or error mapping until the runner proves it is calling steer on a still in-flight regular turn.
+- Important: The calibration runner must not directly subscribe to app-server events; that would bypass Web -> Control Plane -> Worker readiness evidence.
+- Important: Steer fixture prompts must be allowlisted safe calibration prompts. They must not ask Codex to read or write files, run commands, access network, print environment, reveal paths, reveal tokens, or print command output.
+- Important: `steer` may record `real-pass` only when public timeline proof shows the target turn is active and the public steer route returns accepted. `worker_internal_error`, `active-turn-gap`, and `steer-rpc-gap` remain `real-gap`.
+
+- [x] **Step 1: Add failing calibration probe tests**
+
+Extend `scripts/real-local-calibration.test.mjs` to prove the runner:
+
+- does not use `thread/shellCommand`, bypass flags, host UI automation, or raw output capture for steer;
+- starts or selects a fresh steer sample instead of reusing an interrupted turn;
+- waits for a safe active turn before attempting steer, or records a specific `active-turn-gap` / `steer-rpc-gap` reason instead of generic `steer_not_accepted`.
+- uses only safe allowlisted calibration prompts for steer samples;
+- cannot mark steer `real-pass` unless active-turn proof and accepted steer response are both present.
+
+- [x] **Step 2: Implement safe steer probe**
+
+In `scripts/real-local-calibration.mjs`:
+
+- create a steer-specific calibration conversation/turn through existing public start/follow-up APIs;
+- wait for timeline evidence that the target turn is still active before calling steer;
+- if no active turn appears, record `active-turn-gap`;
+- if steer returns a sanitized failure, record `steer-rpc-gap` or another specific allowlisted reason, not a generic readiness claim;
+- keep `steer-rpc-gap` details limited to safe fields such as `status`, `durationMs`, `sanitizedCode`, `reasonCode`, and opaque refs;
+- do not store or emit raw prompt, command output, raw ids, or raw response bodies.
+
+- [x] **Step 3: Run focused verification**
+
+```bash
+node --test scripts/real-local-calibration.test.mjs
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+- [x] **Step 4: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: `steer` becomes `real-pass` or a narrower `real-gap` such as `active-turn-gap` / `steer-rpc-gap`; fake Worker evidence remains excluded.
+
+Actual: `pnpm real:check` generated `logs/real-check/latest.json` with `total=19 realPass=15 fixedPass=0 realGap=4`. `steer` is now a narrower `real-gap` with `activeTurnProven=false` and `reasonCode=active-turn-gap`; it is no longer a generic Worker error and is not counted as readiness.
+
+- [x] **Step 5: Run full gates and commit**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git commit -m "fix: add safe real steer probe"
+```
+
+---
+
+Task 14 implementation notes:
+
+- `scripts/real-local-calibration.mjs` now waits for public timeline proof that the follow-up turn is still active before calling the public steer route.
+- `steer` can only be recorded as `real-pass` after both active-turn proof and an accepted public steer response.
+- If the active proof is missing, the runner records a sanitized `active-turn-gap` with only opaque refs and allowlisted booleans.
+- `scripts/product-readiness-check.mjs` rejects any `steer` `real-pass` in `logs/real-check/latest.json` that lacks `activeTurnProven=true` and accepted status.
+- Focused verification passed: `node --test scripts/real-local-calibration.test.mjs`, `node --test scripts/product-readiness-check.test.mjs`, and `pnpm product:check`.
+- Real runtime verification passed for stack lifecycle and Web smoke: `pnpm real:start`, `pnpm real:status`, `pnpm real:check`, `pnpm web:e2e:smoke`, `pnpm real:stop`, `pnpm real:status`.
+- Full gates passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
 ## Final Acceptance Checklist
 
 - [x] `pnpm real:start` starts Worker, Control Plane, and Web.
@@ -2096,8 +2203,8 @@ git commit -m "fix: stabilize real control calibration"
 - [x] Web can discover the real local project even when there are zero conversations.
 - [x] Web does not display absolute local project paths from `allowedProjectRoot`.
 - [x] Web has a minimal start conversation entrypoint.
-- [ ] `pnpm real:check` creates or uses a `codex-remote-calibration` real conversation.
-- [ ] Real read/timeline/start/follow-up/task-link are `real-pass` or `fixed-pass`.
+- [x] `pnpm real:check` creates or uses a `codex-remote-calibration` real conversation.
+- [x] Real read/timeline/start/follow-up/task-link are `real-pass` or `fixed-pass`.
 - [ ] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
 - [x] `pnpm web:e2e:smoke` passes against the real local stack.
 - [x] Web makes no runtime external font/static asset requests.

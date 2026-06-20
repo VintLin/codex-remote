@@ -5,7 +5,7 @@ import test from "node:test";
 
 const repoRoot = new URL("../", import.meta.url).pathname;
 
-test("real local calibration when probing active-turn controls should use independent steer and interrupt samples", () => {
+test("real local calibration when probing active-turn controls should require active proof before steer", () => {
   const source = readFileSync(join(repoRoot, "scripts/real-local-calibration.mjs"), "utf8");
   const mainBody = source.slice(source.indexOf("async function main()"), source.indexOf("function inspectWorkerEvidence"));
   const controlsBody = source.slice(
@@ -14,10 +14,14 @@ test("real local calibration when probing active-turn controls should use indepe
   );
 
   assert.match(mainBody, /steerTurnId = followUp\.status === 202 \? firstString\(followUp\.value\?\.turnId\) : null/);
-  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{ interruptTurnId: activeTurnId, steerTurnId \}, workerEvidence\)/);
+  assert.match(mainBody, /steerActiveTurnId = steerTurnId \? await waitForActiveTurn\(deviceId, conversationId, steerTurnId\) : null/);
+  assert.match(mainBody, /recordActiveTurnControls\(deviceId, conversationId, \{ interruptTurnId: activeTurnId, steerTurnId, steerActiveTurnId \}, workerEvidence\)/);
   assert.match(controlsBody, /turnIds\.steerTurnId/);
+  assert.match(controlsBody, /turnIds\.steerActiveTurnId/);
+  assert.match(controlsBody, /activeTurnProven: true/);
+  assert.match(controlsBody, /reasonCode: "active-turn-gap"/);
+  assert.match(controlsBody, /"steer-rpc-gap"/);
   assert.match(controlsBody, /turnIds\.interruptTurnId/);
-  assert.ok(controlsBody.indexOf("turnIds.steerTurnId") < controlsBody.indexOf("turnIds.interruptTurnId"));
 });
 
 test("real local calibration when reading a started conversation should wait for timeline visibility", () => {
@@ -28,4 +32,11 @@ test("real local calibration when reading a started conversation should wait for
   assert.match(mainBody, /const timeline = await waitForTimeline\(deviceId, conversationId\)/);
   assert.match(waitBody, /for \(let attempt = 0; attempt < 10; attempt \+= 1\)/);
   assert.match(waitBody, /await sleep\(250\)/);
+});
+
+test("real local calibration should use only safe public steer probes", () => {
+  const source = readFileSync(join(repoRoot, "scripts/real-local-calibration.mjs"), "utf8");
+  assert.doesNotMatch(source, /thread\/shellCommand|dangerously-bypass|--yolo|rawOutput|commandOutput|processOutput/);
+  assert.match(source, /safeSteerPrompt/);
+  assert.doesNotMatch(source.match(/const safeSteerPrompt = "([^"]+)"/)?.[1] ?? "", /read|write|file|command|network|environment|token|path|output/i);
 });

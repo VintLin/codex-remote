@@ -55,6 +55,7 @@ const allowedDetailKeys = new Set([
   "taskRef",
   "pageCount",
   "cursorCount",
+  "activeTurnProven",
 ]);
 
 const workerProofGatedChecks = new Set(["start conversation", "follow-up", "interrupt", "steer", "approval decision", "task link"]);
@@ -134,6 +135,7 @@ async function main() {
 
   let activeTurnId = null;
   let steerTurnId = null;
+  let steerActiveTurnId = null;
   if (workerEvidence.proven && deviceId && conversationId) {
     const timeline = await waitForTimeline(deviceId, conversationId);
     const turns = Array.isArray(timeline.value?.turns) ? timeline.value.turns : [];
@@ -161,6 +163,7 @@ async function main() {
       reasonCode: operationReasonCode(followUp.status === 202, workerEvidence, "follow_up_not_accepted"),
     });
     steerTurnId = followUp.status === 202 ? firstString(followUp.value?.turnId) : null;
+    steerActiveTurnId = steerTurnId ? await waitForActiveTurn(deviceId, conversationId, steerTurnId) : null;
 
     const approvals = await request(
       `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals`,
@@ -205,7 +208,7 @@ async function main() {
   }
 
   if (workerEvidence.proven && deviceId && conversationId && (activeTurnId || steerTurnId)) {
-    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerTurnId }, workerEvidence);
+    await recordActiveTurnControls(deviceId, conversationId, { interruptTurnId: activeTurnId, steerTurnId, steerActiveTurnId }, workerEvidence);
   } else {
     const reasonCode = workerEvidence.proven ? "no_safe_active_turn" : "real_app_server_not_proven";
     record("interrupt", "real-gap", { reasonCode });
@@ -371,8 +374,25 @@ async function waitForTimeline(deviceId, conversationId) {
   return latest ?? { status: 0, ok: false, durationMs: 0, value: null };
 }
 
+async function waitForActiveTurn(deviceId, conversationId, expectedTurnId) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const timeline = await request(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/timeline`,
+    );
+    const turns = Array.isArray(timeline.value?.turns) ? timeline.value.turns : [];
+    const turn = turns.find((item) => firstString(item?.id) === expectedTurnId);
+    if (turn && isActiveTurnStatus(turn.status)) {
+      return expectedTurnId;
+    }
+    await sleep(250);
+  }
+
+  return null;
+}
+
 async function recordActiveTurnControls(deviceId, conversationId, turnIds, workerEvidence) {
-  if (turnIds.steerTurnId) {
+  const safeSteerPrompt = "codex-remote-calibration steer: keep the response short.";
+  if (turnIds.steerTurnId && turnIds.steerActiveTurnId === turnIds.steerTurnId) {
     const steer = await request(
       `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(
         turnIds.steerTurnId,
@@ -380,7 +400,7 @@ async function recordActiveTurnControls(deviceId, conversationId, turnIds, worke
       {
         method: "POST",
         json: {
-          message: "codex-remote-calibration steer: keep the response short.",
+          message: safeSteerPrompt,
           clientRequestId: `real-check-steer-${Date.now()}`,
           expectedTurnId: turnIds.steerTurnId,
         },
@@ -388,11 +408,16 @@ async function recordActiveTurnControls(deviceId, conversationId, turnIds, worke
     );
     record("steer", operationStatus("steer", steer.status === 202, workerEvidence), {
       ...detailFromResponse(steer),
+      activeTurnProven: true,
       turnRef: refOf(turnIds.steerTurnId),
-      reasonCode: operationReasonCode(steer.status === 202, workerEvidence, "steer_not_accepted"),
+      reasonCode: operationReasonCode(steer.status === 202, workerEvidence, "steer-rpc-gap"),
     });
   } else {
-    record("steer", "real-gap", { reasonCode: "no_safe_active_turn" });
+    record("steer", "real-gap", {
+      activeTurnProven: false,
+      turnRef: refOf(turnIds.steerTurnId),
+      reasonCode: "active-turn-gap",
+    });
   }
 
   if (turnIds.interruptTurnId) {

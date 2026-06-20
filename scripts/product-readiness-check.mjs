@@ -205,6 +205,7 @@ function checkRealCheckLatestReport(root) {
     "taskRef",
     "pageCount",
     "cursorCount",
+    "activeTurnProven",
   ]);
   const unsafeValuePatterns = [
     /\bsk-[A-Za-z0-9_-]{12,}\b/,
@@ -254,6 +255,9 @@ function checkRealCheckLatestReport(root) {
           if (!detailKeys.has(key)) {
             failures.push(`${reportPath} contains unsafe real-check key ${key}`);
           }
+        }
+        if (record.name === "steer" && record.status === "real-pass" && (detail.status !== 202 || detail.activeTurnProven !== true)) {
+          failures.push(`${reportPath} contains real-pass steer without active turn proof`);
         }
       }
     }
