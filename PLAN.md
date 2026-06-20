@@ -56,6 +56,7 @@ flowchart LR
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 已完成本地可验证切片；approval decision 为安全 real-gap |
+| 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 计划中 |
 
 ```mermaid
 flowchart TB
@@ -69,8 +70,9 @@ flowchart TB
   P7["7. DB + Task Board"]
   P8["8. Product Readiness + iOS Guardrails"]
   P9["9. Real Local Codex Calibration - complete with approval safety gap"]
+  P10["10. Isolated Approval Fixture - planned"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
 ```
 
 Stage 9 当前证据：
@@ -412,7 +414,7 @@ Stage 8 剩余限制：
 下一步建议：
 
 - Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
-- 下一步不要把 fake Worker smoke 当作 real readiness；继续新增阶段前先写对应 spec/plan，并明确是否要做 isolated approval fixture、streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
+- Stage 10 已进入计划中，只处理 isolated approval decision fixture；不做 streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
 - Q22 的 approval decision 仍需单独 isolated approval fixture 才能从 safety `real-gap` 移出；自动 accept、persistent policy amendment 和 production approval safety model 不属于 Stage 9 已完成范围。
 - Q23 的 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是 Stage 9 当前阻塞；Q24 degraded-vs-empty 当前 Stage 9 fixture 已有 real-pass evidence。
 
