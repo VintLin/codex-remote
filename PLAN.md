@@ -52,8 +52,8 @@ flowchart LR
 | 3. Web 接真实数据 | Web 从 Worker/Control Plane-shaped API 读取设备、项目、对话、timeline | 已完成本地可验证切片 |
 | 4. 写操作主链 | start、follow-up、stream 输出 | 已完成本地可验证切片 |
 | 5. 控制主链 | interrupt、steer、approval request/response | 已完成本地可验证切片 |
-| 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 下一阶段 |
-| 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 未开始 |
+| 6. Control Plane 多设备 | 多 Worker 注册、路由、状态聚合 | 已完成本地可验证切片 |
+| 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 下一阶段 |
 | 8. 产品化与扩展 | 安装、权限、安全审计、iOS API 复用 | 未开始 |
 
 ```mermaid
@@ -242,21 +242,68 @@ Stage 5 剩余限制：
 - Approval registry 和 idempotency memory 仍是 process-local；Worker restart 会丢 pending approval 和 accepted-command replay memory。
 - Approval UI 仍只显示 sanitized summary/risk/kind，不展示命令、路径、patch 或权限详情。
 
-下一步建议进入 Stage 6：Control Plane 多设备。
+最近完成的 Superpowers spec：
 
-Stage 6 范围建议：
+- `docs/superpowers/specs/2026-06-20-control-plane-multidevice-design.md`
 
-- 先写 Control Plane 多设备 spec，明确 Worker 注册、设备身份、路由、状态聚合、反向连接和审计边界。
-- 先写 threat model，再决定 bearer 开发姿态、token rotation、revocation、device-bound token 是否进入本阶段。
-- 默认只做本地多 Worker 可验证主链，不引入 DB 持久任务看板或 iOS UI，除非 Stage 6 spec 明确需要极小状态存储。
-- Web 继续只调用 Control Plane-shaped API；Worker 继续是唯一 app-server 调用者。
-- 不把 WSS send 当任务完成；如实现 reverse connection，必须设计 `msg_id/seq/ack/lease/resume/credit` 和 backpressure。
+最近完成的 Superpowers plan：
 
-Stage 6 风险：
+- `docs/superpowers/plans/2026-06-20-control-plane-multidevice.md`
 
-- 多设备路由和 auth 容易变成产品化安全系统；必须先收敛为本地可验证 slice，并把生产级 auth 明确标为后续。
-- Control Plane 不能保存 provider/Codex secrets；设备身份、token hash、状态和审计可以保存，秘密留在 Worker 设备侧。
-- 如果过早引入 DB/task board，会稀释多设备主链；Stage 7 才默认 SQLite + Drizzle。
+Stage 6 已完成：
+
+- `packages/api-contract/openapi.yaml` 定义 Control Plane 多设备接口：`GET /v1/control-plane/health`、`GET /v1/devices`、聚合 `GET /v1/conversations`、以及 `/v1/devices/{deviceId}/...` 下的 Worker health、capabilities、timeline、approvals、start、follow-up、interrupt、steer、approval decision。
+- `apps/control-plane` 实现本地配置的 Worker upstream registry、device-scoped proxy 和设备/对话聚合；只调用 Worker public HTTP API，不直接调用 Codex app-server。
+- Control Plane 对 `WorkerHealth`、`WorkerCapabilities`、`CodexConversation`、`ConversationTimeline` 做配置 `deviceId` 归一化；对未知 device、上游失败、非法 JSON、额外字段和 upstream public errors fail closed 且脱敏。
+- Web datasource 改为读取 Control Plane 聚合端点；timeline、follow-up、interrupt、steer、approval list/decision 均使用选中 conversation 的 `deviceId` scoped route。
+- Web 内部使用 `conversationKey = deviceId + conversationId` 作为 UI 选择键，避免两个设备返回相同 `conversationId` 时串到错误设备。
+- fake Worker smoke server 支持参数化 `deviceId`、conversation ids、project id/name，可启动两个 Worker 实例用于 Control Plane Chrome smoke。
+- 未引入 DB、pairing、reverse WSS、stream/event log、task board、iOS、产品化 auth、token rotation、revocation、外部部署或持久审计。
+
+验证：
+
+- `pnpm --filter @codex-remote/api-contract test`
+- `pnpm --filter @codex-remote/api-contract build`
+- `pnpm --filter @codex-remote/control-plane typecheck`
+- `pnpm --filter @codex-remote/control-plane test`（22/22）
+- `pnpm --filter @codex-remote/web typecheck`
+- `pnpm --filter @codex-remote/web test`（82/82）
+- `pnpm --filter @codex-remote/web test -- --test-name-pattern "fake Worker smoke server"`（24/24）
+- `pnpm --filter @codex-remote/web test -- --test-name-pattern "project ids collide|conversation ids collide|remote conversations are empty"`（19/19）
+- `pnpm --filter @codex-remote/worker typecheck`
+- `pnpm --filter @codex-remote/worker test`（143/143）
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+Chrome 验证：
+
+- 两个 fake Worker + 本地 Control Plane + Web 拓扑通过；Control Plane 聚合出 `Smoke A` / `Smoke B` 两个设备和两个同名 `shared-thread` conversation。
+- 选择 `Project B` 的 `shared-thread` 后，Chrome CDP 捕获到 Web 请求 `/v1/devices/smoke-b/conversations/shared-thread/timeline` 与 approvals；未串到 `smoke-a`。
+- Steer 和 approval decision 均走 `/v1/devices/smoke-b/...` device-scoped routes，界面状态更新且 pending approval 消失。
+- Worker B 下线、Worker A 在线时，设备页显示 `Smoke A Connected`、`Smoke B Not connected`，可用对话仍来自 Worker A。
+- 两个 Worker 全部下线时，Web 等待远端加载完成后保留 Control Plane 返回的空 conversations 状态，显示空项目/空对话而不是 mock 对话；已补 regression 覆盖。
+- Chrome DOM 检查未出现 upstream Worker 端口或示例 token。
+
+最终复审修复：
+
+- Web 项目分组不再假设 `projectId` 跨设备全局唯一；本地 sidebar 使用 `projectKey = deviceId + projectId` 做展开状态、React key 和分组，API 的 `RemoteProject.id` 保持原 contract 语义。
+- `apps/web/next-env.d.ts` 已恢复稳定 `.next/types` 路径，避免提交本机 dev 产物路径。
+
+Stage 6 剩余限制：
+
+- Control Plane Worker registry 来自本地 runtime JSON config；没有 DB、pairing、token hash、revocation、audit log 或 reverse WSS。
+- Control Plane auth 是本地开发姿态 bearer token，不是 device-bound token。
+- Worker upstream tokens 只在进程配置中使用；生产级 secret storage 和 rotation 属于后续产品化阶段。
+
+下一步建议进入 Stage 7：持久化与任务看板。
+
+Stage 7 范围建议：
+
+- 先写 DB/task board spec，明确 SQLite + Drizzle schema 是持久化字段唯一事实源。
+- 只做最小任务看板主链：任务、conversation 关联、设备/项目引用和本地持久化迁移验证。
+- 不把 Stage 7 扩成 remote sync、iOS、installer、reverse WSS、产品化 auth 或多租户系统。
 
 后续阶段默认设计输入：
 

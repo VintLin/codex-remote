@@ -17,7 +17,7 @@ Long-term product boundaries:
 
 ## Current Stage Context
 
-The next planned stage is Stage 6: Control Plane multi-device routing and status aggregation.
+The next planned stage is Stage 7: persistence and task board.
 
 Stage 4 completed context:
 
@@ -70,6 +70,27 @@ Stage 6 default design input:
 - Web should move toward Control Plane-shaped API calls, but Worker remains the only app-server caller.
 - Reverse connection default direction is Worker outbound WSS, but WSS send is not durable completion. If implemented, define `msg_id/seq/ack/lease/resume/credit`, backpressure, generation fencing, replay, and reconnect semantics.
 - Keep Stage 6 to a local multi-Worker verifiable slice unless the Stage 6 spec explicitly narrows a small state store. Do not prebuild the Stage 7 task board.
+
+Stage 6 completed context:
+
+- Control Plane is a local configured multi-Worker router under `apps/control-plane`.
+- Public Control Plane fields remain schema-first in `packages/api-contract/openapi.yaml`.
+- Web now consumes Control Plane-shaped endpoints: `/v1/devices`, `/v1/conversations`, and `/v1/devices/{deviceId}/...`.
+- Worker remains the only app-server caller; Control Plane calls only Worker public HTTP APIs.
+- Control Plane keeps upstream Worker URLs/tokens only in runtime config/process memory and never persists provider/Codex secrets.
+- Known device-bearing Worker shapes are normalized to the configured Control Plane `deviceId`.
+- Upstream responses are projected to public contract shapes and fail closed on extra fields or invalid JSON.
+- Web uses a local `conversationKey` derived from `deviceId + conversationId` so duplicate conversation ids across devices do not route timeline/control/approval operations to the wrong device.
+- Web sidebar uses a local `projectKey` derived from `deviceId + projectId` so duplicate project ids across devices do not merge project groups.
+- Fake Worker smoke support can run two parameterized Worker instances for local multi-device Chrome verification.
+- Chrome verified two-device aggregation, duplicate `shared-thread` routing to the selected device, device-scoped steer and approval decision, single-Worker degradation, all-Worker empty remote state, and no upstream Worker port/token leakage.
+- Regression coverage records that a successful remote empty conversations response is a loaded empty state, not mock fallback, and that duplicate project ids are device-scoped in Web grouping.
+
+Stage 6 remaining limitations:
+
+- No DB, pairing, reverse WSS, token rotation, revocation, durable audit, iOS, or productized auth.
+- Local Control Plane bearer auth is a development posture, not device-bound auth.
+- Device registry and Worker upstream tokens come from local runtime config; production secret storage belongs to productization.
 
 ## App-Server Integration Notes
 

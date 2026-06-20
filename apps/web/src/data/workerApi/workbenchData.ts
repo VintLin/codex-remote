@@ -4,11 +4,12 @@ import type {
   Device,
   RemoteProject,
   CodexConversation,
-  WorkerHealth,
   ErrorEnvelope,
 } from "@codex-remote/api-contract";
 
 import type { AssistantTimelineTurn, AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline.ts";
+import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
+import { createProjectKey } from "../../domain/sidebar/sidebarModel.ts";
 
 import { conversations as mockConversations, devices as mockDevices, sidebarProjects as mockProjects } from "../app-server/mockData.ts";
 
@@ -16,6 +17,7 @@ import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
 
 export interface SearchRecent {
   conversationId: string;
+  conversationKey: string;
   title: string;
   project: string;
   active?: boolean;
@@ -46,16 +48,14 @@ export interface LoadWorkbenchDataOptions {
   baseUrl: string;
   token: string;
   fetchImpl?: typeof fetch;
-  selectedConversationId?: string | null;
+  selectedConversationKey?: string | null;
 }
 
 export type LoadReason = WorkbenchData["source"]["reason"];
 
-const fallbackCurrentProject = "未选择项目";
-
 export function createFallbackWorkbenchData(
   reason: WorkbenchData["source"]["reason"],
-  selectedConversationId?: string | null,
+  selectedConversationKey?: string | null,
   sourceError?: SourceErrorEnvelope,
 ): WorkbenchData {
   const conversations = [...mockConversations];
@@ -66,7 +66,7 @@ export function createFallbackWorkbenchData(
     projects: [...mockProjects],
     conversations,
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
-    searchRecents: createSearchRecents(conversations, selectedConversationId),
+    searchRecents: createSearchRecents(conversations, selectedConversationKey),
   };
 }
 
@@ -119,12 +119,13 @@ function createMetadataOnlyAssistantTurn(turn: ConversationTimelineTurn): Assist
 
 function createAssistantThreadsFromConversations(
   conversations: readonly CodexConversation[],
-  selectedTimelineConversationId?: string | null,
+  selectedTimelineConversationKey?: string | null,
   timeline?: ConversationTimeline,
-  timelineErrorConversationId?: string | null,
+  timelineErrorConversationKey?: string | null,
 ): AssistantThreadSnapshot[] {
   return conversations.map((conversation) => {
-    if (timelineErrorConversationId === conversation.id) {
+    const conversationKey = createConversationKey(conversation);
+    if (timelineErrorConversationKey === conversationKey) {
       return {
         id: conversation.id,
         title: conversation.title,
@@ -143,7 +144,7 @@ function createAssistantThreadsFromConversations(
       };
     }
 
-    if (selectedTimelineConversationId !== conversation.id || !timeline) {
+    if (selectedTimelineConversationKey !== conversationKey || !timeline) {
       return {
         id: conversation.id,
         title: conversation.title,
@@ -181,21 +182,6 @@ function createAssistantThreadsFromConversations(
   });
 }
 
-function createDeviceFromWorkerHealth(health: WorkerHealth, baseUrl: string, conversations: readonly CodexConversation[]): Device {
-  const currentProject = conversations[0]?.projectName ?? fallbackCurrentProject;
-
-  return {
-    id: health.deviceId,
-    icon: health.deviceId.slice(0, 2).toUpperCase(),
-    name: health.deviceId,
-    status: health.status === "connected" ? "Connected" : "Not connected",
-    ip: safeWorkerHost(baseUrl),
-    lastOnlineAt: health.checkedAt,
-    currentProject,
-    model: "Codex",
-  };
-}
-
 function createProjectsFromConversations(conversations: readonly CodexConversation[]): RemoteProject[] {
   const seenProjects = new Set<string>();
 
@@ -204,11 +190,13 @@ function createProjectsFromConversations(conversations: readonly CodexConversati
       return [];
     }
 
-    if (seenProjects.has(conversation.projectId)) {
+    const projectKey = createProjectKey({ deviceId: conversation.deviceId, id: conversation.projectId });
+
+    if (seenProjects.has(projectKey)) {
       return [];
     }
 
-    seenProjects.add(conversation.projectId);
+    seenProjects.add(projectKey);
 
     return [
       {
@@ -223,14 +211,6 @@ function createProjectsFromConversations(conversations: readonly CodexConversati
       },
     ];
   });
-}
-
-function safeWorkerHost(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).hostname;
-  } catch {
-    return "unknown";
-  }
 }
 
 function mapSourceReasonFromError(error: unknown): LoadReason {
@@ -283,16 +263,18 @@ function toSourceErrorEnvelope(error: {
 
 function createSearchRecents(
   conversations: readonly CodexConversation[],
-  selectedConversationId?: string | null,
+  selectedConversationKey?: string | null,
 ): SearchRecent[] {
   return conversations.map((conversation) => {
+    const conversationKey = createConversationKey(conversation);
     const result: SearchRecent = {
       conversationId: conversation.id,
+      conversationKey,
       title: conversation.title,
       project: conversation.projectName,
     };
 
-    if (selectedConversationId === conversation.id) {
+    if (selectedConversationKey === conversationKey) {
       result.active = true;
     }
 
@@ -306,7 +288,7 @@ function createSearchRecents(
 
 export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Promise<WorkbenchData> {
   if (!options.token) {
-    return createFallbackWorkbenchData("not_configured", options.selectedConversationId);
+    return createFallbackWorkbenchData("not_configured", options.selectedConversationKey);
   }
   const client = new WorkerApiClient({
     baseUrl: options.baseUrl,
@@ -315,20 +297,19 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
   });
 
   try {
-    const workerHealth = await client.getHealth();
-    const capabilities = await client.getCapabilities();
+    const devices = await client.listDevices();
     const conversations = await client.listConversations();
 
-    const selectedConversation = options.selectedConversationId
-      ? conversations.find((item) => item.id === options.selectedConversationId)
-      : conversations[0];
+    const selectedConversation = findConversationByKey(conversations, options.selectedConversationKey) ?? conversations[0];
+    const timelineConversationKey = selectedConversation ? createConversationKey(selectedConversation) : conversations[0] ? createConversationKey(conversations[0]) : null;
     const timelineConversationId = selectedConversation?.id ?? conversations[0]?.id ?? null;
+    const timelineDeviceId = selectedConversation?.deviceId ?? conversations[0]?.deviceId ?? null;
 
     let timeline: ConversationTimeline | null = null;
     let timelineError: unknown = null;
-    if (capabilities.canReadTimeline && timelineConversationId) {
+    if (timelineDeviceId && timelineConversationId) {
       try {
-        timeline = await client.getTimeline(timelineConversationId);
+        timeline = await client.getTimeline(timelineDeviceId, timelineConversationId);
       } catch (error: unknown) {
         timelineError = error;
       }
@@ -336,32 +317,32 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
 
     const assistantThreads = createAssistantThreadsFromConversations(
       conversations,
-      timelineConversationId,
+      timelineConversationKey,
       timeline ?? undefined,
-      timelineError && timelineConversationId ? timelineConversationId : null,
+      timelineError && timelineConversationKey ? timelineConversationKey : null,
     );
 
     if (timelineError) {
       return {
         source: createSourceFromError(timelineError),
-        devices: [createDeviceFromWorkerHealth(workerHealth, options.baseUrl, conversations)],
+        devices,
         projects: createProjectsFromConversations(conversations),
         conversations,
         assistantThreads,
-        searchRecents: createSearchRecents(conversations, options.selectedConversationId),
+        searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
     }
 
     return {
       source: createWorkbenchSource("loaded"),
-      devices: [createDeviceFromWorkerHealth(workerHealth, options.baseUrl, conversations)],
+      devices,
       projects: createProjectsFromConversations(conversations),
       conversations,
       assistantThreads,
-      searchRecents: createSearchRecents(conversations, options.selectedConversationId),
+      searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
     };
   } catch (error: unknown) {
     const source = createSourceFromError(error);
-    return createFallbackWorkbenchData(source.reason, options.selectedConversationId, source.error);
+    return createFallbackWorkbenchData(source.reason, options.selectedConversationKey, source.error);
   }
 }

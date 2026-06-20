@@ -6,6 +6,7 @@ export type TaskStatus = components["schemas"]["TaskStatus"];
 export type DiffKind = components["schemas"]["DiffKind"];
 export type AppServerTransport = components["schemas"]["AppServerTransport"];
 export type WorkerConnectionStatus = components["schemas"]["WorkerConnectionStatus"];
+export type ControlPlaneHealth = components["schemas"]["ControlPlaneHealth"];
 export type WorkerHealth = components["schemas"]["WorkerHealth"];
 export type WorkerCapabilities = components["schemas"]["WorkerCapabilities"];
 export type ConversationRuntimeStatus = components["schemas"]["ConversationRuntimeStatus"];

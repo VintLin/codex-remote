@@ -1,8 +1,11 @@
 import type { CodexConversation, RemoteProject } from "@codex-remote/api-contract";
 
+import { createConversationKey } from "./conversationIdentity.ts";
+
 export interface SidebarProjectGroup extends RemoteProject {
   conversations: CodexConversation[];
   expanded: boolean;
+  projectKey: string;
 }
 
 export interface SidebarModel {
@@ -12,8 +15,8 @@ export interface SidebarModel {
 }
 
 export interface ConversationNavigatorState {
-  nextConversationId: string | null;
-  previousConversationId: string | null;
+  nextConversationKey: string | null;
+  previousConversationKey: string | null;
 }
 
 export type SidebarSectionId = "pinned" | "projects" | "conversations";
@@ -41,12 +44,23 @@ export function toggleSidebarSection(state: SidebarSectionState, sectionId: Side
   };
 }
 
+export function createProjectKey(project: Pick<RemoteProject, "deviceId" | "id">): string {
+  return `${project.deviceId}\u001f${project.id}`;
+}
+
 export function createSidebarModel(params: CreateSidebarModelParams): SidebarModel {
-  const projectGroups = params.projects.map((project) => ({
-    ...project,
-    conversations: params.conversations.filter((conversation) => conversation.projectId === project.id),
-    expanded: params.expandedProjectIds.has(project.id),
-  }));
+  const projectGroups = params.projects.map((project) => {
+    const projectKey = createProjectKey(project);
+
+    return {
+      ...project,
+      conversations: params.conversations.filter(
+        (conversation) => conversation.projectId === project.id && conversation.deviceId === project.deviceId,
+      ),
+      expanded: params.expandedProjectIds.has(projectKey),
+      projectKey,
+    };
+  });
 
   return {
     pinnedProjects: projectGroups.filter((project) => project.pinned),
@@ -55,22 +69,22 @@ export function createSidebarModel(params: CreateSidebarModelParams): SidebarMod
   };
 }
 
-export function resolveConversationNavigator(model: SidebarModel, selectedConversationId: string): ConversationNavigatorState {
+export function resolveConversationNavigator(model: SidebarModel, selectedConversationKey: string): ConversationNavigatorState {
   const projectGroup = [...model.pinnedProjects, ...model.projects].find((project) =>
-    project.conversations.some((conversation) => conversation.id === selectedConversationId),
+    project.conversations.some((conversation) => createConversationKey(conversation) === selectedConversationKey),
   );
   const conversationScope = projectGroup?.conversations ?? model.freeConversations;
-  const selectedIndex = conversationScope.findIndex((conversation) => conversation.id === selectedConversationId);
+  const selectedIndex = conversationScope.findIndex((conversation) => createConversationKey(conversation) === selectedConversationKey);
 
   if (selectedIndex === -1) {
     return {
-      nextConversationId: null,
-      previousConversationId: null,
+      nextConversationKey: null,
+      previousConversationKey: null,
     };
   }
 
   return {
-    nextConversationId: conversationScope[selectedIndex + 1]?.id ?? null,
-    previousConversationId: conversationScope[selectedIndex - 1]?.id ?? null,
+    nextConversationKey: conversationScope[selectedIndex + 1] ? createConversationKey(conversationScope[selectedIndex + 1]!) : null,
+    previousConversationKey: conversationScope[selectedIndex - 1] ? createConversationKey(conversationScope[selectedIndex - 1]!) : null,
   };
 }

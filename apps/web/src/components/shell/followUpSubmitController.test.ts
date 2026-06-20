@@ -19,14 +19,15 @@ test("submitConversationFollowUp when accepted, should submit through Worker and
   const result = await submitConversationFollowUp({
     conversationId: "thread-1",
     createClientRequestId: () => "client-1",
+    deviceId: "device-a",
     message: "Continue safely",
     refreshWorkbenchData: async (conversationId) => {
       events.push(`refresh:${conversationId}`);
     },
     setFollowUpStatus: (status) => events.push(`status:${status}`),
     workerClient: {
-      followUpConversation: async (conversationId, input) => {
-        events.push(`post:${conversationId}:${input.clientRequestId}:${input.expectedConversationId}:${input.message}`);
+      followUpConversation: async (deviceId, conversationId, input) => {
+        events.push(`post:${deviceId}:${conversationId}:${input.clientRequestId}:${input.expectedConversationId}:${input.message}`);
         return accepted;
       },
     },
@@ -35,7 +36,7 @@ test("submitConversationFollowUp when accepted, should submit through Worker and
   assert.equal(result, "accepted");
   assert.deepEqual(events, [
     "status:submitting",
-    "post:thread-1:client-1:thread-1:Continue safely",
+    "post:device-a:thread-1:client-1:thread-1:Continue safely",
     "status:accepted",
     "refresh:thread-1",
   ]);
@@ -47,6 +48,7 @@ test("submitConversationFollowUp when Worker rejects, should set failed and not 
   const result = await submitConversationFollowUp({
     conversationId: "thread-1",
     createClientRequestId: () => "client-1",
+    deviceId: "device-a",
     message: "Continue safely",
     refreshWorkbenchData: async (conversationId) => {
       events.push(`refresh:${conversationId}`);
@@ -70,6 +72,7 @@ test("submitConversationFollowUp when no conversation is selected, should fail w
   const result = await submitConversationFollowUp({
     conversationId: null,
     createClientRequestId: () => "client-1",
+    deviceId: "device-a",
     message: "Continue safely",
     refreshWorkbenchData: async (conversationId) => {
       events.push(`refresh:${conversationId}`);

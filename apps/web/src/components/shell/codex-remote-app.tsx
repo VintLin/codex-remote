@@ -6,8 +6,10 @@ import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../..
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient } from "../../data/workerApi/client";
 import type { PendingApproval } from "@codex-remote/api-contract";
+import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
+  createProjectKey,
   createSidebarModel,
   resolveConversationNavigator,
   toggleSidebarSection,
@@ -33,18 +35,24 @@ import { type AppView, Sidebar, type SidebarPressedItem } from "../sidebar/sideb
 
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
 type MobileWorkspacePane = "detail" | "main" | "sidebar";
-const workerBaseUrl = process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL ?? "http://127.0.0.1:8787";
-const workerToken = process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN ?? "";
+const controlPlaneBaseUrl =
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ??
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL ??
+  "http://127.0.0.1:8786";
+const controlPlaneToken =
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ??
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN ??
+  "";
 
 export function CodexRemoteApp() {
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [selectedDeviceId, setSelectedDeviceId] = useState(workbenchData.devices[0]!.id);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
-    () => workbenchData.conversations[0]?.id ?? null,
+  const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(
+    () => workbenchData.conversations[0] ? createConversationKey(workbenchData.conversations[0]) : null,
   );
   const [expandedProjectIds, setExpandedProjectIds] = useState(
-    () => new Set(workbenchData.projects.filter((project) => project.expanded).map((project) => project.id)),
+    () => new Set(workbenchData.projects.filter((project) => project.expanded).map((project) => createProjectKey(project))),
   );
   const [sectionState, setSectionState] = useState(createDefaultSidebarSectionState);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -63,96 +71,104 @@ export function CodexRemoteApp() {
   const { devices, projects, conversations, assistantThreads, searchRecents, source } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
-    conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
+    findConversationByKey(conversations, selectedConversationKey) ??
     conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
     conversations[0] ??
     null;
-  const assistantThread = conversation ? assistantThreads.find((thread) => thread.id === conversation.id) ?? null : null;
+  const assistantThread = conversation
+    ? assistantThreads.find((thread) => thread.id === conversation.id && thread.deviceId === conversation.deviceId) ?? null
+    : null;
   const sidebarModel = useMemo(
     () => createSidebarModel({ conversations, expandedProjectIds, projects }),
     [expandedProjectIds, conversations, projects],
   );
   const conversationNavigator = useMemo(
     () =>
-      selectedConversationId
-        ? resolveConversationNavigator(sidebarModel, selectedConversationId)
-        : { nextConversationId: null, previousConversationId: null },
-    [selectedConversationId, sidebarModel],
+      selectedConversationKey
+        ? resolveConversationNavigator(sidebarModel, selectedConversationKey)
+        : { nextConversationKey: null, previousConversationKey: null },
+    [selectedConversationKey, sidebarModel],
   );
-  const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(workerToken);
+  const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(controlPlaneToken);
   const activeTurnId = getActiveTurnId(assistantThread);
 
-  const refreshWorkbenchData = useCallback(async (conversationId: string | null) => {
+  const refreshWorkbenchData = useCallback(async (conversationKey: string | null) => {
     const nextWorkbenchData = await loadWorkbenchData({
-      baseUrl: workerBaseUrl,
-      token: workerToken,
-      selectedConversationId: conversationId,
+      baseUrl: controlPlaneBaseUrl,
+      token: controlPlaneToken,
+      selectedConversationKey: conversationKey,
     });
     setWorkbenchData(nextWorkbenchData);
   }, []);
 
-  const refreshApprovals = useCallback(async (conversationId: string | null) => {
-    if (!conversationId || source.reason !== "loaded" || !workerToken) {
+  const refreshApprovals = useCallback(async (conversationKey: string | null) => {
+    const approvalConversation = findConversationByKey(conversations, conversationKey);
+    if (!approvalConversation || source.reason !== "loaded" || !controlPlaneToken) {
       setPendingApprovals([]);
       return;
     }
 
     try {
       const approvals = await new WorkerApiClient({
-        baseUrl: workerBaseUrl,
-        token: workerToken,
-      }).listApprovals(conversationId);
+        baseUrl: controlPlaneBaseUrl,
+        token: controlPlaneToken,
+      }).listApprovals(approvalConversation.deviceId, approvalConversation.id);
       setPendingApprovals(approvals);
     } catch {
       setPendingApprovals([]);
     }
-  }, [source.reason]);
+  }, [conversations, source.reason]);
 
   const submitFollowUp = useCallback(async (message: string) => {
     return submitConversationFollowUp({
       conversationId: conversation?.id ?? null,
       createClientRequestId: () => crypto.randomUUID(),
+      deviceId: conversation?.deviceId ?? null,
       message,
-      refreshWorkbenchData,
+      refreshWorkbenchData: async () => refreshWorkbenchData(conversation ? createConversationKey(conversation) : null),
       setFollowUpStatus,
       workerClient: new WorkerApiClient({
-        baseUrl: workerBaseUrl,
-        token: workerToken,
+        baseUrl: controlPlaneBaseUrl,
+        token: controlPlaneToken,
       }),
     });
   }, [conversation, refreshWorkbenchData]);
 
   const workerClient = useMemo(() => new WorkerApiClient({
-    baseUrl: workerBaseUrl,
-    token: workerToken,
+    baseUrl: controlPlaneBaseUrl,
+    token: controlPlaneToken,
   }), []);
 
   const submitInterruptControl = useCallback(async () => {
     await submitInterrupt({
       conversationId: conversation?.id ?? null,
       createClientRequestId: () => crypto.randomUUID(),
-      refreshWorkbenchData: async (conversationId) => {
-        await refreshWorkbenchData(conversationId);
-        await refreshApprovals(conversationId);
+      deviceId: conversation?.deviceId ?? null,
+      refreshWorkbenchData: async () => {
+        const conversationKey = conversation ? createConversationKey(conversation) : null;
+        await refreshWorkbenchData(conversationKey);
+        await refreshApprovals(conversationKey);
       },
       setStatus: setControlStatus,
       turnId: activeTurnId,
       workerClient,
     });
-  }, [activeTurnId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
+  }, [activeTurnId, conversation?.deviceId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
 
   const submitSteerControl = useCallback(async (message: string) => submitSteer({
     conversationId: conversation?.id ?? null,
     createClientRequestId: () => crypto.randomUUID(),
+    deviceId: conversation?.deviceId ?? null,
     message,
-    refreshWorkbenchData: async (conversationId) => {
-      await refreshWorkbenchData(conversationId);
-      await refreshApprovals(conversationId);
+    refreshWorkbenchData: async () => {
+      const conversationKey = conversation ? createConversationKey(conversation) : null;
+      await refreshWorkbenchData(conversationKey);
+      await refreshApprovals(conversationKey);
     },
     setStatus: setControlStatus,
     turnId: activeTurnId,
     workerClient,
-  }), [activeTurnId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
+  }), [activeTurnId, conversation?.deviceId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
 
   const submitApprovalControl = useCallback(async (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => {
     await submitApprovalDecision({
@@ -160,22 +176,24 @@ export function CodexRemoteApp() {
       conversationId: conversation?.id ?? null,
       createClientRequestId: () => crypto.randomUUID(),
       decision,
-      refreshWorkbenchData: async (conversationId) => {
-        await refreshWorkbenchData(conversationId);
-        await refreshApprovals(conversationId);
+      deviceId: conversation?.deviceId ?? null,
+      refreshWorkbenchData: async () => {
+        const conversationKey = conversation ? createConversationKey(conversation) : null;
+        await refreshWorkbenchData(conversationKey);
+        await refreshApprovals(conversationKey);
       },
       setStatus: setControlStatus,
       workerClient,
     });
-  }, [conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
+  }, [conversation?.deviceId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
 
   useEffect(() => {
     let shouldIgnore = false;
     void (async () => {
       const nextWorkbenchData = await loadWorkbenchData({
-        baseUrl: workerBaseUrl,
-        token: workerToken,
-        selectedConversationId,
+        baseUrl: controlPlaneBaseUrl,
+        token: controlPlaneToken,
+        selectedConversationKey,
       });
       if (!shouldIgnore) {
         setWorkbenchData(nextWorkbenchData);
@@ -185,11 +203,11 @@ export function CodexRemoteApp() {
     return () => {
       shouldIgnore = true;
     };
-  }, [selectedConversationId]);
+  }, [selectedConversationKey]);
 
   useEffect(() => {
-    void refreshApprovals(conversation?.id ?? null);
-  }, [conversation?.id, refreshApprovals]);
+    void refreshApprovals(conversation ? createConversationKey(conversation) : null);
+  }, [conversation, refreshApprovals]);
 
   useEffect(() => {
     if (selectedDeviceId !== "" && !devices.some((deviceItem) => deviceItem.id === selectedDeviceId)) {
@@ -201,28 +219,28 @@ export function CodexRemoteApp() {
     }
 
     if (!devices.length) {
-      setSelectedConversationId(null);
+      setSelectedConversationKey(null);
       return;
     }
 
     const fallbackConversation =
-      conversations.find((conversationItem) => conversationItem.id === selectedConversationId) ??
+      findConversationByKey(conversations, selectedConversationKey) ??
       conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
       conversations[0] ??
       null;
 
-    if (fallbackConversation && fallbackConversation.id !== selectedConversationId) {
-      setSelectedConversationId(fallbackConversation.id);
+    if (fallbackConversation && createConversationKey(fallbackConversation) !== selectedConversationKey) {
+      setSelectedConversationKey(createConversationKey(fallbackConversation));
     }
 
     if (!fallbackConversation) {
-      setSelectedConversationId(null);
+      setSelectedConversationKey(null);
     }
 
     if (fallbackConversation && fallbackConversation.deviceId !== selectedDeviceId) {
       setSelectedDeviceId(fallbackConversation.deviceId);
     }
-  }, [conversations, devices, selectedConversationId, selectedDeviceId]);
+  }, [conversations, devices, selectedConversationKey, selectedDeviceId]);
 
   useEffect(() => {
     return () => {
@@ -237,7 +255,7 @@ export function CodexRemoteApp() {
       return;
     }
     document.querySelector<HTMLElement>(getSidebarInteractionSelector(focusTarget))?.focus({ preventScroll: true });
-  }, [focusTarget, selectedConversationId, expandedProjectIds]);
+  }, [focusTarget, selectedConversationKey, expandedProjectIds]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -253,7 +271,7 @@ export function CodexRemoteApp() {
     setSelectedDetailTarget(null);
     setFollowUpStatus("idle");
     setControlStatus("idle");
-  }, [assistantThread?.id, conversation?.id]);
+  }, [selectedConversationKey]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -293,27 +311,26 @@ export function CodexRemoteApp() {
 
   const selectDevice = (nextDeviceId: string) => {
     setSelectedDeviceId(nextDeviceId);
-    setSelectedConversationId(
-      conversations.find((conversationItem) => conversationItem.deviceId === nextDeviceId)?.id ?? null,
-    );
+    const nextConversation = conversations.find((conversationItem) => conversationItem.deviceId === nextDeviceId);
+    setSelectedConversationKey(nextConversation ? createConversationKey(nextConversation) : null);
   };
 
-  const toggleProject = (projectId: string, options: { restoreFocus?: boolean } = {}) => {
-    pressSidebarItem({ kind: "project", id: projectId }, options);
+  const toggleProject = (projectKey: string, options: { restoreFocus?: boolean } = {}) => {
+    pressSidebarItem({ kind: "project", id: projectKey }, options);
     setExpandedProjectIds((current) => {
       const next = new Set(current);
-      if (next.has(projectId)) {
-        next.delete(projectId);
+      if (next.has(projectKey)) {
+        next.delete(projectKey);
       } else {
-        next.add(projectId);
+        next.add(projectKey);
       }
       return next;
     });
   };
 
-  const selectConversation = (conversationId: string) => {
-    pressSidebarItem({ kind: "conversation", id: conversationId });
-    setSelectedConversationId(conversationId);
+  const selectConversation = (conversationKey: string) => {
+    pressSidebarItem({ kind: "conversation", id: conversationKey });
+    setSelectedConversationKey(conversationKey);
     setActiveView("conversation");
     if (isMobileViewport) {
       setMobilePane("main");
@@ -404,7 +421,7 @@ export function CodexRemoteApp() {
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
-            nextConversationId={conversationNavigator.nextConversationId}
+            nextConversationKey={conversationNavigator.nextConversationKey}
             onBack={() => setMobilePane("sidebar")}
             onExpandDetail={() => setIsDetailCollapsed(false)}
             onExpandSidebar={() => setIsSidebarCollapsed(false)}
@@ -420,7 +437,7 @@ export function CodexRemoteApp() {
             onSubmitInterrupt={submitInterruptControl}
             onSubmitSteer={submitSteerControl}
             pendingApprovals={[]}
-            previousConversationId={conversationNavigator.previousConversationId}
+            previousConversationKey={conversationNavigator.previousConversationKey}
             source={source}
           />
         ),
@@ -449,7 +466,7 @@ export function CodexRemoteApp() {
           isDetailCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}
           isSidebarCollapsed={isSidebarCollapsed}
-          nextConversationId={conversationNavigator.nextConversationId}
+          nextConversationKey={conversationNavigator.nextConversationKey}
           onBack={() => setMobilePane("sidebar")}
           onExpandDetail={() => setIsDetailCollapsed(false)}
           onExpandSidebar={() => setIsSidebarCollapsed(false)}
@@ -465,7 +482,7 @@ export function CodexRemoteApp() {
           onSubmitInterrupt={submitInterruptControl}
           onSubmitSteer={submitSteerControl}
           pendingApprovals={pendingApprovals}
-          previousConversationId={conversationNavigator.previousConversationId}
+          previousConversationKey={conversationNavigator.previousConversationKey}
           source={source}
         />
       ),
@@ -488,7 +505,7 @@ export function CodexRemoteApp() {
       onToggleProject={toggleProject}
       pressedItem={pressedItem}
       sectionState={sectionState}
-      selectedConversationId={selectedConversationId ?? ""}
+      selectedConversationKey={selectedConversationKey ?? ""}
       sidebarScrollRef={sidebarScrollRef}
       onToggleSection={toggleSection}
     />
@@ -518,7 +535,7 @@ export function CodexRemoteApp() {
         onSelectConversation={selectConversation}
         open={isSearchOpen}
         searchRecents={searchRecents}
-        selectedConversationId={selectedConversationId}
+        selectedConversationKey={selectedConversationKey}
       />
     </>
   );
@@ -541,5 +558,5 @@ function getActiveTurnId(thread: AssistantThreadSnapshot | null): string | null 
 
 function getSidebarInteractionSelector(item: { kind: "project" | "conversation"; id: string }): string {
   const escapedId = CSS.escape(item.id);
-  return item.kind === "project" ? `[data-toggle-project="${escapedId}"]` : `[data-conversation-id="${escapedId}"]`;
+  return item.kind === "project" ? `[data-toggle-project="${escapedId}"]` : `[data-conversation-key="${escapedId}"]`;
 }

@@ -40,7 +40,7 @@ test("WorkerApiClient request when using global fetch should bind the fetch rece
       token: "example-token",
     });
 
-    await client.getHealth();
+    await client.getHealth("device-a");
 
     assert.equal(receivedThis, globalThis);
   } finally {
@@ -74,7 +74,7 @@ test("WorkerApiClient follow-up when called, should POST contract body with bear
     fetchImpl: fetchMock,
   });
 
-  const response = await client.followUpConversation("thread-1", {
+  const response = await client.followUpConversation("device-a", "thread-1", {
     message: "Continue safely",
     clientRequestId: "client-1",
     expectedConversationId: "thread-1",
@@ -82,7 +82,7 @@ test("WorkerApiClient follow-up when called, should POST contract body with bear
 
   assert.deepEqual(response, accepted);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0]?.url, "http://127.0.0.1:8787/v1/conversations/thread-1/follow-up");
+  assert.equal(requests[0]?.url, "http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/follow-up");
   assert.equal(requests[0]?.init.method, "POST");
   assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
   assert.equal((requests[0]?.init.headers as Headers).get("content-type"), "application/json");
@@ -118,10 +118,10 @@ test("WorkerApiClient control methods when called, should use versioned control 
     fetchImpl: fetchMock,
   });
 
-  await client.interruptTurn("thread-1", "turn-1", { clientRequestId: "client-i", expectedTurnId: "turn-1" });
-  await client.steerTurn("thread-1", "turn-1", { clientRequestId: "client-s", expectedTurnId: "turn-1", message: "Adjust" });
-  await client.listApprovals("thread-1");
-  await client.decideApproval("thread-1", "approval-1", {
+  await client.interruptTurn("device-a", "thread-1", "turn-1", { clientRequestId: "client-i", expectedTurnId: "turn-1" });
+  await client.steerTurn("device-a", "thread-1", "turn-1", { clientRequestId: "client-s", expectedTurnId: "turn-1", message: "Adjust" });
+  await client.listApprovals("device-a", "thread-1");
+  await client.decideApproval("device-a", "thread-1", "approval-1", {
     clientRequestId: "client-a",
     decision: "accept",
     expectedApprovalRequestId: "approval-1",
@@ -130,10 +130,10 @@ test("WorkerApiClient control methods when called, should use versioned control 
   });
 
   assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
-    "POST http://127.0.0.1:8787/v1/conversations/thread-1/turns/turn-1/interrupt",
-    "POST http://127.0.0.1:8787/v1/conversations/thread-1/turns/turn-1/steer",
-    "GET http://127.0.0.1:8787/v1/conversations/thread-1/approvals",
-    "POST http://127.0.0.1:8787/v1/conversations/thread-1/approvals/approval-1/decision",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/turns/turn-1/interrupt",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/turns/turn-1/steer",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/approvals",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/approvals/approval-1/decision",
   ]);
   assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
 });

@@ -2,6 +2,7 @@ import type {
   CodexConversation,
   CommandAccepted,
   ConversationTimeline,
+  Device,
   ErrorEnvelope,
   FollowUpInput,
   ApprovalDecisionInput,
@@ -20,16 +21,17 @@ export interface WorkerApiClientConfig {
 }
 
 export interface WorkerApiClientLike {
-  getHealth(): Promise<WorkerHealth>;
-  getCapabilities(): Promise<WorkerCapabilities>;
+  getHealth(deviceId: string): Promise<WorkerHealth>;
+  getCapabilities(deviceId: string): Promise<WorkerCapabilities>;
+  listDevices(): Promise<Device[]>;
   listConversations(): Promise<CodexConversation[]>;
-  getTimeline(conversationId: string): Promise<ConversationTimeline>;
-  startConversation(input: StartConversationInput): Promise<CommandAccepted>;
-  followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
-  interruptTurn(conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
-  steerTurn(conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
-  listApprovals(conversationId: string): Promise<PendingApproval[]>;
-  decideApproval(conversationId: string, approvalRequestId: string, input: ApprovalDecisionInput): Promise<CommandAccepted>;
+  getTimeline(deviceId: string, conversationId: string): Promise<ConversationTimeline>;
+  startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted>;
+  followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
+  interruptTurn(deviceId: string, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
+  steerTurn(deviceId: string, conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
+  listApprovals(deviceId: string, conversationId: string): Promise<PendingApproval[]>;
+  decideApproval(deviceId: string, conversationId: string, approvalRequestId: string, input: ApprovalDecisionInput): Promise<CommandAccepted>;
 }
 
 type RequestOptions = {
@@ -45,7 +47,7 @@ type SanitizedErrorEnvelope = {
   requestId?: string;
 };
 
-const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind"]);
+const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind", "deviceId"]);
 const fallbackErrorMessage = "Worker request failed.";
 
 export interface WorkerApiErrorEnvelope extends Error {
@@ -77,13 +79,18 @@ export class WorkerApiClient implements WorkerApiClientLike {
     this.fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
-  public async getHealth(): Promise<WorkerHealth> {
-    const response = await this.request<WorkerHealth>("/v1/worker/health");
+  public async getHealth(deviceId: string): Promise<WorkerHealth> {
+    const response = await this.request<WorkerHealth>(`/v1/devices/${encodeURIComponent(deviceId)}/worker/health`);
     return response;
   }
 
-  public async getCapabilities(): Promise<WorkerCapabilities> {
-    const response = await this.request<WorkerCapabilities>("/v1/worker/capabilities");
+  public async getCapabilities(deviceId: string): Promise<WorkerCapabilities> {
+    const response = await this.request<WorkerCapabilities>(`/v1/devices/${encodeURIComponent(deviceId)}/worker/capabilities`);
+    return response;
+  }
+
+  public async listDevices(): Promise<Device[]> {
+    const response = await this.request<Device[]>("/v1/devices");
     return response;
   }
 
@@ -92,54 +99,63 @@ export class WorkerApiClient implements WorkerApiClientLike {
     return response;
   }
 
-  public async getTimeline(_conversationId: string): Promise<ConversationTimeline> {
-    const response = await this.request<ConversationTimeline>(`/v1/conversations/${_conversationId}/timeline`);
+  public async getTimeline(deviceId: string, conversationId: string): Promise<ConversationTimeline> {
+    const response = await this.request<ConversationTimeline>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/timeline`,
+    );
     return response;
   }
 
-  public async startConversation(input: StartConversationInput): Promise<CommandAccepted> {
-    const response = await this.request<CommandAccepted>("/v1/conversations", {
-      body: input,
-      method: "POST",
-    });
-    return response;
-  }
-
-  public async followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted> {
-    const response = await this.request<CommandAccepted>(`/v1/conversations/${conversationId}/follow-up`, {
+  public async startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted> {
+    const response = await this.request<CommandAccepted>(`/v1/devices/${encodeURIComponent(deviceId)}/conversations`, {
       body: input,
       method: "POST",
     });
     return response;
   }
 
-  public async interruptTurn(conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted> {
-    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/turns/${turnId}/interrupt`, {
+  public async followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted> {
+    const response = await this.request<CommandAccepted>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/follow-up`,
+      {
+      body: input,
+      method: "POST",
+      },
+    );
+    return response;
+  }
+
+  public async interruptTurn(deviceId: string, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(`/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}/interrupt`, {
       body: input,
       method: "POST",
     });
   }
 
-  public async steerTurn(conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted> {
-    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/turns/${turnId}/steer`, {
+  public async steerTurn(deviceId: string, conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(`/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}/steer`, {
       body: input,
       method: "POST",
     });
   }
 
-  public async listApprovals(conversationId: string): Promise<PendingApproval[]> {
-    return this.request<PendingApproval[]>(`/v1/conversations/${conversationId}/approvals`);
+  public async listApprovals(deviceId: string, conversationId: string): Promise<PendingApproval[]> {
+    return this.request<PendingApproval[]>(`/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals`);
   }
 
   public async decideApproval(
+    deviceId: string,
     conversationId: string,
     approvalRequestId: string,
     input: ApprovalDecisionInput,
   ): Promise<CommandAccepted> {
-    return this.request<CommandAccepted>(`/v1/conversations/${conversationId}/approvals/${approvalRequestId}/decision`, {
-      body: input,
-      method: "POST",
-    });
+    return this.request<CommandAccepted>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals/${encodeURIComponent(approvalRequestId)}/decision`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
   }
 
   private async request<TResponse>(path: string, options: RequestOptions = {}): Promise<TResponse> {
@@ -215,6 +231,7 @@ function sanitizeErrorDetails(details: unknown): {
   limit?: number;
   expected?: string;
   actualKind?: string;
+  deviceId?: string;
 } | undefined {
   if (!isRecord(details)) {
     return undefined;
@@ -229,6 +246,7 @@ function sanitizeErrorDetails(details: unknown): {
     limit?: number;
     expected?: string;
     actualKind?: string;
+    deviceId?: string;
   } = {};
 
   for (const [rawKey, rawValue] of Object.entries(details)) {
@@ -244,6 +262,7 @@ function sanitizeErrorDetails(details: unknown): {
       case "field":
       case "expected":
       case "actualKind":
+      case "deviceId":
         if (typeof rawValue === "string" && rawValue.trim() !== "") {
           sanitized[key] = rawValue;
         }

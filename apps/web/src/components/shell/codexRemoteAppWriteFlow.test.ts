@@ -17,3 +17,12 @@ test("codex remote app when follow-up submit is wired, should call Worker API an
   assert.match(controllerSource, /expectedConversationId/);
   assert.doesNotMatch(`${shellSource}\n${controllerSource}`, /StartConversationInput|startConversation/);
 });
+
+test("codex remote app when selection changes, should refresh device-scoped approvals by conversation key", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.match(shellSource, /refreshApprovals\(conversation \? createConversationKey\(conversation\) : null\)/);
+  assert.match(shellSource, /\}, \[selectedConversationKey\]\);/);
+  assert.doesNotMatch(shellSource, /refreshApprovals\(conversation\?\.id \?\? null\)/);
+  assert.doesNotMatch(shellSource, /\[assistantThread\?\.id, conversation\?\.id\]/);
+});

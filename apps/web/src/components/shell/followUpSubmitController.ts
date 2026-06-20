@@ -4,12 +4,13 @@ export type FollowUpSubmitStatus = "accepted" | "failed" | "idle" | "submitting"
 export type FollowUpSubmitResult = "accepted" | "failed";
 
 export interface FollowUpWorkerClient {
-  followUpConversation(conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
+  followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
 }
 
 export interface SubmitConversationFollowUpOptions {
   conversationId: string | null;
   createClientRequestId: () => string;
+  deviceId: string | null;
   message: string;
   refreshWorkbenchData: (conversationId: string) => Promise<void>;
   setFollowUpStatus: (status: FollowUpSubmitStatus) => void;
@@ -19,14 +20,14 @@ export interface SubmitConversationFollowUpOptions {
 export async function submitConversationFollowUp(
   options: SubmitConversationFollowUpOptions,
 ): Promise<FollowUpSubmitResult> {
-  if (!options.conversationId) {
+  if (!options.deviceId || !options.conversationId) {
     options.setFollowUpStatus("failed");
     return "failed";
   }
 
   options.setFollowUpStatus("submitting");
   try {
-    await options.workerClient.followUpConversation(options.conversationId, {
+    await options.workerClient.followUpConversation(options.deviceId, options.conversationId, {
       message: options.message,
       clientRequestId: options.createClientRequestId(),
       expectedConversationId: options.conversationId,

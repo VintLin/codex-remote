@@ -21,124 +21,62 @@ import type {
 const defaultHost = "127.0.0.1";
 const defaultPort = 8788;
 const defaultToken = "example-token";
+const defaultDeviceId = "smoke-worker";
+const defaultConversationIds = {
+  active: "smoke-thread-1",
+  complete: "smoke-thread-2",
+} as const;
+const defaultProjectId = "smoke-project";
+const defaultProjectName = "stage3-smoke";
 const allowedOrigin = "http://127.0.0.1:5173";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 
-const initialConversations: CodexConversation[] = [
-  {
-    id: "smoke-thread-1",
-    title: "Smoke Worker conversation",
-    deviceId: "smoke-worker",
-    projectId: "smoke-project",
-    projectName: "stage3-smoke",
-    status: "running",
-    updatedAt: "2026-06-20T00:00:00.000Z",
-    summary: "Read-only fake Worker data",
-    sandbox: "workspace-write",
-    approval: "never",
-  },
-  {
-    id: "smoke-thread-2",
-    title: "Smoke complete conversation",
-    deviceId: "smoke-worker",
-    projectId: "smoke-project",
-    projectName: "stage3-smoke",
-    status: "done",
-    updatedAt: "2026-06-20T00:01:00.000Z",
-    summary: "Second fake Worker conversation",
-    sandbox: "workspace-write",
-    approval: "never",
-  },
-];
-
-const health: WorkerHealth = {
-  deviceId: "smoke-worker",
-  status: "connected",
-  checkedAt: "2026-06-20T00:02:00.000Z",
-  codexVersion: "fake-smoke",
-  appServer: {
-    transport: "loopbackWebSocket",
-    readyz: true,
-  },
-};
-
-const capabilities: WorkerCapabilities = {
-  deviceId: "smoke-worker",
-  canReadProjects: true,
-  canReadConversations: true,
-  canReadTimeline: true,
-  canRunReadOnlyProbe: false,
-  appServerTransport: "loopbackWebSocket",
-  supportedSourceKinds: ["cli", "appServer"],
-};
-
-const initialTimelines: Record<string, ConversationTimeline> = {
-  "smoke-thread-1": {
-    deviceId: "smoke-worker",
-    conversationId: "smoke-thread-1",
-    projectId: "smoke-project",
-    readStartedAt: "2026-06-20T00:02:00.000Z",
-    readCompletedAt: "2026-06-20T00:02:01.000Z",
-    snapshotRevision: "smoke-thread-1:2026-06-20T00:02:01.000Z",
-    runtimeStatus: "running",
-    latestTurnStatus: "unknown",
-    turns: [
-      {
-        id: "smoke-turn-1",
-        status: "in_progress",
-        startedAt: 1,
-        completedAt: null,
-        durationMs: null,
-      },
-    ],
-  },
-  "smoke-thread-2": {
-    deviceId: "smoke-worker",
-    conversationId: "smoke-thread-2",
-    projectId: "smoke-project",
-    readStartedAt: "2026-06-20T00:03:00.000Z",
-    readCompletedAt: "2026-06-20T00:03:01.000Z",
-    snapshotRevision: "smoke-thread-2:2026-06-20T00:03:01.000Z",
-    runtimeStatus: "idle",
-    latestTurnStatus: "completed",
-    turns: [
-      {
-        id: "smoke-turn-2",
-        status: "completed",
-        startedAt: 3,
-        completedAt: 4,
-        durationMs: 1_000,
-      },
-    ],
-  },
-};
-
-const initialApprovals: PendingApproval[] = [
-  {
-    id: "smoke-approval-1",
-    conversationId: "smoke-thread-1",
-    turnId: "smoke-turn-1",
-    itemId: "smoke-item-1",
-    kind: "command_execution",
-    status: "pending",
-    startedAt: "2026-06-20T00:02:01.000Z",
-    summary: "Run smoke command",
-    risk: "medium",
-  },
-];
-
 export interface FakeWorkerSmokeServerOptions {
+  conversationIds?: {
+    active: string;
+    complete: string;
+  };
+  deviceId?: string;
   host?: string;
   port?: number;
+  projectId?: string;
+  projectName?: string;
   token?: string;
+}
+
+interface FakeWorkerSeedInput {
+  conversationIds: {
+    active: string;
+    complete: string;
+  };
+  deviceId: string;
+  projectId: string;
+  projectName: string;
+}
+
+interface FakeWorkerSeedData extends FakeWorkerSeedInput {
+  activeTurnId: string;
+  approvals: PendingApproval[];
+  capabilities: WorkerCapabilities;
+  conversations: CodexConversation[];
+  health: WorkerHealth;
+  timelines: Record<string, ConversationTimeline>;
 }
 
 export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOptions = {}) {
   const token = options.token ?? defaultToken;
-  const conversations = cloneConversations(initialConversations);
-  const timelines = cloneTimelines(initialTimelines);
-  const approvals = cloneApprovals(initialApprovals);
+  const seed = createSeedData({
+    conversationIds: options.conversationIds ?? defaultConversationIds,
+    deviceId: options.deviceId ?? defaultDeviceId,
+    projectId: options.projectId ?? defaultProjectId,
+    projectName: options.projectName ?? defaultProjectName,
+  });
+  const conversations = cloneConversations(seed.conversations);
+  const timelines = cloneTimelines(seed.timelines);
+  const approvals = cloneApprovals(seed.approvals);
+  const health = seed.health;
+  const capabilities = seed.capabilities;
   let commandSequence = 0;
 
   return createServer((request, response) => {
@@ -163,6 +101,8 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
       void handleWriteRequest({
         conversations,
         approvals,
+        deviceId: health.deviceId,
+        projectName: seed.projectName,
         timelines,
         nextSequence: () => {
           commandSequence += 1;
@@ -211,9 +151,119 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
   });
 }
 
+function createSeedData(input: FakeWorkerSeedInput): FakeWorkerSeedData {
+  const activeTurnId = "smoke-turn-1";
+  const completeTurnId = "smoke-turn-2";
+  const conversations: CodexConversation[] = [
+    {
+      id: input.conversationIds.active,
+      title: "Smoke Worker conversation",
+      deviceId: input.deviceId,
+      projectId: input.projectId,
+      projectName: input.projectName,
+      status: "running",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+      summary: "Read-only fake Worker data",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+    {
+      id: input.conversationIds.complete,
+      title: "Smoke complete conversation",
+      deviceId: input.deviceId,
+      projectId: input.projectId,
+      projectName: input.projectName,
+      status: "done",
+      updatedAt: "2026-06-20T00:01:00.000Z",
+      summary: "Second fake Worker conversation",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+  ];
+  return {
+    ...input,
+    activeTurnId,
+    approvals: [
+      {
+        id: "smoke-approval-1",
+        conversationId: input.conversationIds.active,
+        turnId: activeTurnId,
+        itemId: "smoke-item-1",
+        kind: "command_execution",
+        status: "pending",
+        startedAt: "2026-06-20T00:02:01.000Z",
+        summary: "Run smoke command",
+        risk: "medium",
+      },
+    ],
+    capabilities: {
+      deviceId: input.deviceId,
+      canReadProjects: true,
+      canReadConversations: true,
+      canReadTimeline: true,
+      canRunReadOnlyProbe: false,
+      appServerTransport: "loopbackWebSocket",
+      supportedSourceKinds: ["cli", "appServer"],
+    },
+    conversations,
+    health: {
+      deviceId: input.deviceId,
+      status: "connected",
+      checkedAt: "2026-06-20T00:02:00.000Z",
+      codexVersion: "fake-smoke",
+      appServer: {
+        transport: "loopbackWebSocket",
+        readyz: true,
+      },
+    },
+    timelines: {
+      [input.conversationIds.active]: {
+        deviceId: input.deviceId,
+        conversationId: input.conversationIds.active,
+        projectId: input.projectId,
+        readStartedAt: "2026-06-20T00:02:00.000Z",
+        readCompletedAt: "2026-06-20T00:02:01.000Z",
+        snapshotRevision: `${input.conversationIds.active}:2026-06-20T00:02:01.000Z`,
+        runtimeStatus: "running",
+        latestTurnStatus: "unknown",
+        turns: [
+          {
+            id: activeTurnId,
+            status: "in_progress",
+            startedAt: 1,
+            completedAt: null,
+            durationMs: null,
+          },
+        ],
+      },
+      [input.conversationIds.complete]: {
+        deviceId: input.deviceId,
+        conversationId: input.conversationIds.complete,
+        projectId: input.projectId,
+        readStartedAt: "2026-06-20T00:03:00.000Z",
+        readCompletedAt: "2026-06-20T00:03:01.000Z",
+        snapshotRevision: `${input.conversationIds.complete}:2026-06-20T00:03:01.000Z`,
+        runtimeStatus: "idle",
+        latestTurnStatus: "completed",
+        turns: [
+          {
+            id: completeTurnId,
+            status: "completed",
+            startedAt: 3,
+            completedAt: 4,
+            durationMs: 1_000,
+          },
+        ],
+      },
+    },
+  };
+}
+
 async function handleWriteRequest(params: {
   approvals: PendingApproval[];
   conversations: CodexConversation[];
+  deviceId: string;
+  projectName: string;
   timelines: Record<string, ConversationTimeline>;
   nextSequence: () => number;
   path: string;
@@ -239,9 +289,9 @@ async function handleWriteRequest(params: {
     const conversation: CodexConversation = {
       id: conversationId,
       title: "Smoke started conversation",
-      deviceId: "smoke-worker",
+      deviceId: params.deviceId,
       projectId: input.projectId,
-      projectName: "stage4-smoke",
+      projectName: params.projectName,
       status: "running",
       updatedAt: acceptedAt,
       summary: "Accepted fake Worker start",
@@ -249,7 +299,7 @@ async function handleWriteRequest(params: {
       approval: "never",
     };
     params.conversations.unshift(conversation);
-    params.timelines[conversationId] = createStartedTimeline(conversationId, input.projectId, turnId, acceptedAt);
+    params.timelines[conversationId] = createStartedTimeline(params.deviceId, conversationId, input.projectId, turnId, acceptedAt);
     writeJson(params.response, 202, createAcceptedCommand("start", conversationId, input.clientRequestId, turnId, acceptedAt));
     return;
   }
@@ -455,13 +505,14 @@ async function handleApprovalDecisionRequest(params: {
 }
 
 function createStartedTimeline(
+  deviceId: string,
   conversationId: string,
   projectId: string,
   turnId: string,
   acceptedAt: string,
 ): ConversationTimeline {
   return {
-    deviceId: "smoke-worker",
+    deviceId,
     conversationId,
     projectId,
     readStartedAt: acceptedAt,

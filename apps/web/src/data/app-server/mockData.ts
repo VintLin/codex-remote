@@ -1,5 +1,6 @@
 import type { BoardTask, CodexConversation, Device, DiffLine, RemoteProject } from "@codex-remote/api-contract";
 import type { SearchRecent } from "../workerApi/workbenchData.ts";
+import { createConversationKey } from "../../domain/sidebar/conversationIdentity.ts";
 import {
   classifyLinkTarget,
   type AssistantThreadSnapshot,
@@ -81,6 +82,7 @@ export const conversations: CodexConversation[] = [
 
 export const searchRecents: SearchRecent[] = conversations.map((conversation) => ({
   conversationId: conversation.id,
+  conversationKey: createConversationKey(conversation),
   title: conversation.title,
   project: conversation.projectName,
   ...(conversation.status === "waiting" ? { marker: true } : {}),

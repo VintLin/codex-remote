@@ -25,6 +25,7 @@ const schemaTypeNames = [
   "SteerTurnInput",
   "PendingApproval",
   "ApprovalDecisionInput",
+  "ControlPlaneHealth",
   "CommandAccepted",
   "ErrorEnvelope",
   "AppServerTransport",
@@ -68,6 +69,27 @@ const stage5WriteControlPaths = [
   "/v1/conversations/{conversationId}/turns/{turnId}/interrupt:",
   "/v1/conversations/{conversationId}/turns/{turnId}/steer:",
   "/v1/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
+] as const;
+const stage6ControlPlanePaths = [
+  "/v1/control-plane/health:",
+  "/v1/devices:",
+  "/v1/conversations:",
+  "/v1/devices/{deviceId}/worker/health:",
+  "/v1/devices/{deviceId}/worker/capabilities:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/timeline:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/approvals:",
+  "/v1/devices/{deviceId}/conversations:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
+] as const;
+const stage6ControlPlaneWritePaths = [
+  "/v1/devices/{deviceId}/conversations:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
 ] as const;
 const stage4WriteErrorStatuses = {
   "/v1/conversations:": ["400", "401", "403", "408", "409", "424", "500"],
@@ -508,7 +530,7 @@ test("when worker write http api is maintained, openapi should define only versi
     const method = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
     return writeMethods.some((writeMethod) => writeMethod === method);
   });
-  const expectedWritePathMethodPairs = [...stage4WritePaths, ...stage5WriteControlPaths].map(
+  const expectedWritePathMethodPairs = [...stage4WritePaths, ...stage5WriteControlPaths, ...stage6ControlPlaneWritePaths].map(
     (path) => `${path.slice(0, -1)}:post`,
   );
 
@@ -557,7 +579,7 @@ test("when worker control http api is maintained, openapi should define versione
     const pathBlockLines = extractPathBlock(source, path);
     assert.equal(pathBlockLines.length > 0, true);
     const methodNames = extractMethodBlocks(pathBlockLines).map((methodBlock) => methodBlock.method);
-    assert.deepEqual(methodNames, [expectDefined(expectedMethods.get(path), `${path} should have an expected method`)]);
+    assert.equal(methodNames.includes(expectDefined(expectedMethods.get(path), `${path} should have an expected method`)), true);
   }
 });
 
@@ -573,6 +595,87 @@ test("when worker control routes are maintained, no unversioned public control p
     controlPathLines.filter((line) => !/^  \/v1\//.test(line)),
     [],
   );
+});
+
+test("when control plane http api is maintained, openapi should define versioned stage 6 paths", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  for (const path of stage6ControlPlanePaths) {
+    assert.equal(versionedPathLines.includes(path), true);
+  }
+
+  const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "get" | "post">([
+    ["/v1/control-plane/health:", "get"],
+    ["/v1/devices:", "get"],
+    ["/v1/conversations:", "get"],
+    ["/v1/devices/{deviceId}/worker/health:", "get"],
+    ["/v1/devices/{deviceId}/worker/capabilities:", "get"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/timeline:", "get"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals:", "get"],
+    ["/v1/devices/{deviceId}/conversations:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", "post"],
+  ]);
+
+  for (const path of stage6ControlPlanePaths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    assert.equal(pathBlockLines.length > 0, true);
+    const methodNames = extractMethodBlocks(pathBlockLines).map((methodBlock) => methodBlock.method);
+    assert.equal(methodNames.includes(expectDefined(expectedMethods.get(path), `${path} should have an expected method`)), true);
+  }
+});
+
+test("when control plane routes are maintained, no unversioned public control plane paths should exist", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const controlPlanePathLines = source
+    .split("\n")
+    .filter((line) => /^  \/.+:\s*$/.test(line))
+    .filter((line) => /control-plane|\/devices\/\{deviceId\}/i.test(line));
+
+  assert.equal(controlPlanePathLines.length > 0, true);
+  assert.deepEqual(
+    controlPlanePathLines.filter((line) => !/^  \/v1\//.test(line)),
+    [],
+  );
+});
+
+test("when control plane api is maintained, device scoped routes should reuse existing public schemas", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const forbiddenParallelSchemas = [
+    "ControlPlaneConversation",
+    "ControlPlaneTimeline",
+    "DeviceConversation",
+    "DeviceTimeline",
+  ];
+
+  for (const schemaName of forbiddenParallelSchemas) {
+    assert.equal(extractSchemaBlock(source, schemaName).length, 0, `${schemaName} should not exist`);
+  }
+
+  const schemaRefsByPath = new Map<(typeof stage6ControlPlanePaths)[number], readonly string[]>([
+    ["/v1/control-plane/health:", ["ControlPlaneHealth"]],
+    ["/v1/devices:", ["Device"]],
+    ["/v1/conversations:", ["CodexConversation"]],
+    ["/v1/devices/{deviceId}/worker/health:", ["WorkerHealth"]],
+    ["/v1/devices/{deviceId}/worker/capabilities:", ["WorkerCapabilities"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/timeline:", ["ConversationTimeline"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals:", ["PendingApproval"]],
+    ["/v1/devices/{deviceId}/conversations:", ["StartConversationInput", "CommandAccepted"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:", ["FollowUpInput", "CommandAccepted"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:", ["InterruptTurnInput", "CommandAccepted"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:", ["SteerTurnInput", "CommandAccepted"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", ["ApprovalDecisionInput", "CommandAccepted"]],
+  ]);
+
+  for (const [path, schemaRefs] of schemaRefsByPath) {
+    const pathSource = extractPathBlock(source, path).join("\n");
+    for (const schemaRef of schemaRefs) {
+      assert.match(pathSource, new RegExp(`#\\/components\\/schemas\\/${schemaRef}`));
+    }
+  }
 });
 
 test("when worker control schemas are maintained, request limits should stay explicit", () => {
@@ -603,10 +706,10 @@ test("when worker approval schemas are maintained, public approval shape should 
   expectPropertyEnum(approvalDecisionInputBlockLines, "decision", ["accept", "decline", "cancel"]);
 });
 
-test("when worker control api types are exported, public aliases should derive from generated schemas", () => {
+test("when worker control and control plane api types are exported, public aliases should derive from generated schemas", () => {
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
 
-  for (const aliasName of ["InterruptTurnInput", "SteerTurnInput", "PendingApproval", "ApprovalDecisionInput"]) {
+  for (const aliasName of ["InterruptTurnInput", "SteerTurnInput", "PendingApproval", "ApprovalDecisionInput", "ControlPlaneHealth"]) {
     assert.match(
       publicExportSource,
       new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`),
@@ -730,7 +833,17 @@ test("when ErrorEnvelope is maintained, details must be allowlisted", () => {
   const detailsBlock = errorEnvelopeBlock.slice(detailsBlockStart, detailsBlockEnd).join("\n");
   const additionalPropertiesIsFalse = /^ {10}additionalProperties:\s*false$/m;
   const propertiesBlock = extractBlockLines(detailsBlock, /^ {10}properties:\s*$/).join("\n");
-  const allowlistedKeys = ["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind"];
+  const allowlistedKeys = [
+    "operation",
+    "retryable",
+    "diagnosticId",
+    "reason",
+    "field",
+    "limit",
+    "expected",
+    "actualKind",
+    "deviceId",
+  ];
   const propertyKeys = [
     ...propertiesBlock.matchAll(/^ {12}([A-Za-z][A-Za-z0-9_-]*):\s*$/gm),
   ].map((match) => expectDefined(match[1], "property key capture should exist"));

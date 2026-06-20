@@ -15,7 +15,9 @@ export type WorkerHttpErrorCode =
   | "worker_config_invalid"
   | "worker_internal_error";
 
-const allowedDetailKeys = new Set([
+type AllowedDetailKey = keyof NonNullable<ErrorEnvelope["details"]>;
+
+const allowedDetailKeys: ReadonlySet<AllowedDetailKey> = new Set([
   "operation",
   "retryable",
   "diagnosticId",
@@ -24,6 +26,7 @@ const allowedDetailKeys = new Set([
   "limit",
   "expected",
   "actualKind",
+  "deviceId",
 ] as const);
 
 const publicMessages: Record<WorkerHttpErrorCode, string> = {
@@ -56,7 +59,6 @@ const unsafeStringPatterns = [
 
 const safeIdentifierPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
 
-type AllowedDetailKey = keyof NonNullable<ErrorEnvelope["details"]>;
 type WorkerHttpErrorDetails = Partial<Record<AllowedDetailKey, unknown>> & Record<string, unknown>;
 
 export class WorkerHttpError extends Error {
@@ -170,6 +172,12 @@ function sanitizeDetails(details: WorkerHttpErrorDetails | undefined): ErrorEnve
       case "actualKind": {
         if (isSafeIdentifier(value)) {
           sanitized.actualKind = value;
+        }
+        break;
+      }
+      case "deviceId": {
+        if (isSafeIdentifier(value)) {
+          sanitized.deviceId = value;
         }
         break;
       }

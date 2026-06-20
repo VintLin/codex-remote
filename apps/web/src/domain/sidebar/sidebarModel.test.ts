@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   createDefaultSidebarSectionState,
+  createProjectKey,
   createSidebarModel,
   resolveConversationNavigator,
   toggleSidebarSection,
 } from "./sidebarModel.ts";
+import { createConversationKey } from "./conversationIdentity.ts";
 import type { CodexConversation, RemoteProject } from "@codex-remote/api-contract";
 
 const fixtureProjects: RemoteProject[] = [
@@ -125,6 +127,74 @@ test("when called with local fixtures, should group projects and conversations f
   );
 });
 
+test("when project ids collide across devices, should group by device-scoped project key", () => {
+  const projects: RemoteProject[] = [
+    {
+      id: "shared-project",
+      name: "Shared A",
+      deviceId: "device-a",
+      path: "/projects/shared",
+      branch: "main",
+      hasChanges: false,
+      pinned: false,
+    },
+    {
+      id: "shared-project",
+      name: "Shared B",
+      deviceId: "device-b",
+      path: "/projects/shared",
+      branch: "main",
+      hasChanges: false,
+      pinned: false,
+    },
+  ];
+  const conversations: CodexConversation[] = [
+    {
+      id: "conversation-a",
+      title: "Shared project on A",
+      deviceId: "device-a",
+      projectId: "shared-project",
+      projectName: "Shared A",
+      status: "running",
+      updatedAt: "刚刚",
+      summary: "A device project.",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+    {
+      id: "conversation-b",
+      title: "Shared project on B",
+      deviceId: "device-b",
+      projectId: "shared-project",
+      projectName: "Shared B",
+      status: "running",
+      updatedAt: "刚刚",
+      summary: "B device project.",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+  ];
+
+  const model = createSidebarModel({
+    conversations,
+    expandedProjectIds: new Set([createProjectKey(projects[1]!)]),
+    projects,
+  });
+
+  assert.deepEqual(
+    model.projects.map((project) => project.projectKey),
+    projects.map((project) => createProjectKey(project)),
+  );
+  assert.deepEqual(model.projects[0]?.conversations.map((conversation) => createConversationKey(conversation)), [
+    createConversationKey(conversations[0]!),
+  ]);
+  assert.deepEqual(model.projects[1]?.conversations.map((conversation) => createConversationKey(conversation)), [
+    createConversationKey(conversations[1]!),
+  ]);
+  assert.equal(model.projects[0]?.expanded, false);
+  assert.equal(model.projects[1]?.expanded, true);
+});
+
 test("when toggling a sidebar section, should only change that section", () => {
   const state = createDefaultSidebarSectionState();
   const collapsedProjects = toggleSidebarSection(state, "projects");
@@ -143,27 +213,31 @@ test("when toggling a sidebar section, should only change that section", () => {
 
 test("when resolving project conversations, should navigate only inside the selected project", () => {
   const model = createFixtureModel();
+  const conversationA = createConversationKey(fixtureConversations[0]!);
+  const conversationB = createConversationKey(fixtureConversations[1]!);
 
-  assert.deepEqual(resolveConversationNavigator(model, "conversation-a"), {
-    nextConversationId: "conversation-b",
-    previousConversationId: null,
+  assert.deepEqual(resolveConversationNavigator(model, conversationA), {
+    nextConversationKey: conversationB,
+    previousConversationKey: null,
   });
-  assert.deepEqual(resolveConversationNavigator(model, "conversation-b"), {
-    nextConversationId: null,
-    previousConversationId: "conversation-a",
+  assert.deepEqual(resolveConversationNavigator(model, conversationB), {
+    nextConversationKey: null,
+    previousConversationKey: conversationA,
   });
 });
 
 test("when resolving free conversations, should navigate inside the conversation section", () => {
   const model = createFixtureModel();
+  const conversationC = createConversationKey(fixtureConversations[2]!);
+  const conversationD = createConversationKey(fixtureConversations[3]!);
 
-  assert.deepEqual(resolveConversationNavigator(model, "conversation-c"), {
-    nextConversationId: "conversation-d",
-    previousConversationId: null,
+  assert.deepEqual(resolveConversationNavigator(model, conversationC), {
+    nextConversationKey: conversationD,
+    previousConversationKey: null,
   });
-  assert.deepEqual(resolveConversationNavigator(model, "conversation-d"), {
-    nextConversationId: null,
-    previousConversationId: "conversation-c",
+  assert.deepEqual(resolveConversationNavigator(model, conversationD), {
+    nextConversationKey: null,
+    previousConversationKey: conversationC,
   });
 });
 
@@ -171,7 +245,7 @@ test("when resolving an unknown conversation, should disable both adjacent contr
   const model = createFixtureModel();
 
   assert.deepEqual(resolveConversationNavigator(model, "missing-conversation"), {
-    nextConversationId: null,
-    previousConversationId: null,
+    nextConversationKey: null,
+    previousConversationKey: null,
   });
 });

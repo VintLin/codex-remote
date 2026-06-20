@@ -9,6 +9,7 @@ import type {
 } from "../../domain/assistant/assistantTimeline.ts";
 
 import { assistantThreads as mockAssistantThreads, conversations as mockConversations } from "../app-server/mockData.ts";
+import { createConversationKey } from "../../domain/sidebar/conversationIdentity.ts";
 import { loadWorkbenchData, createFallbackWorkbenchData } from "./workbenchData.ts";
 
 function jsonResponse<T>(payload: T, status = 200): Response {
@@ -35,6 +36,18 @@ function createFetchMock(endpointMap: Record<string, Response>): typeof fetch {
 
 test("workbench datasource when endpoint responses are valid should create snapshot from contract payloads", async () => {
   const responses: Record<string, Response> = {
+    "/v1/devices": jsonResponse([
+      {
+        id: "w1",
+        icon: "laptop",
+        name: "w1",
+        status: "Connected",
+        ip: "local",
+        lastOnlineAt: "2026-06-20T00:00:00.000Z",
+        currentProject: "project-live",
+        model: "Codex",
+      },
+    ]),
     "/v1/worker/health": jsonResponse({
       deviceId: "w1",
       status: "connected",
@@ -79,7 +92,7 @@ test("workbench datasource when endpoint responses are valid should create snaps
         approval: "never",
       },
     ]),
-    "/v1/conversations/conv-live-1/timeline": jsonResponse({
+    "/v1/devices/w1/conversations/conv-live-1/timeline": jsonResponse({
       deviceId: "w1",
       conversationId: "conv-live-1",
       projectId: "p-live",
@@ -143,6 +156,37 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
 });
 
+test("workbench datasource when remote conversations are empty should keep remote empty state", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-empty",
+          icon: "laptop",
+          name: "Empty worker",
+          status: "Not connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "",
+          model: "",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.devices[0]?.id, "w-empty");
+  assert.equal(data.devices.length, 1);
+  assert.equal(data.projects.length, 0);
+  assert.equal(data.conversations.length, 0);
+  assert.equal(data.assistantThreads.length, 0);
+  assert.equal(data.searchRecents.length, 0);
+  assert.notDeepEqual(data.conversations, mockConversations);
+});
+
 for (const [status, reason] of [
   [401, "unauthorized"],
   [403, "forbidden"],
@@ -161,7 +205,7 @@ for (const [status, reason] of [
       baseUrl: "http://example.test",
       token: "token",
       fetchImpl: createFetchMock({
-        "/v1/worker/health": jsonResponse(error, status),
+        "/v1/devices": jsonResponse(error, status),
       }),
     });
 
@@ -175,7 +219,7 @@ test("workbench datasource should sanitize unsafe error message content", async 
     baseUrl: "http://example.test",
     token: "token",
     fetchImpl: createFetchMock({
-      "/v1/worker/health": jsonResponse(
+      "/v1/devices": jsonResponse(
         {
           code: "internal_server_error",
           message:
@@ -201,6 +245,18 @@ test("workbench datasource when conversations are projectless should not create 
     baseUrl: "http://example.test",
     token: "token",
     fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w2",
+          icon: "laptop",
+          name: "w2",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "alpha",
+          model: "Codex",
+        },
+      ]),
       "/v1/worker/health": jsonResponse({
         deviceId: "w2",
         status: "connected",
@@ -245,7 +301,7 @@ test("workbench datasource when conversations are projectless should not create 
           approval: "never",
         },
       ]),
-      "/v1/conversations/p-less/timeline": jsonResponse({
+      "/v1/devices/w2/conversations/p-less/timeline": jsonResponse({
         deviceId: "w2",
         conversationId: "p-less",
         readStartedAt: "2026-06-20T00:00:00.000Z",
@@ -269,6 +325,18 @@ test("workbench datasource when timeline loads should create metadata-only nodes
     baseUrl: "http://example.test",
     token: "token",
     fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w3",
+          icon: "laptop",
+          name: "w3",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "timeline",
+          model: "Codex",
+        },
+      ]),
       "/v1/worker/health": jsonResponse({
         deviceId: "w3",
         status: "connected",
@@ -302,7 +370,7 @@ test("workbench datasource when timeline loads should create metadata-only nodes
           approval: "never",
         },
       ]),
-      "/v1/conversations/timeline/timeline": jsonResponse({
+      "/v1/devices/w3/conversations/timeline/timeline": jsonResponse({
         deviceId: "w3",
         conversationId: "timeline",
         projectId: "p-timeline",
@@ -367,8 +435,20 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",
     token: "token",
-    selectedConversationId: "timeline-error",
+    selectedConversationKey: createConversationKey({ deviceId: "w4", id: "timeline-error" }),
     fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w4",
+          icon: "laptop",
+          name: "w4",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "project-four",
+          model: "Codex",
+        },
+      ]),
       "/v1/worker/health": jsonResponse({
         deviceId: "w4",
         status: "connected",
@@ -414,7 +494,7 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
           approval: "never",
         },
       ]),
-      "/v1/conversations/timeline-error/timeline": jsonResponse(
+      "/v1/devices/w4/conversations/timeline-error/timeline": jsonResponse(
         {
           code: "timeline_read_failed",
           message: "Unable to read conversation timeline.",
@@ -450,6 +530,136 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
   assert.equal(other?.loadState, "missingRead");
 });
 
+test("workbench datasource when conversation ids collide across devices, should load selected device timeline", async () => {
+  const requestedPaths: string[] = [];
+  const conversations = [
+    {
+      id: "shared-thread",
+      title: "Shared on A",
+      deviceId: "device-a",
+      projectId: "project-a",
+      projectName: "A",
+      status: "running",
+      updatedAt: "1h",
+      summary: "A copy",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+    {
+      id: "shared-thread",
+      title: "Shared on B",
+      deviceId: "device-b",
+      projectId: "project-b",
+      projectName: "B",
+      status: "running",
+      updatedAt: "1m",
+      summary: "B copy",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+  ];
+  const fetchImpl: typeof fetch = async (input) => {
+    const requestUrl = new URL(input.toString());
+    requestedPaths.push(requestUrl.pathname);
+    if (requestUrl.pathname === "/v1/devices") {
+      return jsonResponse([
+        { id: "device-a", icon: "laptop", name: "A", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "A", model: "Codex" },
+        { id: "device-b", icon: "laptop", name: "B", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "B", model: "Codex" },
+      ]);
+    }
+    if (requestUrl.pathname === "/v1/conversations") {
+      return jsonResponse(conversations);
+    }
+    if (requestUrl.pathname === "/v1/devices/device-b/conversations/shared-thread/timeline") {
+      return jsonResponse({
+        deviceId: "device-b",
+        conversationId: "shared-thread",
+        projectId: "project-b",
+        readStartedAt: "2026-06-20T00:00:00.000Z",
+        readCompletedAt: "2026-06-20T00:00:01.000Z",
+        snapshotRevision: "b",
+        runtimeStatus: "idle",
+        latestTurnStatus: "completed",
+        turns: [],
+      });
+    }
+    throw new Error(`Unexpected endpoint: ${requestUrl.pathname}`);
+  };
+
+  const data = await loadWorkbenchData({
+    baseUrl: "http://collision.test",
+    token: "token",
+    selectedConversationKey: createConversationKey({ deviceId: "device-b", id: "shared-thread" }),
+    fetchImpl,
+  });
+
+  assert.equal(requestedPaths.includes("/v1/devices/device-b/conversations/shared-thread/timeline"), true);
+  assert.equal(requestedPaths.includes("/v1/devices/device-a/conversations/shared-thread/timeline"), false);
+  assert.equal(data.assistantThreads.find((thread) => thread.deviceId === "device-b")?.loadState, "loaded");
+  assert.equal(data.assistantThreads.find((thread) => thread.deviceId === "device-a")?.loadState, "missingRead");
+  assert.equal(data.searchRecents.find((item) => item.conversationKey === createConversationKey({ deviceId: "device-b", id: "shared-thread" }))?.active, true);
+});
+
+test("workbench datasource when project ids collide across devices, should keep device-scoped projects", async () => {
+  const conversations = [
+    {
+      id: "conversation-a",
+      title: "Shared project on A",
+      deviceId: "device-a",
+      projectId: "shared-project",
+      projectName: "Shared A",
+      status: "running",
+      updatedAt: "1h",
+      summary: "A project copy",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+    {
+      id: "conversation-b",
+      title: "Shared project on B",
+      deviceId: "device-b",
+      projectId: "shared-project",
+      projectName: "Shared B",
+      status: "running",
+      updatedAt: "1m",
+      summary: "B project copy",
+      sandbox: "workspace-write",
+      approval: "never",
+    },
+  ];
+
+  const data = await loadWorkbenchData({
+    baseUrl: "http://project-collision.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-a", icon: "laptop", name: "A", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Shared A", model: "Codex" },
+        { id: "device-b", icon: "laptop", name: "B", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Shared B", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse(conversations),
+      "/v1/devices/device-a/conversations/conversation-a/timeline": jsonResponse({
+        deviceId: "device-a",
+        conversationId: "conversation-a",
+        projectId: "shared-project",
+        readStartedAt: "2026-06-20T00:00:00.000Z",
+        readCompletedAt: "2026-06-20T00:00:01.000Z",
+        snapshotRevision: "a",
+        runtimeStatus: "idle",
+        latestTurnStatus: "completed",
+        turns: [],
+      }),
+    }),
+  });
+
+  assert.deepEqual(
+    data.projects.map((project) => ({ deviceId: project.deviceId, id: project.id, name: project.name })),
+    [
+      { deviceId: "device-a", id: "shared-project", name: "Shared A" },
+      { deviceId: "device-b", id: "shared-project", name: "Shared B" },
+    ],
+  );
+});
+
 test("workbench datasource search recents should be derived from conversations", async () => {
   const conversations = [
     {
@@ -470,6 +680,18 @@ test("workbench datasource search recents should be derived from conversations",
     baseUrl: "http://search.test",
     token: "token",
     fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w5",
+          icon: "laptop",
+          name: "w5",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-20T00:00:00.000Z",
+          currentProject: "search",
+          model: "Codex",
+        },
+      ]),
       "/v1/worker/health": jsonResponse({
         deviceId: "w-search",
         status: "connected",
@@ -490,7 +712,7 @@ test("workbench datasource search recents should be derived from conversations",
         supportedSourceKinds: ["cli", "vscode", "appServer"],
       }),
       "/v1/conversations": jsonResponse(conversations),
-      "/v1/conversations/search-1/timeline": jsonResponse({
+      "/v1/devices/w-search/conversations/search-1/timeline": jsonResponse({
         deviceId: "w-search",
         conversationId: "search-1",
         projectId: "search-project",

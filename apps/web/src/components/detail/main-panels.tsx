@@ -24,15 +24,15 @@ interface ConversationMainProps {
   isSidebarCollapsed: boolean;
   onBack?: () => void;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
-  onSelectAdjacentConversation: (conversationId: string) => void;
+  onSelectAdjacentConversation: (conversationKey: string) => void;
   onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   onSubmitFollowUp: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
   onSubmitInterrupt: () => Promise<void>;
   onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
-  previousConversationId: string | null;
-  nextConversationId: string | null;
+  previousConversationKey: string | null;
+  nextConversationKey: string | null;
   pendingApprovals: PendingApproval[];
   source: WorkbenchData["source"];
   activeTurnId: string | null;
@@ -53,9 +53,9 @@ interface DevicesPageProps {
 
 interface SearchDialogProps {
   onClose: () => void;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectConversation: (conversationKey: string) => void;
   open: boolean;
-  selectedConversationId: string | null;
+  selectedConversationKey: string | null;
   searchRecents: SearchRecent[];
 }
 
@@ -68,7 +68,7 @@ export function ConversationMain({
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
-  nextConversationId,
+  nextConversationKey,
   onBack,
   onExpandDetail,
   onExpandSidebar,
@@ -78,7 +78,7 @@ export function ConversationMain({
   onSubmitFollowUp,
   onSubmitInterrupt,
   onSubmitSteer,
-  previousConversationId,
+  previousConversationKey,
   pendingApprovals,
   source,
   activeTurnId,
@@ -105,10 +105,10 @@ export function ConversationMain({
               <button
                 aria-label="切换到上一条对话"
                 className="icon-button conversation-nav-button"
-                disabled={!previousConversationId}
+                disabled={!previousConversationKey}
                 onClick={() => {
-                  if (previousConversationId) {
-                    onSelectAdjacentConversation(previousConversationId);
+                  if (previousConversationKey) {
+                    onSelectAdjacentConversation(previousConversationKey);
                   }
                 }}
                 type="button"
@@ -118,10 +118,10 @@ export function ConversationMain({
               <button
                 aria-label="切换到下一条对话"
                 className="icon-button conversation-nav-button"
-                disabled={!nextConversationId}
+                disabled={!nextConversationKey}
                 onClick={() => {
-                  if (nextConversationId) {
-                    onSelectAdjacentConversation(nextConversationId);
+                  if (nextConversationKey) {
+                    onSelectAdjacentConversation(nextConversationKey);
                   }
                 }}
                 type="button"
@@ -496,7 +496,7 @@ export function SearchDialog({
   onSelectConversation,
   open,
   searchRecents,
-  selectedConversationId,
+  selectedConversationKey,
 }: SearchDialogProps) {
   if (!open) {
     return null;
@@ -512,10 +512,10 @@ export function SearchDialog({
         <div className="search-results">
           {searchRecents.map((item, index) => (
             <button
-              className={`search-result${item.conversationId === selectedConversationId ? " is-active" : ""}`}
-              key={item.conversationId}
+              className={`search-result${item.conversationKey === selectedConversationKey ? " is-active" : ""}`}
+              key={item.conversationKey}
               onClick={() => {
-                onSelectConversation(item.conversationId);
+                onSelectConversation(item.conversationKey);
                 onClose();
               }}
               type="button"

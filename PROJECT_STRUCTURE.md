@@ -12,7 +12,7 @@ Do not create future-stage directories until a stage spec needs real files there
 apps/
   web/
   worker/
-  control-plane/    # 暂不创建，等 Stage 6
+  control-plane/
 
 packages/
   api-contract/
@@ -80,18 +80,24 @@ Not allowed:
 
 ### `apps/control-plane`
 
-Status: future Stage 6 directory. Do not create yet.
+Purpose:
 
-Purpose when introduced:
+- Local configured multi-Worker routing.
+- Device-scoped proxying to Worker public APIs.
+- Device status and conversation aggregation for Web and future iOS-shaped APIs.
 
-- Multi-device routing.
-- Worker registration and device status aggregation.
-- Stable API surface for Web and future iOS.
+Allowed:
+
+- Import public types from `packages/api-contract`.
+- Keep configured Worker upstream URLs and Worker bearer tokens only in runtime config/process memory.
+- Normalize configured `deviceId` at the Control Plane boundary for known public Worker shapes.
 
 Not allowed:
 
 - Directly call Codex app-server.
 - Store OpenAI / ChatGPT / provider secrets.
+- Persist device registry, DB state, token hashes, pairing state, revocation state, or audit log before the DB/productization stages.
+- Import `packages/codex-protocol`, Web code, Worker internals, or DB code.
 
 ## Packages
 
@@ -228,7 +234,7 @@ New stage specs and plans should go here, not under root-level `docs/specs/` or 
 flowchart LR
   Web["apps/web"]
   Worker["apps/worker"]
-  CP["apps/control-plane<br/>future"]
+  CP["apps/control-plane"]
   API["packages/api-contract"]
   Protocol["packages/codex-protocol"]
   UI["packages/ui"]
@@ -241,8 +247,8 @@ flowchart LR
   Worker --> Protocol
   Worker --> AppServer
   CP --> API
-  CP --> DB
   CP --> Worker
+  CP -. Stage 7+ .-> DB
 ```
 
 Rules:

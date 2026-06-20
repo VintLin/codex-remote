@@ -124,6 +124,401 @@ paths:
           $ref: "#/components/responses/AppServerUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/control-plane/health:
+    get:
+      operationId: getControlPlaneHealth
+      responses:
+        "200":
+          description: Control Plane aggregation readiness.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlPlaneHealth"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices:
+    get:
+      operationId: listControlPlaneDevices
+      responses:
+        "200":
+          description: Configured devices visible through the Control Plane.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/worker/health:
+    get:
+      operationId: getControlPlaneDeviceWorkerHealth
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Worker health for a configured device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerHealth"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/worker/capabilities:
+    get:
+      operationId: getControlPlaneDeviceWorkerCapabilities
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Worker capabilities for a configured device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerCapabilities"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations:
+    post:
+      operationId: startControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartConversationInput"
+      responses:
+        "202":
+          description: Device-scoped start command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/timeline:
+    get:
+      operationId: getControlPlaneDeviceConversationTimeline
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device-scoped timeline snapshot for a single conversation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationTimeline"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/follow-up:
+    post:
+      operationId: followUpControlPlaneDeviceConversation
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowUpInput"
+      responses:
+        "202":
+          description: Device-scoped follow-up command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:
+    post:
+      operationId: interruptControlPlaneDeviceTurn
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: turnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterruptTurnInput"
+      responses:
+        "202":
+          description: Device-scoped interrupt command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:
+    post:
+      operationId: steerControlPlaneDeviceTurn
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: turnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SteerTurnInput"
+      responses:
+        "202":
+          description: Device-scoped steer command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/approvals:
+    get:
+      operationId: listControlPlaneDevicePendingApprovals
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device-scoped process-local pending approval snapshot for a conversation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingApproval"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:
+    post:
+      operationId: decideControlPlaneDevicePendingApproval
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: approvalRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalDecisionInput"
+      responses:
+        "202":
+          description: Device-scoped approval decision command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/conversations:
     get:
       operationId: listWorkerConversations
@@ -432,6 +827,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    DeviceNotFoundError:
+      description: The requested configured device could not be found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
     RequestTimeoutError:
       description: Worker request timed out before a stable response was produced.
       content:
@@ -446,6 +847,12 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     AppServerUnavailableError:
       description: Worker could not reach the local Codex app-server dependency.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    DeviceUnavailableError:
+      description: Control Plane could not reach the configured device Worker.
       content:
         application/json:
           schema:
@@ -495,6 +902,27 @@ components:
         - disconnected
         - degraded
         - unknown
+    ControlPlaneHealth:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - checkedAt
+        - deviceCount
+        - connectedDeviceCount
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+        checkedAt:
+          type: string
+          format: date-time
+        deviceCount:
+          type: number
+        connectedDeviceCount:
+          type: number
     ConversationRuntimeStatus:
       type: string
       enum:
@@ -1133,6 +1561,8 @@ components:
             expected:
               type: string
             actualKind:
+              type: string
+            deviceId:
               type: string
         requestId:
           type: string

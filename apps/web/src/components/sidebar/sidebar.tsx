@@ -9,6 +9,7 @@ import type {
   SidebarSectionId,
   SidebarSectionState,
 } from "../../domain/sidebar/sidebarModel";
+import { createConversationKey } from "../../domain/sidebar/conversationIdentity";
 import { getStatusClassName } from "../../domain/status/statusPresentation";
 import { ActionMenu, type SidebarActionGroup } from "./action-menu";
 import { iconForDevice } from "../shared/icons";
@@ -25,14 +26,14 @@ interface SidebarProps {
   model: SidebarModel;
   onCollapseSidebar: () => void;
   onOpenSearch: () => void;
-  onSelectAdjacentConversation: (conversationId: string) => void;
+  onSelectAdjacentConversation: (conversationKey: string) => void;
   onSelectView: (view: AppView) => void;
-  onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
+  onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   onToggleSection: (sectionId: SidebarSectionId) => void;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectConversation: (conversationKey: string) => void;
   pressedItem: SidebarPressedItem;
   sectionState: SidebarSectionState;
-  selectedConversationId: string;
+  selectedConversationKey: string;
   sidebarScrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -103,10 +104,10 @@ export function Sidebar(props: SidebarProps) {
             <button
               aria-label="切换到上一条对话"
               className="sidebar-header-control sidebar-header-control-button"
-              disabled={!props.conversationNavigator.previousConversationId}
+              disabled={!props.conversationNavigator.previousConversationKey}
               onClick={() => {
-                if (props.conversationNavigator.previousConversationId) {
-                  props.onSelectAdjacentConversation(props.conversationNavigator.previousConversationId);
+                if (props.conversationNavigator.previousConversationKey) {
+                  props.onSelectAdjacentConversation(props.conversationNavigator.previousConversationKey);
                 }
               }}
               type="button"
@@ -116,10 +117,10 @@ export function Sidebar(props: SidebarProps) {
             <button
               aria-label="切换到下一条对话"
               className="sidebar-header-control sidebar-header-control-button"
-              disabled={!props.conversationNavigator.nextConversationId}
+              disabled={!props.conversationNavigator.nextConversationKey}
               onClick={() => {
-                if (props.conversationNavigator.nextConversationId) {
-                  props.onSelectAdjacentConversation(props.conversationNavigator.nextConversationId);
+                if (props.conversationNavigator.nextConversationKey) {
+                  props.onSelectAdjacentConversation(props.conversationNavigator.nextConversationKey);
                 }
               }}
               type="button"
@@ -167,7 +168,7 @@ export function Sidebar(props: SidebarProps) {
           onToggleProject={props.onToggleProject}
           pressedItem={props.pressedItem}
           sectionState={props.sectionState}
-          selectedConversationId={props.selectedConversationId}
+          selectedConversationKey={props.selectedConversationKey}
         />
       </div>
 
@@ -197,12 +198,12 @@ function NavButton(props: { active?: boolean; icon: IconName; label: string; onC
 
 function DeviceWorkspaceNav(props: {
   model: SidebarModel;
-  onSelectConversation: (conversationId: string) => void;
-  onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
+  onSelectConversation: (conversationKey: string) => void;
+  onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   onToggleSection: (sectionId: SidebarSectionId) => void;
   pressedItem: SidebarPressedItem;
   sectionState: SidebarSectionState;
-  selectedConversationId: string;
+  selectedConversationKey: string;
 }) {
   return (
     <>
@@ -215,7 +216,7 @@ function DeviceWorkspaceNav(props: {
         />
         {props.sectionState.pinned ? (
           props.model.pinnedProjects.length > 0
-          ? props.model.pinnedProjects.map((project) => <ProjectGroup key={project.id} {...props} project={project} />)
+          ? props.model.pinnedProjects.map((project) => <ProjectGroup key={project.projectKey} {...props} project={project} />)
           : <EmptyProjectRow />
         ) : null}
       </section>
@@ -229,7 +230,7 @@ function DeviceWorkspaceNav(props: {
         />
         {props.sectionState.projects ? (
           props.model.projects.length > 0
-          ? props.model.projects.map((project) => <ProjectGroup key={project.id} {...props} project={project} />)
+          ? props.model.projects.map((project) => <ProjectGroup key={project.projectKey} {...props} project={project} />)
           : <EmptyProjectRow />
         ) : null}
       </section>
@@ -245,11 +246,11 @@ function DeviceWorkspaceNav(props: {
           props.model.freeConversations.length > 0
           ? props.model.freeConversations.map((conversation) => (
               <ConversationRow
-                key={conversation.id}
+                key={createConversationKey(conversation)}
                 conversation={conversation}
                 onSelectConversation={props.onSelectConversation}
                 pressedItem={props.pressedItem}
-                selectedConversationId={props.selectedConversationId}
+                selectedConversationKey={props.selectedConversationKey}
               />
             ))
           : <EmptyConversationRow />
@@ -287,30 +288,30 @@ function SectionHeading(props: {
 }
 
 function ProjectGroup(props: {
-  onSelectConversation: (conversationId: string) => void;
-  onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
+  onSelectConversation: (conversationKey: string) => void;
+  onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   pressedItem: SidebarPressedItem;
   project: SidebarProjectGroup;
-  selectedConversationId: string;
+  selectedConversationKey: string;
 }) {
   return (
     <>
       <ProjectRow
         onToggleProject={props.onToggleProject}
         project={props.project}
-        selected={props.project.conversations.some((conversation) => conversation.id === props.selectedConversationId)}
+        selected={props.project.conversations.some((conversation) => createConversationKey(conversation) === props.selectedConversationKey)}
       />
       {props.project.expanded ? (
         <div className="nested-list">
           {props.project.conversations.length > 0
             ? props.project.conversations.map((conversation) => (
                 <ConversationRow
-                  key={conversation.id}
+                  key={createConversationKey(conversation)}
                   conversation={conversation}
                   nested
                   onSelectConversation={props.onSelectConversation}
                   pressedItem={props.pressedItem}
-                  selectedConversationId={props.selectedConversationId}
+                  selectedConversationKey={props.selectedConversationKey}
                 />
               ))
             : <EmptyConversationRow />}
@@ -321,7 +322,7 @@ function ProjectGroup(props: {
 }
 
 function ProjectRow(props: {
-  onToggleProject: (projectId: string, options?: { restoreFocus?: boolean }) => void;
+  onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   project: SidebarProjectGroup;
   selected: boolean;
 }) {
@@ -334,7 +335,7 @@ function ProjectRow(props: {
       itemAttributes={{
         "aria-expanded": props.project.expanded,
         "aria-label": expandedLabel,
-        "data-toggle-project": props.project.id,
+        "data-toggle-project": props.project.projectKey,
         role: "button",
         tabIndex: 0,
       }}
@@ -345,14 +346,14 @@ function ProjectRow(props: {
         if (target instanceof Element && target.closest(".action-menu")) {
           return;
         }
-        props.onToggleProject(props.project.id, { restoreFocus: false });
+        props.onToggleProject(props.project.projectKey, { restoreFocus: false });
       }}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") {
           return;
         }
         event.preventDefault();
-        props.onToggleProject(props.project.id);
+        props.onToggleProject(props.project.projectKey);
       }}
       onMouseDown={(event) => {
         const target = event.target;
@@ -370,19 +371,20 @@ function ProjectRow(props: {
 function ConversationRow(props: {
   conversation: CodexConversation;
   nested?: boolean;
-  onSelectConversation: (conversationId: string) => void;
+  onSelectConversation: (conversationKey: string) => void;
   pressedItem: SidebarPressedItem;
-  selectedConversationId: string;
+  selectedConversationKey: string;
 }) {
+  const conversationKey = createConversationKey(props.conversation);
   return (
     <SidebarListItem
       actionGroup="conversation"
-      contentAttributes={{ "data-conversation-id": props.conversation.id }}
+      contentAttributes={{ "data-conversation-key": conversationKey }}
       kind="conversation"
       nested={props.nested ?? false}
-      onClick={() => props.onSelectConversation(props.conversation.id)}
-      pressed={props.pressedItem?.kind === "conversation" && props.pressedItem.id === props.conversation.id}
-      selected={props.conversation.id === props.selectedConversationId}
+      onClick={() => props.onSelectConversation(conversationKey)}
+      pressed={props.pressedItem?.kind === "conversation" && props.pressedItem.id === conversationKey}
+      selected={conversationKey === props.selectedConversationKey}
       title={props.conversation.title}
       trailing={props.conversation.updatedAt}
     />

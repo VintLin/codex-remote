@@ -15,6 +15,25 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  apps/control-plane:
+    dependencies:
+      '@codex-remote/api-contract':
+        specifier: workspace:*
+        version: link:../../packages/api-contract
+      '@hono/node-server':
+        specifier: ^2.0.5
+        version: 2.0.5(hono@4.12.26)
+      hono:
+        specifier: ^4.12.26
+        version: 4.12.26
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/web:
     dependencies:
       '@ai-sdk/react':

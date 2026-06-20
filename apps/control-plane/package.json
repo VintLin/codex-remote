@@ -1,0 +1,25 @@
+{
+  "name": "@codex-remote/control-plane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit --pretty false && mkdir -p dist && touch dist/.build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "node --test",
+    "lint": "tsc --noEmit --pretty false",
+    "serve": "node src/cli/controlPlaneHttpServerCli.ts"
+  },
+  "dependencies": {
+    "@codex-remote/api-contract": "workspace:*",
+    "@hono/node-server": "^2.0.5",
+    "hono": "^4.12.26"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^5.8.3"
+  }
+}

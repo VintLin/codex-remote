@@ -289,8 +289,72 @@ test("fake Worker smoke server when write body violates contract, should reject 
   }
 });
 
-async function startFakeServer(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
-  const server = createFakeWorkerSmokeServer({ token });
+test("fake Worker smoke server when two instances are configured, should return distinct device and conversation data", async () => {
+  const workerA = await startFakeServer({
+    conversationIds: { active: "shared-thread", complete: "a-complete" },
+    deviceId: "device-a",
+    projectId: "project-a",
+    projectName: "Project A",
+  });
+  const workerB = await startFakeServer({
+    conversationIds: { active: "shared-thread", complete: "b-complete" },
+    deviceId: "device-b",
+    projectId: "project-b",
+    projectName: "Project B",
+  });
+
+  try {
+    const [startA, startB] = await Promise.all([
+      fetch(`${workerA.baseUrl}/v1/conversations`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ projectId: "project-a", message: "Start A", clientRequestId: "start-a" }),
+      }),
+      fetch(`${workerB.baseUrl}/v1/conversations`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ projectId: "project-b", message: "Start B", clientRequestId: "start-b" }),
+      }),
+    ]);
+    assert.equal(startA.status, 202);
+    assert.equal(startB.status, 202);
+
+    const [healthA, healthB, conversationsA, conversationsB] = await Promise.all([
+      fetchJson<{ deviceId: string }>(`${workerA.baseUrl}/v1/worker/health`),
+      fetchJson<{ deviceId: string }>(`${workerB.baseUrl}/v1/worker/health`),
+      fetchJson<Array<{ deviceId: string; id: string; projectName: string }>>(`${workerA.baseUrl}/v1/conversations`),
+      fetchJson<Array<{ deviceId: string; id: string; projectName: string }>>(`${workerB.baseUrl}/v1/conversations`),
+    ]);
+
+    assert.equal(healthA.deviceId, "device-a");
+    assert.equal(healthB.deviceId, "device-b");
+    assert.deepEqual(conversationsA.map((conversation) => `${conversation.deviceId}:${conversation.id}:${conversation.projectName}`), [
+      "device-a:smoke-start-start-a:Project A",
+      "device-a:shared-thread:Project A",
+      "device-a:a-complete:Project A",
+    ]);
+    assert.deepEqual(conversationsB.map((conversation) => `${conversation.deviceId}:${conversation.id}:${conversation.projectName}`), [
+      "device-b:smoke-start-start-b:Project B",
+      "device-b:shared-thread:Project B",
+      "device-b:b-complete:Project B",
+    ]);
+    assert.doesNotMatch(JSON.stringify([...conversationsA, ...conversationsB]), /example-token|127\.0\.0\.1:\d+/);
+  } finally {
+    await workerA.close();
+    await workerB.close();
+  }
+});
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 200);
+  return response.json() as Promise<T>;
+}
+
+async function startFakeServer(options: Parameters<typeof createFakeWorkerSmokeServer>[0] = {}): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+  const server = createFakeWorkerSmokeServer({ ...options, token });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
 
