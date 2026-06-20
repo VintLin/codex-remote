@@ -41,6 +41,11 @@ The synthesis answers two questions:
 | Q26 calibration report and secret scanning | Answered | Default real-check artifacts belong in ignored `logs/real-check/`; tracked docs should contain only explicit sanitized evidence. |
 | Q27 task link integrity | Answered | Control Plane must validate resources and project ownership before storing verified task links; offline Worker checks may remain pending. |
 | Q28 local self-hosted asset policy | Answered | Runtime external font/static asset requests should be disallowed; use system fonts or vendored local assets. |
+| Q29 Codex App official capability surface | Answered | Current parity target is conversation/timeline/approval/files/diff/search/models/skills/account status; remote host switching remains Codex Remote-specific; realtime voice and GUI/browser control are future/experimental. |
+| Q30 notifications as Web timeline source | Answered | Notifications are runtime stream inputs, not durable history; Worker must project stable `seq/eventId` events and use snapshot reconciliation. |
+| Q31 conversation lifecycle semantics | Answered | Productize user intents: open/continue, archive/restore, rename, live badge first; fork/goal/compact next; rollback and `inject_items` deferred. |
+| Q32 local tool UI placement | Answered | Files, shell, Git, review, MCP, plugins, skills, hooks, and apps belong in workbench surfaces, not raw method buttons; read-only surfaces come before writes. |
+| Q33 advanced/platform priority | Answered | Near-term only sanitized auth/platform/sandbox projections; login/logout, usage detail, Windows setup, feedback upload, external import, and realtime voice are later or experimental. |
 
 ## Adopted Planning Decisions
 
@@ -95,6 +100,15 @@ Stage 9 real local calibration:
 - Store full real-check artifacts in ignored `logs/real-check/`; only sanitized evidence summaries may enter tracked docs.
 - Web readiness includes no runtime external font/static asset requests.
 
+Codex App-like browser workbench after Q29-Q33:
+
+- Stage 11 should start with Conversation Workbench Parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline stream, request cards, and approval pending/resolved state.
+- Worker-projected live events need stable Web-facing names, `seq`, `eventId`, redaction, replay/gap handling, and snapshot reconciliation. Web must never consume raw app-server notification method/params directly.
+- Timeline v1 includes turn lifecycle, assistant deltas, command summaries, diff updates, approval/request state, MCP tool-call state, warnings, and terminal turn state. Reasoning, standalone process APIs, fuzzy-search sessions, realtime voice, and unstable experimental events stay out.
+- Local work tools should start read-only: file preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
+- Controlled local actions should wait for explicit stage design: shell commands, allowlisted project actions, review start, stage/unstage/revert, skill enable/disable, OAuth/connector login with local confirmation.
+- Advanced and sensitive capabilities are not near-term targets: account login/logout, access tokens/API keys, feedback upload, external agent import, arbitrary MCP calls, Windows sandbox setup, realtime voice, remote GUI/computer use, and automations.
+
 ## Source Gaps And Local Verification Needed
 
 - Imported answers are ChatGPT exports. Critical conclusions must be verified against first sources before implementation.
@@ -108,6 +122,7 @@ Stage 9 real local calibration:
 - DPoP-like auth must not be half-implemented; partial custom signing can be worse than a simpler bearer-token MVP with clear limitations.
 - Linux Secret Service/headless behavior must be verified locally; file fallback is a conscious security tradeoff, not a default.
 - Q21, Q23, and Q24 are locally verified for the current Stage 9 stack. Q22 remains partial: approval pending list is real, while approval decision is a documented safety `real-gap`; the Stage 10 isolated fixture currently does not receive a pending approval from app-server.
+- Q29-Q33 are ChatGPT-exported research answers with cited official sources. Treat them as planning references; verify protocol behavior locally before implementing each stage and keep `openapi.yaml` / generated `codex-protocol` as the schema facts of record.
 - If the Worker still depends on loopback WebSocket for self-started app-server, that is a Stage 9 readiness gap unless it is explicitly marked as debug fallback.
 - Current `RemoteProject.path` compatibility must not be used to expose `allowedProjectRoot`; schema cleanup should be scheduled if implementation still requires the field.
 

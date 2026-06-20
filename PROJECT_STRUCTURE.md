@@ -257,6 +257,7 @@ Use these current references first:
 - `docs/references/codex-app-server.md`: explanatory app-server protocol reference. `packages/codex-protocol` remains the type source of truth.
 - `docs/references/openai-codex-app-pages/pages/`: official Codex App product behavior references, not API contracts or DTO sources.
 - `docs/references/questions/SYNTHESIS.md`: research conclusion index.
+- `docs/references/questions/q29-q33-codex-app-parity-research-answers/`: Codex App-like browser workbench planning research; reference only, not schema source.
 - `docs/references/research/参考项目架构调研报告 v0.2.md`: reference-project evidence and adoption/rejection rationale.
 
 Do not keep absorbed PRDs, specs, prompt logs, or import metadata in `docs/references/`; archive them under `docs/archives/`.

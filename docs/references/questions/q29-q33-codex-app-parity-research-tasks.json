@@ -1,0 +1,27 @@
+[
+  {
+    "title": "Q29：Codex App 官方产品能力面",
+    "output_name": "q29-codex-app-official-capability-surface",
+    "question": "请使用网页搜索，并以超高推理强度回答。\n\n背景：我在开发一个自托管的多设备 Codex Web 控制台 Codex Remote。总目标不是复刻桌面应用，而是远程控制多台电脑上的多个 Codex；当前子目标是让 Web 工作台尽量具备 Codex App-like 的功能体验。本仓已经有：`CODEX_APP_PARITY.md`、`FEATURE_SUPPORT.md`、`PROJECT_STRUCTURE.md`。唯一事实源规则是：公开 API 字段来自 `packages/api-contract/openapi.yaml`；Codex app-server 协议来自 `packages/codex-protocol` 生成物；Web 只能调用 Control Plane-shaped API；Worker 是唯一 app-server / 本机文件系统 / Shell / Git 调用者。\n\n问题：请只基于官方 OpenAI/Codex 文档、官方 Codex App 页面、官方发布说明、以及我描述的本地协议类别，梳理 Codex App 当前官方产品能力面。不要做泛竞品调研。\n\n需要输出：\n1. 一张能力表，覆盖 conversation lifecycle、timeline/realtime output、approvals/input、files、shell/commands、Git/review、search、models/config、skills/plugins/MCP/apps、account、realtime voice、Windows sandbox。\n2. 每项标记为：current parity target / remote-only addition / future or experimental / not enough evidence。\n3. 每项说明应映射到 Codex Remote 的哪类产品能力，而不是 raw app-server method。\n4. 明确哪些能力不应进入近期 stage。\n5. 给出来源链接，并标注哪些结论是官方明示、哪些是从官方资料和协议名称推断。"
+  },
+  {
+    "title": "Q30：app-server notifications 能否支撑 Web timeline stream",
+    "output_name": "q30-app-server-notifications-web-timeline-stream",
+    "question": "请使用网页搜索，并以超高推理强度回答。\n\n背景：Codex Remote 当前 Web timeline 主要是 snapshot/read，不是 durable live stream。`packages/codex-protocol` 生成物里有大量 `ServerNotification`，包括 thread/started、thread/status/changed、turn/started/completed、item/agentMessage/delta、item/reasoning/*、item/plan/delta、command/exec/outputDelta、process/outputDelta/exited、turn/diff/updated、serverRequest/resolved、mcpServer/startupStatus/updated、fuzzyFileSearch/sessionUpdated/sessionCompleted、thread/realtime/* 等。本项目原则：app-server notifications 不能直接透传到 Web；Worker 必须投影成稳定 Web-facing events，并加 seq/eventId、脱敏、snapshot reconciliation。\n\n问题：请基于官方 OpenAI/Codex 文档、官方 app-server/SDK/CLI 说明或公开源信息，判断 app-server notifications 是否适合作为 Web timeline stream 输入。\n\n需要输出：\n1. 按通知类别分组：conversation/thread、turn lifecycle、assistant delta、reasoning/plan、tool/command/process output、file change/diff、approval/request resolution、MCP、search、realtime voice、warnings/errors。\n2. 每组判断：可作为 timeline event / 只能内部消费 / 需要 snapshot fallback / 需要本地验证。\n3. 明确 app-server notification 是否可视为 durable event log；如果不能，Worker 应补哪些字段和机制。\n4. 给出 Codex Remote 最小实现建议：第一版 stream 应接哪些事件，哪些延后。\n5. 给出来源链接，并区分官方明示与推断。"
+  },
+  {
+    "title": "Q31：conversation lifecycle 方法的用户语义",
+    "output_name": "q31-conversation-lifecycle-user-semantics",
+    "question": "请使用网页搜索，并以超高推理强度回答。\n\n背景：Codex Remote 已真实验证 start、follow-up、interrupt、steer、conversation list/read，但还没有 productize 完整 conversation lifecycle。生成协议里有 `thread/resume`、`thread/fork`、`thread/archive`、`thread/unarchive`、`thread/name/set`、`thread/goal/set/get/clear`、`thread/compact/start`、`thread/rollback`、`thread/loaded/list`、`thread/inject_items` 等。我们不想把 raw method 暴露成按钮，而是要和 Codex App 用户语义一致。\n\n问题：请基于官方 Codex App 文档、官方产品页面、官方发布说明和公开 app-server 说明，解释这些 conversation lifecycle 能力在用户体验中应代表什么。\n\n需要输出：\n1. 方法到用户意图的映射表。\n2. 每项建议 UI 支持面：Sidebar/Navigator、Main Conversation、Right Detail Pane、Tool Surface、Status/Badge、Modal/Popover。\n3. 每项需要的公开 API 输入/输出字段类型，注意 public project/conversation id 应 opaque，不暴露 cwd 或真实路径。\n4. 每项风险和是否适合近期实现。\n5. 哪些语义需要本地 app-server 验证而不能只靠官方资料。\n6. 给出来源链接，并区分官方明示与推断。"
+  },
+  {
+    "title": "Q32：文件 Shell Git Review MCP 插件 Skills 的 UI 放置",
+    "output_name": "q32-local-tool-ui-placement",
+    "question": "请使用网页搜索，并以超高推理强度回答。\n\n背景：Codex Remote 的主产品是远程控制多台电脑上的多个 Codex；当前子目标是 Codex App-like browser workbench。根级 UI 支持面已经定义为：Sidebar/Navigator、Main Conversation、Right Detail Pane、Tool Surface、Status Strip/Badges、Modal/Popover。相关 app-server 能力包括 `fs/*`、`command/exec*`、`thread/shellCommand`、`gitDiffToRemote`、`review/start`、`fuzzyFileSearch`、`mcpServer/*`、`plugin/*`、`marketplace/*`、`skills/*`、`hooks/list`、`app/list`。\n\n问题：请基于官方 Codex App / Codex 文档和官方产品资料，判断这些本机工具能力应如何落到 Web UI 支持面中，避免全部塞进 conversation shell 或做 raw method 按钮。\n\n需要输出：\n1. UI placement matrix：files、shell/commands、Git diff、review、fuzzy search、MCP resources/tools/status/OAuth、plugins/marketplace、skills/hooks、apps。\n2. 每项建议主 UI surface、辅助 surface、入口位置、状态展示、空态/退化态、失败态。\n3. 哪些能力应显示为 timeline item，哪些应是右侧详情，哪些需要独立 Tool Surface。\n4. 哪些能力需要先做只读，哪些可以近期支持写操作，哪些必须延后。\n5. 来源链接，并说明官方明示与产品推断的边界。"
+  },
+  {
+    "title": "Q33：高级和平台特定能力优先级",
+    "output_name": "q33-advanced-platform-capability-priority",
+    "question": "请使用网页搜索，并以超高推理强度回答。\n\n背景：`packages/codex-protocol` 生成物里存在一些高级或平台特定能力：`thread/realtime/*`、realtime transcript/audio/SDP、`windowsSandbox/setupStart`、`windowsSandbox/readiness`、`windows/worldWritableWarning`、`account/login/start`、`account/logout`、`account/read`、`getAuthStatus`、`account/rateLimits/read`、`account/usage/read`、`feedback/upload`、`externalAgentConfig/detect/import`。Codex Remote 近期目标仍是多设备 Codex Web 控制台，不应因为协议存在就把能力放进近期 stage。\n\n问题：请基于官方 OpenAI/Codex 文档、官方产品页面、官方发布说明和公开源码/协议线索，分类这些高级能力的成熟度和路线优先级。\n\n需要输出：\n1. 能力表：realtime voice、Windows sandbox、account login/auth status/rate limits/usage、feedback upload、external agent config import。\n2. 每项标记：near-term / later / experimental-watch / not a Codex Remote target / insufficient evidence。\n3. 每项说明为什么，是否需要 Web UI，是否需要 Worker-only，是否涉及 secrets 或平台前置条件。\n4. 哪些能力需要真实账号登录、2FA、API key、付费服务、Windows 环境或外部部署，因此应标记为暂停条件。\n5. 给出来源链接，并区分官方明示、源码/协议推断和你的判断。"
+  }
+]

@@ -49,10 +49,22 @@ Stage 9 reopened a narrower research queue for real local verification. Q21, Q23
 | Q26 | `docs/references/questions/q26-calibration-report-destination-and-secret-scanning.md` | answered |
 | Q27 | `docs/references/questions/q27-task-link-integrity-checks.md` | answered |
 | Q28 | `docs/references/questions/q28-local-self-hosted-external-asset-policy.md` | answered |
+| Q29 | `docs/references/questions/q29-q33-codex-app-parity-research-answers/001-Q29-Codex-App-官方产品能力面.md` | answered |
+| Q30 | `docs/references/questions/q29-q33-codex-app-parity-research-answers/002-Q30-app-server-notifications-能否支撑-Web-timeline-stream.md` | answered |
+| Q31 | `docs/references/questions/q29-q33-codex-app-parity-research-answers/003-Q31-conversation-lifecycle-方法的用户语义.md` | answered |
+| Q32 | `docs/references/questions/q29-q33-codex-app-parity-research-answers/004-Q32-文件-Shell-Git-Review-MCP-插件-Skills-的-UI-放置.md` | answered |
+| Q33 | `docs/references/questions/q29-q33-codex-app-parity-research-answers/005-Q33-高级和平台特定能力优先级.md` | answered |
 
 ## Current Open Research Questions
 
-Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步路线先按 `CODEX_APP_PARITY.md` 做 Codex App-like 能力对齐；如果某个能力面需要新的不可本地验证事实，再新增独立研究问题。
+Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步路线先按 `CODEX_APP_PARITY.md` 做 Codex App-like 能力对齐。
+
+Codex App-like browser 子目标的窄范围官方资料调研已完成。Q29-Q33 的提问任务、会话清单、回答和汇总分别位于：
+
+- `docs/references/questions/q29-q33-codex-app-parity-research-tasks.json`
+- `docs/references/questions/q29-q33-codex-app-parity-research-conversations.json`
+- `docs/references/questions/q29-q33-codex-app-parity-research-answers/`
+- `docs/references/questions/q29-q33-codex-app-parity-research-answers/summary.json`
 
 ### Q21. Real command/control protocol compatibility
 
@@ -88,6 +100,46 @@ Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22�
 - Desired result: Define response/error semantics for all-workers-down and partial-device failure.
 - Blocks: Web source taxonomy, fallback banner, empty states, and multi-device readiness.
 - Status: Locally verified in Stage 9. Healthy empty data stays distinct from dependency failure; all-workers-down and invalid-worker-token make `/v1/conversations` return a sanitized dependency error instead of `200 []`, while health/devices can still expose sanitized degraded inventory.
+
+### Q29. Codex App official product capability surface
+
+- Context: `CODEX_APP_PARITY.md` defines a Codex App-like browser sub-roadmap, but app-server protocol methods are not the same thing as official Codex App product behavior.
+- Reason: Before splitting future stages, the project needs to know which capabilities should be treated as Codex App parity targets versus Codex Remote-specific additions or future-only experiments.
+- Direction: Use web search with official OpenAI/Codex sources first. Compare official Codex App pages/docs/release notes with the generated app-server protocol categories already listed in `FEATURE_SUPPORT.md`.
+- Desired result: A capability table that classifies conversation lifecycle, timeline, approvals/input, files, shell, Git/review, search, models/config, skills/plugins/MCP/apps, account, realtime voice, and Windows sandbox as current parity target, remote-only target, future/experimental, or not supported.
+- Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/001-Q29-Codex-App-官方产品能力面.md`.
+
+### Q30. App-server notifications as Web timeline source
+
+- Context: The generated protocol exposes many `ServerNotification` variants, while Codex Remote currently reads snapshots rather than a durable live stream.
+- Reason: The next realtime stage needs to know whether app-server notifications are stable enough as stream inputs, and where Worker must add `seq/eventId`, replay, and snapshot reconciliation.
+- Direction: Use official docs/source/release notes when available, plus local generated notification names from `packages/codex-protocol`. Do not assume notifications are durable event log entries.
+- Desired result: A recommendation for which notification groups can feed Web timeline, which must stay internal, which require snapshot fallback, and which need separate verification.
+- Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/002-Q30-app-server-notifications-能否支撑-Web-timeline-stream.md`.
+
+### Q31. Conversation lifecycle user semantics
+
+- Context: The generated protocol exposes `thread/resume`, `fork`, `archive`, `unarchive`, `name/set`, `goal/*`, `compact/start`, and `rollback`, but Codex Remote currently productizes only start/list/read and turn control.
+- Reason: The conversation workbench should model user intent correctly instead of exposing raw methods.
+- Direction: Use web search with official Codex App behavior/docs and compare against generated app-server method names.
+- Desired result: A method-to-user-intent table that explains what each lifecycle action means, which UI surface should own it, what data is needed, and what should remain deferred.
+- Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/003-Q31-conversation-lifecycle-方法的用户语义.md`.
+
+### Q32. Local tool UI placement for files, shell, Git, review, MCP, plugins, and skills
+
+- Context: `DESIGN.md` now defines Sidebar, Main Conversation, Right Detail Pane, Tool Surface, Status, and Modal/Popover support surfaces.
+- Reason: Local tool capabilities should not all be squeezed into the conversation shell or exposed as raw API buttons.
+- Direction: Use official Codex App product references and official docs to infer where these tools appear in the experience. Cross-check against app-server method groups.
+- Desired result: A UI placement matrix for files, shell/commands, Git diff, review, fuzzy search, MCP, plugins/marketplace, skills/hooks, and apps, including required empty/degraded/action states.
+- Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/004-Q32-文件-Shell-Git-Review-MCP-插件-Skills-的-UI-放置.md`.
+
+### Q33. Advanced and platform-specific capability priority
+
+- Context: The protocol exposes realtime voice, Windows sandbox, account login/status/usage, feedback upload, and external agent config/import, but these may be platform-specific, experimental, or not relevant to the near-term browser workbench.
+- Reason: The roadmap should not promote advanced protocol surfaces into near-term stages without evidence.
+- Direction: Use official OpenAI/Codex sources and local generated protocol names to classify each capability by maturity and roadmap priority.
+- Desired result: A priority table that marks each advanced capability as near-term, later, experimental/watch, or not a Codex Remote target, with reasoning and source links.
+- Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/005-Q33-高级和平台特定能力优先级.md`.
 
 Summary and adopted decisions:
 

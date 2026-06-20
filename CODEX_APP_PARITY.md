@@ -12,6 +12,7 @@ This document defines the product capability target before new stages are split.
 - Public API: `packages/api-contract/openapi.yaml`
 - Current support state: `FEATURE_SUPPORT.md`
 - Main stage roadmap: `PLAN.md`
+- Research references: `docs/references/questions/q29-q33-codex-app-parity-research-answers/`
 
 ## Direction
 
@@ -75,11 +76,11 @@ Rules:
 
 Future stages should be split by product capability area, not by raw app-server method.
 
-1. Conversation workbench parity: lifecycle, active turn state, timeline stream, request cards.
-2. Local work tools: filesystem, shell, Git, review, fuzzy search.
-3. Runtime management: models, config, experiments, account status.
-4. Extension management: skills, hooks, plugins, marketplace, MCP, apps.
-5. Advanced realtime and platform: realtime voice, Windows sandbox, external agent config, feedback.
+1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline, projected live events, request cards, approval pending/resolved state.
+2. Local work tools read-only: filesystem preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
+3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
+4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.
+5. Advanced realtime and platform watchlist: realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations.
 6. Remote-specific hardening: devices, project binding, task association, self-hosted evidence, future pairing/reverse connection.
 
 Each stage must still keep the existing architecture boundary:
@@ -117,3 +118,13 @@ Unsupported capabilities should be absent or explicitly disabled; they must not 
 ## Deprecated Direction
 
 The next stage is no longer assumed to be only permission or approval productionization. Approval remains an important gap, but it should be placed inside the broader Codex App parity roadmap instead of driving the entire roadmap by itself.
+
+## Research-Adopted Guardrails
+
+- Notifications are runtime stream inputs, not durable history. Worker must project them into Web-facing events with `seq`, `eventId`, redaction, replay/gap handling, and snapshot reconciliation.
+- The first timeline stream should include turn lifecycle, assistant deltas, command summaries, diff updates, approval/request state, MCP tool-call state, warnings, and terminal turn state. Reasoning, standalone process APIs, fuzzy-search sessions, and realtime voice stay out of the first stream.
+- Conversation lifecycle UI uses user intent names: open/continue, branch, archive, restore, rename, goal, compact, rollback preview. It must not expose raw `thread/*` method names as buttons.
+- Near-term lifecycle scope is open/resume, archive/unarchive, rename, and loaded/live badge. Fork/goal/compact are next; rollback and `inject_items` are deferred.
+- Local tools enter as read-only evidence first. Arbitrary filesystem write, arbitrary shell, plugin install, MCP config edit, and destructive external app actions require later controlled-action stages.
+- Account capability starts as sanitized device auth status from `account/read`. Login/logout, externally supplied tokens, usage/rate detail, and feedback upload are not near-term Web actions.
+- Realtime voice is experimental/watch. Official Codex App evidence supports dictation-like input more clearly than durable realtime voice control.

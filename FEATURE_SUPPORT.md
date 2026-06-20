@@ -227,10 +227,12 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 
 ## Next Planning Implication
 
-Codex Remote should not try to expose all app-server methods at once. The next planning step is Codex App parity mapping by product capability area:
+Codex Remote should not try to expose all app-server methods at once. Q29-Q33 research confirms that the next plan should prioritize product capability surfaces, not protocol coverage percentage:
 
-1. Map app-server protocol methods to stable product capabilities, not raw pass-through APIs.
-2. Split future stages by experience surface: conversation workbench, local work tools, runtime management, extension management, advanced realtime/platform, and remote-specific hardening.
-3. Keep approval as a major gap inside that roadmap, but do not let approval alone define the next roadmap.
+1. Stage 11 should start with Conversation Workbench Parity: open/resume, archive/unarchive, rename, loaded/live badge, snapshot-first timeline stream, request cards, and approval pending/resolved state.
+2. Stage 12 should expose local work tools read-only first: file preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
+3. Controlled write actions come after read-only surfaces: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
+4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell.
+5. Keep approval as a major gap inside the conversation/request lifecycle, but do not let approval alone define the roadmap.
 
 See `CODEX_APP_PARITY.md` for the current capability target and stage split direction.

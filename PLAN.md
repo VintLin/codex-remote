@@ -117,7 +117,9 @@ Stage 10 当前证据：
 
 - 根路线文档：`CODEX_APP_PARITY.md`。
 - 支持状态矩阵：`FEATURE_SUPPORT.md`。
-- 下一阶段不再默认等同于权限控制 / approval productionization；应先围绕 Codex App-like 能力面拆分 stage，再为选中的能力面写 spec 和 plan。
+- Q29-Q33 调研答案已保存到 `docs/references/questions/q29-q33-codex-app-parity-research-answers/`；它们是阶段拆分参考，不是 API 或协议事实源。
+- 下一阶段不再默认等同于权限控制 / approval productionization；应先做 Conversation Workbench Parity，把打开/继续、归档/恢复、重命名、loaded/live 状态、snapshot-first timeline、request cards 和 approval pending/resolved 状态收敛成一个可验证工作台切片。
+- 本地工具、运行态、扩展管理和高级平台能力按只读优先、受控写后置、实验能力观察的顺序推进。
 
 当前 active Superpowers 文档：
 
@@ -189,8 +191,21 @@ flowchart LR
 | Q18-Q20 Stage 9 app-server/session/project identity | 已回答 | Worker 使用 initialized long-lived app-server session；public project id 必须 opaque，路径/cwd 留在 Worker；Worker-owned app-server transport 目标为 stdio，loopback WebSocket 仅 debug fallback |
 | Q21-Q24 Stage 9 实机验证项 | partial，进入当前执行计划 | start/follow-up/interrupt/steer、active turn/approval、`thread/list(cwd)` scope/pagination、Control Plane degraded-vs-empty 必须由 `pnpm real:check` 和真实本机栈给出 real-pass/fixed-pass/real-gap |
 | Q25-Q28 Stage 9 readiness guardrails | 已回答 | Stage 9 需要最小 Web browser smoke；real-check 默认写 ignored `logs/real-check/`；task-link 必须验证资源/归属；self-hosted Web 不应运行时请求外部字体或静态资源 |
+| Q29-Q33 Codex App-like browser workbench | 已回答 | 近期路线应先做 conversation lifecycle + projected live timeline + request/approval cards；本地工具先只读，账号/平台只做脱敏状态，插件/MCP/Skills 先 status/list，realtime voice、Windows setup、login/logout、feedback upload、external import 延后 |
 
 当前不新增全网调研问题。Stage 9 本机实证计划已归档到 `docs/archives/plans/2026-06-20-real-local-codex-calibration.md`。
+
+## Stage 11+ Draft Roadmap
+
+Q29-Q33 的路线含义：
+
+1. Stage 11：Conversation Workbench Parity。产品化 `open/resume`、archive/unarchive、rename、loaded/live badge，建立 snapshot-first + Worker-projected live event schema，展示 assistant delta、command summary、diff update、approval/request pending/resolved、turn terminal state。Non-goals：rollback、raw `inject_items`、arbitrary shell/filesystem write、plugin install、account login、realtime voice。
+2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、command history/output、turn diff/working tree diff、review findings、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps list。Non-goals：任意写文件、任意 shell、push/PR、MCP config edit、plugin install。
+3. Stage 13：Controlled Local Actions。显式用户 shell command、allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows only with local confirmation. Non-goals：automatic full access、batch destructive file ops、automatic push/PR、arbitrary MCP tool call。
+4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only, skills/plugins/MCP/apps richer management。Non-goals：token handling in Control Plane、login/logout, external agent import, feedback upload。
+5. Stage 15+：Advanced Platform Watchlist。realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations。只有在真实平台、权限、secret storage、redaction、audit 和 user-confirmation 设计完成后再进入 stage。
+
+Stage 11 开始前必须写新的 `docs/superpowers/specs/` 和 `docs/superpowers/plans/`，并以 Q29-Q33 的 tracked answer files 作为参考输入。
 
 ## 当前技术栈
 

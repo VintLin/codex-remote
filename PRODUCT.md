@@ -33,7 +33,8 @@ P0:
 
 P1:
 
-- Codex App parity surfaces: realtime timeline, conversation lifecycle, terminal output, filesystem, Git diff/review, fuzzy search, model switching, config, skills, plugins, MCP, account status, and richer status filters.
+- Codex App parity surfaces in product order: conversation workbench lifecycle and projected live timeline first; local files/commands/Git/review/search/MCP/plugins/skills/apps as read-only work surfaces next; controlled local writes only after explicit confirmation, approval, and rollback semantics are designed.
+- Runtime projections: sanitized model/profile, account auth status, platform, sandbox, and transport health. Account login/logout, token handling, feedback upload, external agent import, realtime voice, and Windows setup are not near-term browser workbench actions.
 
 P2:
 

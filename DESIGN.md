@@ -251,6 +251,7 @@ Rules:
 
 - New capability UI starts inside an existing workbench surface unless the stage spec proves that a new surface is necessary.
 - Files, Shell, Git, MCP, plugin, and config experiences are operational tool surfaces, not marketing cards.
+- Local tool capabilities appear read-only before they become write controls; show evidence, status, empty/degraded state, and selected-item detail before adding destructive actions.
 - Realtime or high-risk capabilities must show loading, active, waiting, accepted, failed, empty, and degraded states.
 - A disabled or unsupported capability must either be absent or visibly disabled with clear state; no clickable no-op controls.
 - Ownership context stays visible at action time: device, project, conversation, task, or account as applicable.
