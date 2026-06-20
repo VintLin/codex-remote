@@ -158,6 +158,67 @@ test("product readiness check when real operation passes without worker proof sh
   }
 });
 
+test("product readiness check when worker proof omits required detail should fail", () => {
+  const root = createFixture();
+  try {
+    mkdirSync(join(root, "logs/real-check"), { recursive: true });
+    writeFileSync(
+      join(root, "logs/real-check/latest.json"),
+      JSON.stringify({
+        schemaVersion: "real-check-report/v1",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        summary: { total: 2, realPass: 2, fixedPass: 0, realGap: 0 },
+        checks: [
+          {
+            name: "worker app-server proof",
+            status: "real-pass",
+            durationMs: 1,
+            detail: { status: 200 },
+          },
+          {
+            name: "start conversation",
+            status: "real-pass",
+            durationMs: 1,
+            detail: { status: 202 },
+          },
+        ],
+      }),
+    );
+    assert.match(
+      runProductReadinessCheck(root).join("\n"),
+      /logs\/real-check\/latest\.json contains real-pass start conversation without real worker proof/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when real-check report contains raw URL value should fail", () => {
+  const root = createFixture();
+  try {
+    mkdirSync(join(root, "logs/real-check"), { recursive: true });
+    writeFileSync(
+      join(root, "logs/real-check/latest.json"),
+      JSON.stringify({
+        schemaVersion: "real-check-report/v1",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        summary: { total: 1, realPass: 0, fixedPass: 0, realGap: 1 },
+        checks: [
+          {
+            name: "control-plane health",
+            status: "real-gap",
+            durationMs: 1,
+            detail: { reasonCode: "https://control-plane.example.invalid/private" },
+          },
+        ],
+      }),
+    );
+    assert.match(runProductReadinessCheck(root).join("\n"), /logs\/real-check\/latest\.json contains unsafe real-check value/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("product readiness check when calibration runner uses weak Q23 proof should fail", () => {
   const root = createFixture();
   try {

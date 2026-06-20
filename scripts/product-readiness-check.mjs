@@ -204,6 +204,7 @@ function checkRealCheckLatestReport(root) {
   const unsafeValuePatterns = [
     /\bsk-[A-Za-z0-9_-]{12,}\b/,
     /\bBearer\s+[A-Za-z0-9._-]{8,}\b/i,
+    /https?:\/\/[^\s"'{}[\]]+/i,
     /\/Users\/[A-Za-z0-9._-]+\//,
     /^ {2,}at .+\(.+:\d+:\d+\)$/m,
     /\bcodex-remote-calibration\b/i,
@@ -227,7 +228,7 @@ function checkRealCheckLatestReport(root) {
 
   if (Array.isArray(report.checks)) {
     const workerProof = report.checks.find((check) => check?.name === "worker app-server proof");
-    const hasRealWorkerProof = workerProof?.status === "real-pass";
+    const hasRealWorkerProof = hasRealWorkerProofDetail(workerProof);
     const workerProofGatedChecks = new Set(["start conversation", "follow-up", "interrupt", "steer", "approval decision", "task link"]);
     for (const check of report.checks) {
       const record = requireRecordForScan(check, failures, reportPath);
@@ -261,6 +262,19 @@ function checkRealCheckLatestReport(root) {
   }
 
   return [...new Set(failures)];
+}
+
+function hasRealWorkerProofDetail(workerProof) {
+  const detail = workerProof && typeof workerProof === "object" && !Array.isArray(workerProof) ? workerProof.detail : null;
+  if (workerProof?.status !== "real-pass" || !detail || typeof detail !== "object" || Array.isArray(detail)) {
+    return false;
+  }
+  return (
+    detail.appServerConnected === true &&
+    (detail.transport === "stdio" || detail.transport === "loopbackWebSocket") &&
+    typeof detail.codexVersion === "string" &&
+    detail.codexVersion.length > 0
+  );
 }
 
 function requireRecordForScan(value, failures, path) {
