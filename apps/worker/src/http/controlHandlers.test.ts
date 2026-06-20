@@ -32,16 +32,9 @@ test("worker control handlers when interrupting, should prove conversation is al
     expectedTurnId: "turn-1",
   });
 
-  assert.deepEqual(client.listCalls, [
-    {
-      cwd: paths.allowedRoot,
-      sourceKinds: ["cli", "vscode", "appServer"],
-      archived: false,
-      limit: 25,
-      sortDirection: "desc",
-      cursor: null,
-    },
-  ]);
+  assert.deepEqual(client.listCalls, []);
+  assert.deepEqual(client.readCalls, [{ threadId: "thread-1", includeTurns: true }]);
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "readThread", "interruptTurn"]);
   assert.deepEqual(client.interruptTurnCalls, [{ threadId: "thread-1", turnId: "turn-1" }]);
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-1");
@@ -87,6 +80,7 @@ test("worker control handlers when steering, should map to turn/steer with one t
       input: [{ type: "text", text: "Adjust the active turn", text_elements: [] }],
     },
   ]);
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "readThread", "steerTurn"]);
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-1");
   assert.equal(accepted.turnId, "turn-1");
@@ -184,7 +178,8 @@ test("worker control handlers when listing approvals, should return pending appr
   const approvals = await listApprovals(context, "thread-1");
 
   assert.deepEqual(approvals.map((approval) => approval.conversationId), ["thread-1"]);
-  assert.equal(client.listCalls.length, 1);
+  assert.deepEqual(client.listCalls, []);
+  assert.deepEqual(client.readCalls, [{ threadId: "thread-1", includeTurns: true }]);
 });
 
 test("worker control handlers when deciding approval, should send the captured approval response and return CommandAccepted", async () => {
@@ -207,6 +202,7 @@ test("worker control handlers when deciding approval, should send the captured a
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-1");
   assert.equal(accepted.turnId, "turn-1");
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "readThread", "sendApprovalResponse"]);
   assert.deepEqual(client.approvalResponses, [{ requestId: "jsonrpc-1", result: { decision: "accept" } }]);
   assert.deepEqual(await listApprovals(context, "thread-1"), []);
 });
@@ -247,6 +243,9 @@ test("worker control handlers when listing approvals for a forbidden conversatio
     listApprovals(context, "thread-1"),
     (error) => error instanceof WorkerHttpError && error.status === 404 && error.code === "conversation_not_found",
   );
+  assert.deepEqual(client.readCalls, [{ threadId: "thread-1", includeTurns: true }]);
+  assert.deepEqual(client.interruptTurnCalls, []);
+  assert.deepEqual(client.steerTurnCalls, []);
 });
 
 test("worker control handlers when deciding approval for a forbidden conversation, should fail before sending response", async () => {
@@ -274,7 +273,9 @@ test("worker control handlers when deciding approval for a forbidden conversatio
 
 class FakeControlClient implements WorkerControlAppServerClient {
   closed = false;
+  readonly callOrder: string[] = [];
   readonly listCalls: Parameters<WorkerControlAppServerClient["listThreads"]>[0][] = [];
+  readonly readCalls: Parameters<WorkerControlAppServerClient["readThread"]>[0][] = [];
   readonly interruptTurnCalls: v2.TurnInterruptParams[] = [];
   readonly steerTurnCalls: v2.TurnSteerParams[] = [];
   readonly approvalResponses: Array<{ requestId: string | number; result: unknown }> = [];
@@ -295,18 +296,23 @@ class FakeControlClient implements WorkerControlAppServerClient {
     this.steerTurnError = options.steerTurnError ?? null;
   }
 
-  async readyz(): Promise<void> {}
+  async readyz(): Promise<void> {
+    this.callOrder.push("readyz");
+  }
 
   async initialize(): Promise<void> {}
 
   async initialized(): Promise<void> {}
 
   async listThreads(params: Parameters<WorkerControlAppServerClient["listThreads"]>[0]): Promise<v2.ThreadListResponse> {
+    this.callOrder.push("listThreads");
     this.listCalls.push(params);
     return { data: this.threads, nextCursor: null, backwardsCursor: null };
   }
 
   async readThread(params: Parameters<WorkerControlAppServerClient["readThread"]>[0]): Promise<v2.ThreadReadResponse> {
+    this.callOrder.push("readThread");
+    this.readCalls.push(params);
     const thread = this.threads.find((candidate) => candidate.id === params.threadId);
     if (!thread) {
       throw new Error("missing_fake_read_response");
@@ -323,6 +329,7 @@ class FakeControlClient implements WorkerControlAppServerClient {
   }
 
   async interruptTurn(params: v2.TurnInterruptParams): Promise<unknown> {
+    this.callOrder.push("interruptTurn");
     this.interruptTurnCalls.push(params);
     if (this.interruptTurnError) {
       throw this.interruptTurnError;
@@ -331,6 +338,7 @@ class FakeControlClient implements WorkerControlAppServerClient {
   }
 
   async steerTurn(params: v2.TurnSteerParams): Promise<unknown> {
+    this.callOrder.push("steerTurn");
     this.steerTurnCalls.push(params);
     if (this.steerTurnError) {
       throw this.steerTurnError;
@@ -339,6 +347,7 @@ class FakeControlClient implements WorkerControlAppServerClient {
   }
 
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {
+    this.callOrder.push("sendApprovalResponse");
     if (this.approvalResponseError) {
       throw this.approvalResponseError;
     }

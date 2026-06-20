@@ -77,12 +77,12 @@ Stage 9 当前证据：
 
 - Fake smoke evidence：Stage 3-8 的 fake Worker smoke 覆盖过 Web/Control Plane/Worker-shaped flows，但它只能证明 contract/UI/fallback 行为；Task 5/6 已实现 real calibration runner 和 smoke gate 后，fake Worker smoke 不再能作为 real readiness。
 - Real app-server evidence：Worker-owned `stdio` app-server lifecycle 已实现为当前默认路径；`pnpm real:start` 可启动 Worker、Control Plane 和 Web，`pnpm real:status` 看到三项 running。
-- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=11 fixedPass=0 realGap=8`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
+- Real calibration evidence：`pnpm real:check` 生成 ignored `logs/real-check/latest.json`，当前 summary 为 `total=19 realPass=15 fixedPass=0 realGap=4`。Worker app-server proof 为 `appServerConnected=true` 且 `transport=stdio`；public project/conversation/task refs 保持 opaque。
 - Web real entrypoint evidence：`pnpm web:e2e:smoke` 在真实栈上通过，覆盖 Web -> Control Plane -> Worker 的加载、start、任务创建/关联和无外部 runtime asset 请求检查。
 - Fixed in current slice：Control Plane task conversation links now reject arbitrary invalid ids before persisting; `task link` and `task link invalid ids` both record `real-pass`.
 - Fixed in current slice：Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`; all-workers-down and invalid-worker-token make `/v1/conversations` return a sanitized dependency error instead of `200 []`, while health/devices remain sanitized degraded inventory.
-- Fixed in current slice：Worker write paths now initialize the stdio app-server session before `thread/start` / `turn/start`; `start conversation` records `real-pass` with HTTP 202.
-- Remaining real gaps：the newly accepted start conversation is not yet readable through Control Plane timeline/follow-up and records sanitized `conversation_not_found`; approval decision has no safe pending approval; interrupt/steer have no safe active turn; Q23 cwd scope/pagination probes remain explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
+- Fixed in current slice：Worker specific conversation routes now prove access with `thread/read` followed by Worker-local realpath verification; start, timeline, follow-up, approval pending list, and interrupt record `real-pass`.
+- Remaining real gaps：approval decision has no safe pending approval; steer returns sanitized `worker_internal_error`; Q23 cwd scope/pagination probes remain explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
 

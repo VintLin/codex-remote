@@ -98,16 +98,8 @@ test("worker write handlers when following up, should prove conversation is allo
   const accepted = await followUpConversation(context, "thread-1", input);
 
   assert.equal(client.startTurnCalls.length, 1);
-  assert.deepEqual(client.listCalls, [
-    {
-      cwd: paths.allowedRoot,
-      sourceKinds: ["cli", "vscode", "appServer"],
-      archived: false,
-      limit: 25,
-      sortDirection: "desc",
-      cursor: null,
-    },
-  ]);
+  assert.deepEqual(client.listCalls, []);
+  assert.deepEqual(client.readCalls, [{ threadId: "thread-1", includeTurns: true }]);
   assert.deepEqual(client.startTurnCalls, [
     {
       threadId: "thread-1",
@@ -134,7 +126,7 @@ test("worker write handlers when following up, should initialize session before 
     expectedConversationId: "thread-1",
   });
 
-  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "listThreads", "startTurn"]);
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "readThread", "startTurn"]);
 });
 
 test("worker write handlers when session initialization times out, should fail closed before business rpc", async () => {
@@ -159,36 +151,23 @@ test("worker write handlers when session initialization times out, should fail c
   assert.equal(client.closed, true);
 });
 
-test("worker write handlers when allowed conversation is on a later page, should still allow follow-up", async () => {
+test("worker write handlers when specific conversation is absent from aggregate list, should still allow follow-up after read proof", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeWriteClient({
-    listResponses: [
-      {
-        data: [createThread({ cwd: paths.allowedChild, id: "other-thread" })],
-        nextCursor: "page-2",
-        backwardsCursor: null,
-      },
-      {
-        data: [createThread({ cwd: paths.allowedChild, id: "thread-page-2" })],
-        nextCursor: null,
-        backwardsCursor: null,
-      },
-    ],
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-started" })],
     startTurnResponse: { turn: createTurn({ id: "turn-page-2", status: "inProgress" }) },
   });
   const context = createContext(paths.allowedRoot, client);
 
-  const accepted = await followUpConversation(context, "thread-page-2", {
-    message: "Continue from page two",
+  const accepted = await followUpConversation(context, "thread-started", {
+    message: "Continue after start",
     clientRequestId: "client-page-2",
-    expectedConversationId: "thread-page-2",
+    expectedConversationId: "thread-started",
   });
 
   assert.equal(accepted.turnId, "turn-page-2");
-  assert.deepEqual(
-    client.listCalls.map((call) => call.cursor),
-    [null, "page-2"],
-  );
+  assert.deepEqual(client.listCalls, []);
+  assert.deepEqual(client.readCalls, [{ threadId: "thread-started", includeTurns: true }]);
   assert.equal(client.startTurnCalls.length, 1);
 });
 

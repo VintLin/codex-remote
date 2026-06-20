@@ -77,12 +77,12 @@ test("worker read-only handlers when no allowed conversations exist, should retu
   assert.equal(client.closed, true);
 });
 
-test("worker read-only handlers when reading timeline, should prove id before read and return metadata only", async () => {
+test("worker read-only handlers when reading timeline, should prove specific id by read and return metadata only", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
     listResponses: [
       {
-        data: [createThread({ cwd: paths.allowedChild, id: "thread-1" })],
+        data: [],
         nextCursor: null,
         backwardsCursor: null,
       },
@@ -104,6 +104,7 @@ test("worker read-only handlers when reading timeline, should prove id before re
   });
   const timeline = await readConversationTimeline(createContext(paths.allowedRoot, client), "thread-1");
 
+  assert.deepEqual(client.listCalls, []);
   assert.deepEqual(client.readCalls, [{ threadId: "thread-1", includeTurns: true }]);
   assert.equal(timeline.conversationId, "thread-1");
   assert.equal(timeline.snapshotRevision, "thread-1:2026-06-19T10:00:01.000Z");
@@ -111,7 +112,7 @@ test("worker read-only handlers when reading timeline, should prove id before re
   assert.equal(client.closed, true);
 });
 
-test("worker read-only handlers when timeline id is absent from allowed list, should not read and should map not found", async () => {
+test("worker read-only handlers when timeline id cannot be read, should map not found", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
     listResponses: [{ data: [createThread({ cwd: paths.allowedChild, id: "other" })], nextCursor: null, backwardsCursor: null }],
@@ -121,7 +122,8 @@ test("worker read-only handlers when timeline id is absent from allowed list, sh
     readConversationTimeline(createContext(paths.allowedRoot, client), "missing"),
     (error) => error instanceof WorkerHttpError && error.status === 404 && error.code === "conversation_not_found",
   );
-  assert.deepEqual(client.readCalls, []);
+  assert.deepEqual(client.listCalls, []);
+  assert.deepEqual(client.readCalls, [{ threadId: "missing", includeTurns: true }]);
   assert.equal(client.closed, true);
 });
 
@@ -138,8 +140,8 @@ test("worker read-only handlers when read result escapes root, should fail witho
     readConversationTimeline(createContext(paths.allowedRoot, client), "thread-1"),
     (error) =>
       error instanceof WorkerHttpError &&
-      error.status === 403 &&
-      error.code === "project_forbidden" &&
+      error.status === 404 &&
+      error.code === "conversation_not_found" &&
       !JSON.stringify(error.details).includes(paths.outside),
   );
   assert.equal(client.closed, true);

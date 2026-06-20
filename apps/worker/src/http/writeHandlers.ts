@@ -5,8 +5,8 @@ import type {
 } from "@codex-remote/api-contract";
 import type { v2 } from "@codex-remote/codex-protocol";
 
-import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
 import { mapUnknownError, WorkerHttpError } from "./errors.ts";
+import { readAllowedConversationThread } from "./readOnlyHandlers.ts";
 import type {
   WorkerReadOnlyAppServerClient,
   WorkerReadOnlyHandlerContext,
@@ -39,9 +39,6 @@ type IdempotencyRecord = {
   response: CommandAccepted;
 };
 
-const sourceKinds = ["cli", "vscode", "appServer"] as const;
-const listLimit = 25;
-const maxPages = 3;
 const clientRequestIdMaxLength = 128;
 
 export async function startConversation(
@@ -173,34 +170,7 @@ async function assertConversationAllowed(
   allowedProjectRoot: string,
   conversationId: string,
 ): Promise<void> {
-  let cursor: string | null = null;
-
-  for (let page = 0; page < maxPages; page += 1) {
-    const response = await client.listThreads({
-      cwd: allowedProjectRoot,
-      sourceKinds,
-      archived: false,
-      limit: listLimit,
-      sortDirection: "desc",
-      cursor,
-    });
-
-    for (const thread of response.data) {
-      if (thread.id === conversationId && await isPathInsideRootRealpath(thread.cwd, allowedProjectRoot)) {
-        return;
-      }
-    }
-
-    cursor = response.nextCursor;
-    if (!cursor) {
-      break;
-    }
-  }
-
-  throw new WorkerHttpError(404, "conversation_not_found", "Conversation was not found.", {
-    operation: "turn/start",
-    retryable: false,
-  });
+  await readAllowedConversationThread(client, allowedProjectRoot, conversationId, "turn/start");
 }
 
 async function withWriteClient<T>(

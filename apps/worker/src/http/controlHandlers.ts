@@ -7,10 +7,10 @@ import type {
 } from "@codex-remote/api-contract";
 import type { v2 } from "@codex-remote/codex-protocol";
 
-import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
 import { WorkerHttpError } from "./errors.ts";
 import { mapUnknownError } from "./errors.ts";
 import type { WorkerApprovalRegistry } from "./approvalRegistry.ts";
+import { readAllowedConversationThread } from "./readOnlyHandlers.ts";
 import type { WorkerWriteAppServerClient, WorkerWriteHandlerContext } from "./writeHandlers.ts";
 
 export interface WorkerControlAppServerClient extends WorkerWriteAppServerClient {
@@ -155,9 +155,6 @@ type IdempotencyRecord = {
   response: CommandAccepted;
 };
 
-const sourceKinds = ["cli", "vscode", "appServer"] as const;
-const listLimit = 25;
-const maxPages = 3;
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 
@@ -222,34 +219,7 @@ async function assertConversationAllowed(
   conversationId: string,
   operation: string,
 ): Promise<void> {
-  let cursor: string | null = null;
-
-  for (let page = 0; page < maxPages; page += 1) {
-    const response = await client.listThreads({
-      cwd: allowedProjectRoot,
-      sourceKinds,
-      archived: false,
-      limit: listLimit,
-      sortDirection: "desc",
-      cursor,
-    });
-
-    for (const thread of response.data) {
-      if (thread.id === conversationId && await isPathInsideRootRealpath(thread.cwd, allowedProjectRoot)) {
-        return;
-      }
-    }
-
-    cursor = response.nextCursor;
-    if (!cursor) {
-      break;
-    }
-  }
-
-  throw new WorkerHttpError(404, "conversation_not_found", "Conversation was not found.", {
-    operation,
-    retryable: false,
-  });
+  await readAllowedConversationThread(client, allowedProjectRoot, conversationId, operation);
 }
 
 async function withControlClient<T>(
@@ -266,6 +236,7 @@ async function withControlClient<T>(
   }
 
   try {
+    await client.readyz();
     return await run(client);
   } catch (error) {
     throw mapUnknownError(error, operation);

@@ -146,30 +146,46 @@ export async function readConversationTimeline(
   conversationId: string,
 ): Promise<ConversationTimeline> {
   return await withClient(context, "thread/read", async (client) => {
-    const allowedThreads = await listAllowedThreads(client, context.config.allowedProjectRoot);
-    if (!allowedThreads.some((thread) => thread.id === conversationId)) {
-      throw new WorkerHttpError(404, "conversation_not_found", "Conversation was not found.", {
-        operation: "thread/read",
-        retryable: false,
-      });
-    }
-
     const readStartedAt = context.now();
-    const response = await client.readThread({ threadId: conversationId, includeTurns: true });
-    if (!(await isPathInsideRootRealpath(response.thread.cwd, context.config.allowedProjectRoot))) {
-      throw new WorkerHttpError(403, "project_forbidden", "Requested project is outside the allowed root.", {
-        operation: "thread/read",
-        retryable: false,
-      });
-    }
+    const thread = await readAllowedConversationThread(
+      client,
+      context.config.allowedProjectRoot,
+      conversationId,
+      "thread/read",
+    );
 
-    return projectThreadToTimeline(response.thread, {
+    return projectThreadToTimeline(thread, {
       allowedProjectRoot: context.config.allowedProjectRoot,
       deviceId: context.config.deviceId,
       readStartedAt,
       readCompletedAt: context.now(),
     });
   });
+}
+
+export async function readAllowedConversationThread(
+  client: WorkerReadOnlyAppServerClient,
+  allowedProjectRoot: string,
+  conversationId: string,
+  operation: string,
+): Promise<v2.Thread> {
+  let response: v2.ThreadReadResponse;
+
+  try {
+    response = await client.readThread({ threadId: conversationId, includeTurns: true });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("app_server_")) {
+      throw error;
+    }
+
+    throw conversationNotFound(operation);
+  }
+
+  if (!(await isPathInsideRootRealpath(response.thread.cwd, allowedProjectRoot))) {
+    throw conversationNotFound(operation);
+  }
+
+  return response.thread;
 }
 
 async function withClient<T>(
@@ -240,6 +256,13 @@ function createThreadListParams(cwd: string, cursor: string | null): ThreadListP
     sortDirection: "desc",
     cursor,
   };
+}
+
+function conversationNotFound(operation: string): WorkerHttpError {
+  return new WorkerHttpError(404, "conversation_not_found", "Conversation was not found.", {
+    operation,
+    retryable: false,
+  });
 }
 
 function createProjectionContext(context: WorkerReadOnlyHandlerContext): ConversationProjectionContext {

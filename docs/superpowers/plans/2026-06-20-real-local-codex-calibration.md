@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-11 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=11 fixedPass=0 realGap=8`; `start conversation` now records `real-pass`, but the newly started conversation is not yet readable through timeline/follow-up and records sanitized `conversation_not_found`. Remaining work is the next vertical slice for post-start readable conversation, follow-up/control/approval closure, and Q23 real probes. Q24 all-workers-down and invalid-worker-token fixtures still record `real-pass`.
+**Current gap:** Tasks 1-12 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=15 fixedPass=0 realGap=4`; start, timeline, follow-up, approval pending list, interrupt, task link, and Q24 degraded-vs-empty fixtures now record `real-pass`. Remaining work is the next vertical slice for steer, approval decision scenario, and Q23 real probes.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -103,6 +103,23 @@ Q18-Q28 are now imported under `docs/references/questions/`. This plan adopts th
 - Q26: `real:check` writes ignored local artifacts under `logs/real-check/` by default. Tracked docs may contain only explicit sanitized evidence.
 - Q27: task links must validate Control Plane-owned resources and project ownership; offline Worker verification can be pending, but arbitrary ids must not become verified links.
 - Q28: the local self-hosted Web UI must not make runtime external font/static asset requests. Use system fonts or vendored assets only.
+
+Reviewer: `019ee60e-2bc4-72c2-9c70-12cf2cd54162`
+
+Result: clean enough to execute after safety clarifications.
+
+Findings addressed by Task 12:
+
+- Important: read-before-verify must not become a public oracle for whether an outside-root thread exists. Missing, outside-root, and inaccessible specific conversations must all map to sanitized `conversation_not_found`.
+- Important: approval registry entries must not be exposed before the specific conversation verifier passes. If `thread/read` returns outside-root, `listApprovals()` must return `conversation_not_found` even when a matching pending approval exists.
+- Important: control paths must receive the same session initialization protection as write paths. Focused tests should prove `readyz -> readThread -> control RPC` order for interrupt/steer/approval decision.
+
+Pre-review evidence for Task 12:
+
+- After Task 11, a real Control Plane start request returns HTTP 202 and a public conversation id.
+- The same id is not present in immediate Control Plane or Worker `GET /v1/conversations` aggregate results.
+- Timeline and follow-up then fail with sanitized `conversation_not_found`, because specific conversation routes currently require `thread/list(cwd)` to rediscover the id before calling `thread/read` or `turn/start`.
+- Protocol evidence from `packages/codex-protocol`: `thread/list` accepts an exact-match `cwd` filter, while `thread/read` accepts a target thread id. Any fix must still verify `thread.cwd` stays inside `allowedProjectRoot` before returning or writing.
 
 ---
 
@@ -1876,6 +1893,97 @@ Update `PLAN.md`, `docs/references/development-context.md`, and this plan with s
 ```bash
 git add apps/worker/src/http/writeHandlers.ts apps/worker/src/http/writeHandlers.test.ts PLAN.md docs/references/development-context.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
 git commit -m "fix: initialize worker writes before rpc"
+```
+
+---
+
+### Task 12: Prove Specific Conversation Access By Read-Then-Verify
+
+**Files:**
+- Modify: `apps/worker/src/http/readOnlyHandlers.ts`
+- Modify: `apps/worker/src/http/writeHandlers.ts`
+- Modify: `apps/worker/src/http/controlHandlers.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.test.ts`
+- Modify: `apps/worker/src/http/writeHandlers.test.ts`
+- Modify: `apps/worker/src/http/controlHandlers.test.ts`
+- Modify: `apps/worker/src/http/workerHttpApp.test.ts` only if route-level behavior needs coverage.
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keeps public API, DB schema, and Codex protocol generated types unchanged.
+- Keeps aggregate conversation list behavior on `thread/list(cwd)`.
+- For specific conversation routes, uses `thread/read({ threadId, includeTurns: true })` followed by `isPathInsideRootRealpath(thread.cwd, allowedProjectRoot)` as the allowlist proof.
+- Keeps `allowedProjectRoot` and `cwd` inside Worker only; public errors remain sanitized.
+
+**Non-goals:**
+- No Q23 cwd-scope or pagination probe implementation.
+- No approval scenario construction.
+- No interrupt/steer active-turn scenario construction.
+- No Web UI changes unless focused real smoke proves a Web-only regression.
+- No persistence of started conversation ids in Control Plane or DB.
+- No raw app-server response, real raw ids, prompt text, command output, full diff, raw JSON-RPC, token, raw URL, stack/cause, or private path in docs/logs/tests. Synthetic ids in tests are allowed.
+
+- [x] **Step 1: Add failing Worker tests**
+
+Add tests proving:
+
+- timeline reads a newly started/specific conversation when `thread/list(cwd)` does not include it, as long as `thread/read` returns a cwd inside `allowedProjectRoot`;
+- follow-up starts a turn for the same case after read-then-verify;
+- approval listing, `decideApproval()`, and control allowlist paths use the same read-then-verify helper before exposing approvals or sending control RPCs;
+- if `thread/read` returns a cwd outside `allowedProjectRoot`, public output is sanitized and no write/control RPC is called;
+- if `thread/read` returns a cwd outside `allowedProjectRoot`, approval registry entries for the same synthetic id are not exposed;
+- control paths initialize the session before `thread/read`, then call the control RPC only after verification.
+
+- [x] **Step 2: Implement one shared Worker-local verifier**
+
+Refactor Worker HTTP handlers to use a small internal verifier for specific conversation ids:
+
+- call `client.readThread({ threadId: conversationId, includeTurns: true })`;
+- verify `thread.cwd` is inside `allowedProjectRoot`;
+- return the thread for timeline projection or allow follow-up/control to proceed;
+- map missing, outside-root, and inaccessible conversations to sanitized `conversation_not_found`; do not expose a distinct forbidden response that would prove an outside-root id exists;
+- call `readyz()` before specific-conversation reads on write/control paths when the client may be the first request against a stdio session.
+
+- [x] **Step 3: Run focused verification**
+
+```bash
+pnpm --filter @codex-remote/worker test -- --test-name-pattern "specific conversation|following up|approvals|interrupting|steering"
+pnpm --filter @codex-remote/worker typecheck
+```
+
+- [x] **Step 4: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: timeline and follow-up for the newly accepted start conversation become `real-pass` or move to a narrower sanitized gap. Fake Worker evidence remains excluded.
+
+Observed after the read-then-verify fix:
+
+- `pnpm real:check` records `total=19 realPass=15 fixedPass=0 realGap=4`.
+- `timeline` records `real-pass` with HTTP 200 and a nonzero turn count for the newly accepted start conversation.
+- `follow-up` records `real-pass` with HTTP 202.
+- `approval pending scenario` records `real-pass` with HTTP 200 and safe count metadata.
+- `interrupt` records `real-pass` with HTTP 202.
+- Remaining gaps are `thread/list cwd scope`, `thread/list pagination`, `approval decision` with `no_safe_pending_approval`, and `steer` with sanitized `worker_internal_error`.
+
+- [x] **Step 5: Run full gates and commit**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git commit -m "fix: verify specific worker conversations by read"
 ```
 
 ---
