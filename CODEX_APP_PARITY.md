@@ -1,8 +1,8 @@
-# Codex App Parity Roadmap
+# Codex App Parity Sub-Roadmap
 
 ## Purpose
 
-Codex Remote should feel like Codex App in a browser, with the remote-specific additions needed for devices, projects, and tasks.
+Codex Remote's main product goal remains a self-hosted multi-device Codex control plane. This sub-roadmap defines how the Web workbench should feel closer to Codex App while keeping the multi-computer remote-control goal primary.
 
 This document defines the product capability target before new stages are split. It does not expose raw app-server protocol as product API, and it does not make permission or approval policy decisions by itself.
 
@@ -11,7 +11,7 @@ This document defines the product capability target before new stages are split.
 - App-server protocol: `packages/codex-protocol/src/generated/ClientRequest.ts`, `ServerRequest.ts`, and `ServerNotification.ts`
 - Public API: `packages/api-contract/openapi.yaml`
 - Current support state: `FEATURE_SUPPORT.md`
-- Stage roadmap: `PLAN.md`
+- Main stage roadmap: `PLAN.md`
 
 ## Direction
 

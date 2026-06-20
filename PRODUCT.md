@@ -10,7 +10,9 @@ Power users who run Codex across several macOS, Windows, and Linux machines. The
 
 ## Product Purpose
 
-Codex Remote is a self-hosted multi-device Codex control plane and browser workbench. It should feel as close as practical to Codex App while adding remote-specific device, project, and task coordination. It aggregates device status, remote projects, conversations, output streams, approvals, local work tools, runtime state, and manual task links without sharing OpenAI, ChatGPT, Codex, or provider secrets across devices. Success means the user can quickly switch devices, inspect live Codex work, send follow-up instructions, interrupt unsafe or stale turns, use local Codex capabilities through the owning Worker, and associate conversations from different machines with one task board item.
+Codex Remote is a self-hosted multi-device Codex control plane. It aggregates device status, remote projects, conversations, output streams, approvals, local work tools, runtime state, and manual task links without sharing OpenAI, ChatGPT, Codex, or provider secrets across devices. Success means the user can quickly switch devices, inspect live Codex work, send follow-up instructions, interrupt unsafe or stale turns, use local Codex capabilities through the owning Worker, and associate conversations from different machines with one task board item.
+
+Current subgoal: make the Web workbench feel as close as practical to Codex App while preserving Codex Remote's main product goal of controlling multiple Codex instances across multiple computers.
 
 ## Core Scenarios
 

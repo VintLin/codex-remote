@@ -2,9 +2,11 @@
 
 ## 总目标
 
-构建一个自托管的多设备 Codex Web 控制台和浏览器工作台，尽量提供与 Codex App 一致的功能体验。
+构建一个自托管的多设备 Codex Web 控制台。
 
-核心能力是在一个 Web 工作台中管理多台设备上的 Codex：查看设备状态、项目、对话和输出流，发送 follow-up，中止任务，处理 approval，并逐步补齐 Codex App-like 的会话生命周期、实时 timeline、文件、Shell、Git、搜索、模型、配置、技能、插件、MCP、账户和实时语音等能力，同时把不同设备上的 Codex conversations 关联到任务看板。
+核心能力是在一个 Web 工作台中管理多台设备上的 Codex：查看设备状态、项目、对话和输出流，发送 follow-up，中止任务，处理 approval，并把不同设备上的 Codex conversations 关联到任务看板。
+
+当前子目标是在不改变上述产品定位的前提下，让 Web 工作台尽量具备 Codex App-like 的功能体验：会话生命周期、实时 timeline、文件、Shell、Git、搜索、模型、配置、技能、插件、MCP、账户和实时语音等能力。
 
 长期拓扑：
 

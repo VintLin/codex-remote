@@ -4,7 +4,7 @@ This document stores stage-specific planning context and researched decisions. `
 
 ## Product Context
 
-Codex Remote is a self-hosted multi-device Codex Web console and browser workbench aiming for practical Codex App-like experience parity. `CODEX_APP_PARITY.md` is the current capability target for that direction.
+Codex Remote is a self-hosted multi-device Codex Web console. The current subgoal is practical Codex App-like browser workbench parity; `CODEX_APP_PARITY.md` is the capability target for that sub-roadmap.
 
 Long-term product boundaries:
 
