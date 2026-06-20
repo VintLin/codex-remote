@@ -216,7 +216,7 @@ function getCalibrationThreadStartOverrides(
 
   return {
     approvalPolicy: "on-request",
-    sandbox: "workspace-write",
+    sandbox: "read-only",
   };
 }
 
@@ -230,11 +230,8 @@ function getCalibrationTurnStartOverrides(
   return {
     approvalPolicy: "on-request",
     sandboxPolicy: {
-      type: "workspaceWrite",
-      writableRoots: [context.config.allowedProjectRoot],
+      type: "readOnly",
       networkAccess: false,
-      excludeTmpdirEnvVar: true,
-      excludeSlashTmp: true,
     },
   };
 }

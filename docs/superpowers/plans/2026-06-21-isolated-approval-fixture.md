@@ -56,17 +56,14 @@ In `apps/worker/src/http/writeHandlers.test.ts`, add a test for `startConversati
 ```ts
 const expectedThreadParams = {
   approvalPolicy: "on-request",
-  sandbox: "workspace-write",
+  sandbox: "read-only",
 } satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox">;
 
 const expectedTurnParams = {
   approvalPolicy: "on-request",
   sandboxPolicy: {
-    type: "workspaceWrite",
-    writableRoots: [context.config.allowedProjectRoot],
+    type: "readOnly",
     networkAccess: false,
-    excludeTmpdirEnvVar: true,
-    excludeSlashTmp: true,
   },
 } satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy">;
 ```
@@ -90,7 +87,7 @@ function getCalibrationThreadStartOverrides(context: WorkerWriteHandlerContext):
   if (context.config.calibrationApprovalMode !== "on-request") {
     return {};
   }
-  return { approvalPolicy: "on-request", sandbox: "workspace-write" };
+  return { approvalPolicy: "on-request", sandbox: "read-only" };
 }
 
 function getCalibrationTurnStartOverrides(context: WorkerWriteHandlerContext): Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy"> {
@@ -100,11 +97,8 @@ function getCalibrationTurnStartOverrides(context: WorkerWriteHandlerContext): P
   return {
     approvalPolicy: "on-request",
     sandboxPolicy: {
-      type: "workspaceWrite",
-      writableRoots: [context.config.allowedProjectRoot],
+      type: "readOnly",
       networkAccess: false,
-      excludeTmpdirEnvVar: true,
-      excludeSlashTmp: true,
     },
   };
 }
@@ -229,7 +223,7 @@ In `scripts/real-local-calibration.test.mjs`, add a small report sanitizer test 
 - `logs/real-check/latest.json` should move `approval decision` from `real-gap` to `real-pass` if the fixture succeeds.
 - If the fixture cannot safely trigger approval, leave `real-gap` and document the exact sanitized blocker.
 
-- [ ] **Step 1: Run real verification**
+- [x] **Step 1: Run real verification**
 
 Run:
 
@@ -244,6 +238,8 @@ pnpm real:status
 
 Expected if fixture succeeds: `logs/real-check/latest.json` has `approval decision` as `real-pass`.
 
+Actual current result: `pnpm real:start`, `pnpm real:check`, `pnpm real:status`, and `pnpm web:e2e:smoke` ran. `logs/real-check/latest.json` currently records `total=19 realPass=17 fixedPass=0 realGap=2`; `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`, and the latest run also has intermittent `interrupt_not_accepted`.
+
 After the command, inspect `logs/real-check/latest.json` and assert it does not contain:
 
 - the fixture temp root string;
@@ -253,7 +249,7 @@ After the command, inspect `logs/real-check/latest.json` and assert it does not 
 - command output;
 - `stack` or `cause`.
 
-- [ ] **Step 2: Run full gates**
+- [x] **Step 2: Run full gates**
 
 Run:
 
@@ -267,13 +263,17 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 3: Verify in Google Chrome**
+Actual result: PASS for `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+- [x] **Step 3: Verify in Google Chrome**
 
 Open `http://127.0.0.1:5173/` in Google Chrome against the real stack and confirm:
 
 - real Control Plane state loads;
 - start/follow-up controls remain available;
 - no raw prompt, private path, raw Worker URL, token, stack/cause, raw JSON-RPC, command output, or fake readiness claim appears.
+
+Actual result: Chrome-channel Playwright verification loaded `http://127.0.0.1:5173/` with title `Codex Remote`, real local Control Plane content, two inputs, and no forbidden text matches for bearer tokens, raw Worker URLs, private paths, JSON-RPC, command output, diffs, stack/cause, fake/mock readiness, or fixture prompt text. The Chrome extension control path was unavailable due a tool-layer sandbox metadata error, so verification used Google Chrome via Playwright `channel: "chrome"`.
 
 - [ ] **Step 4: Update docs and commit**
 
@@ -293,3 +293,4 @@ git commit -m "fix: prove approval decision with isolated fixture"
 - Reviewer `019ee651-d412-7301-99f1-a3b20f3bc561`: clean. Confirmed polling failure taxonomy, report artifact denylist, source-of-truth boundaries, Worker-only app-server boundary, OS temp fixture cleanup, and decline-first decision rule.
 - Task 1 reviewer `019ee657-bcd1-7f02-84da-70bc98a38387`: clean. Confirmed required `calibrationApprovalMode` config, generated-protocol overrides, no public API change, and no leak regressions. Noted follow-up also receives the runtime write-call override; Task 2 should use a new fixture conversation.
 - Task 2 reviewer `019ee65f-d173-7b10-a37b-372d3fd222ee`: errored due external usage limit before review output. Local follow-up review found and fixed a product-readiness source-scan failure caused by forbidden report-key literals in sanitizer tests; `pnpm product:check` and script/product focused tests pass after replacing those literals with dynamically constructed keys.
+- Real verification follow-up: workspace-write/on-request, read-only/on-request, and read-only/untrusted fixture profiles were tried within the three-round focused fix budget. The retained implementation is read-only/on-request; current app-server behavior still does not emit a pending approval for the safe fixture prompt within the bounded polling window.

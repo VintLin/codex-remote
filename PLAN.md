@@ -56,7 +56,7 @@ flowchart LR
 | 7. 持久化与任务看板 | DB、任务关联、conversation 到任务映射 | 已完成本地可验证切片 |
 | 8. 产品化与扩展 | 本地 self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成本地可验证切片 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 已声明能力 | 已完成本地可验证切片；approval decision 为安全 real-gap |
-| 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 计划中 |
+| 10. Isolated Approval Fixture | 用隔离 fixture 验证真实 approval decision decline/cancel；no accept/policy amendment/production approval model | 实现中；真实验证仍有 gap |
 
 ```mermaid
 flowchart TB
@@ -70,7 +70,7 @@ flowchart TB
   P7["7. DB + Task Board"]
   P8["8. Product Readiness + iOS Guardrails"]
   P9["9. Real Local Codex Calibration - complete with approval safety gap"]
-  P10["10. Isolated Approval Fixture - planned"]
+  P10["10. Isolated Approval Fixture - in progress"]
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
 ```
@@ -92,6 +92,14 @@ Stage 9 当前证据：
 - Documented safety gap：approval decision has no safe pending approval in the current real project stack. Approval pending list is real, but approval decision is excluded from product-ready claims until a separate isolated approval fixture proves at least decline/cancel; automatic accept, persistent policy amendment, and production approval safety model are out of Stage 9.
 - Transport/readiness rule：`debug-websocket` 仅是 explicit local debug fallback；`real:check` 和 readiness 只接受 `stdio` proof。
 - Output streaming：仍是单独 out-of-scope，不随 Stage 9 校准默认为完成。
+
+Stage 10 当前证据：
+
+- Implemented in current slice：Worker calibration runtime flag, isolated approval fixture process orchestration, sanitized fixture report checks, and decline-only decision path are implemented without OpenAPI/Web/Control Plane public contract changes.
+- Real verification：`pnpm real:start` and `pnpm real:status` prove Worker, Control Plane, and Web running on loopback; `pnpm web:e2e:smoke` passes against the real stack.
+- Current `pnpm real:check` evidence：`logs/real-check/latest.json` currently records `total=19 realPass=17 fixedPass=0 realGap=2`. `approval decision` remains `real-gap` with `reasonCode=approval_fixture_no_pending_request`; latest run also has an intermittent `interrupt_not_accepted` sanitized gap.
+- Focused fixes attempted：workspace-write/on-request, read-only/on-request, and read-only/untrusted fixture profiles were tested. The retained implementation is read-only/on-request because it matches Q22's safer fixture direction; no automatic accept, `acceptForSession`, policy amendment, or production approval model was added.
+- Remaining risk：current app-server behavior does not emit a pending approval for the isolated fixture prompt within the bounded polling window, so approval decision is still not product-ready.
 
 ## 每阶段交付标准
 
@@ -414,8 +422,8 @@ Stage 8 剩余限制：
 下一步建议：
 
 - Stage 0-9 已完成本地可验证切片；Stage 9 以 approval decision safety gap 收尾，不把 approval decision 宣称为 product-ready。
-- Stage 10 已进入计划中，只处理 isolated approval decision fixture；不做 streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
-- Q22 的 approval decision 仍需单独 isolated approval fixture 才能从 safety `real-gap` 移出；自动 accept、persistent policy amendment 和 production approval safety model 不属于 Stage 9 已完成范围。
+- Stage 10 已进入实现中，只处理 isolated approval decision fixture；不做 streaming、installer/keychain/pairing、reverse WSS、外部部署或 iOS client。
+- Q22 的 isolated approval fixture 已实现但当前 real run 仍未产生 pending approval；approval decision 继续保留为 safety `real-gap`。自动 accept、persistent policy amendment 和 production approval safety model 不属于当前范围。
 - Q23 的 broader worktree/path-alias/source/archive/provider matrix 是未来多根项目发现问题，不是 Stage 9 当前阻塞；Q24 degraded-vs-empty 当前 Stage 9 fixture 已有 real-pass evidence。
 
 后续阶段默认设计输入：

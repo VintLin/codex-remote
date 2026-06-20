@@ -72,16 +72,13 @@ test("worker write handlers when calibration approval mode is enabled, should ad
   const context = createContext(paths.allowedRoot, client, { calibrationApprovalMode: "on-request" });
   const expectedThreadParams = {
     approvalPolicy: "on-request",
-    sandbox: "workspace-write",
+    sandbox: "read-only",
   } satisfies Pick<v2.ThreadStartParams, "approvalPolicy" | "sandbox">;
   const expectedTurnParams = {
     approvalPolicy: "on-request",
     sandboxPolicy: {
-      type: "workspaceWrite",
-      writableRoots: [context.config.allowedProjectRoot],
+      type: "readOnly",
       networkAccess: false,
-      excludeTmpdirEnvVar: true,
-      excludeSlashTmp: true,
     },
   } satisfies Pick<v2.TurnStartParams, "approvalPolicy" | "sandboxPolicy">;
 
