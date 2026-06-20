@@ -10,6 +10,8 @@
     "real:start": "bash scripts/start-real-local-stack.sh",
     "real:status": "bash scripts/status-real-local-stack.sh",
     "real:stop": "bash scripts/stop-real-local-stack.sh",
+    "real:check": "node scripts/real-local-calibration.mjs",
+    "web:e2e:smoke": "playwright test apps/web/e2e/real-local-smoke.spec.ts --project=chromium",
     "product:check": "node scripts/product-readiness-check.mjs",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
@@ -17,6 +19,7 @@
     "lint": "turbo lint"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "turbo": "^2.5.4",
     "typescript": "^5.8.3"
   }

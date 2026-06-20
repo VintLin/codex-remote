@@ -10,7 +10,7 @@ const repoRoot = new URL("../", import.meta.url).pathname;
 
 function createFixture() {
   const root = mkdtempSync(join(tmpdir(), "codex-remote-readiness-"));
-  for (const path of ["package.json", "apps", "packages", "docs", "scripts"]) {
+  for (const path of [".gitignore", "package.json", "apps", "packages", "docs", "scripts"]) {
     cpSync(join(repoRoot, path), join(root, path), { recursive: true });
   }
   rmSync(join(root, "apps/web/.next"), { recursive: true, force: true });
@@ -51,6 +51,86 @@ test("product readiness check when real local stack scripts are missing should f
     assert.match(failures, /package\.json missing script real:start/);
     assert.match(failures, /package\.json missing script real:status/);
     assert.match(failures, /package\.json missing script real:stop/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when real calibration scripts are missing should fail", () => {
+  const root = createFixture();
+  try {
+    updateJson(join(root, "package.json"), (packageJson) => {
+      delete packageJson.scripts["real:check"];
+      delete packageJson.scripts["web:e2e:smoke"];
+    });
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /package\.json missing script real:check/);
+    assert.match(failures, /package\.json missing script web:e2e:smoke/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when real-check runtime artifacts are not ignored should fail", () => {
+  const root = createFixture();
+  try {
+    const gitignorePath = join(root, ".gitignore");
+    writeFileSync(
+      gitignorePath,
+      readFileSync(gitignorePath, "utf8")
+        .replace(/^logs\/real-check\/\n/m, "")
+        .replace(/^logs\/\*\.pid\n/m, "")
+        .replace(/^logs\/\*\.sqlite\n/m, ""),
+    );
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /\.gitignore missing logs\/real-check\//);
+    assert.match(failures, /\.gitignore missing logs\/\*\.pid/);
+    assert.match(failures, /\.gitignore missing logs\/\*\.sqlite/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when real-check report contains unsafe fields should fail", () => {
+  const root = createFixture();
+  try {
+    mkdirSync(join(root, "logs/real-check"), { recursive: true });
+    writeFileSync(
+      join(root, "logs/real-check/latest.json"),
+      JSON.stringify({
+        schemaVersion: "real-check-report/v1",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        checks: [
+          {
+            name: "start conversation",
+            status: "real-gap",
+            detail: {
+              status: 424,
+              prompt: "codex-remote-calibration start",
+              stack: "Error: leaked",
+              body: { token: "realbearertoken12345" },
+            },
+          },
+        ],
+      }),
+    );
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /logs\/real-check\/latest\.json contains unsafe real-check key prompt/);
+    assert.match(failures, /logs\/real-check\/latest\.json contains unsafe real-check key stack/);
+    assert.match(failures, /logs\/real-check\/latest\.json contains unsafe real-check key body/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("product readiness check when calibration runner writes dangerous report keys should fail", () => {
+  const root = createFixture();
+  try {
+    writeFileSync(
+      join(root, "scripts/real-local-calibration.mjs"),
+      "const report = [{ detail: { rawRequestBody: {}, stack: new Error().stack } }];\n",
+    );
+    assert.match(runProductReadinessCheck(root).join("\n"), /scripts\/real-local-calibration\.mjs contains unsafe real-check report key rawRequestBody/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

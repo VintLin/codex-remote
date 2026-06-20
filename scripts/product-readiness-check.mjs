@@ -10,6 +10,8 @@ export function runProductReadinessCheck(root = defaultRoot) {
   const failures = [
     ...checkRootScripts(root),
     ...checkRealLocalStackScripts(root),
+    ...checkGitignore(root),
+    ...checkRealCheckSafety(root),
     ...checkLoopbackDefaults(root),
     ...checkOpenApi(root),
     ...checkImports(root),
@@ -37,6 +39,8 @@ function checkRootScripts(root) {
     "real:start",
     "real:status",
     "real:stop",
+    "real:check",
+    "web:e2e:smoke",
     "lint",
     "typecheck",
     "test",
@@ -109,6 +113,140 @@ function checkRealLocalStackScripts(root) {
     }
   }
   return failures;
+}
+
+function checkGitignore(root) {
+  const source = readText(root, ".gitignore");
+  const requiredPatterns = ["logs/real-check/", "logs/*.log", "logs/*.pid", "logs/*.sqlite", "logs/*.sqlite-*"];
+  return requiredPatterns.flatMap((pattern) => (source.split("\n").includes(pattern) ? [] : [`.gitignore missing ${pattern}`]));
+}
+
+function checkRealCheckSafety(root) {
+  return [...checkRealCheckRunnerSource(root), ...checkRealCheckLatestReport(root)];
+}
+
+function checkRealCheckRunnerSource(root) {
+  const path = "scripts/real-local-calibration.mjs";
+  if (!existsSync(join(root, path))) {
+    return [`${path} missing`];
+  }
+
+  const source = readText(root, path);
+  const unsafeReportKeys = [
+    "rawRequestBody",
+    "rawResponseBody",
+    "rawPrompt",
+    "rawId",
+    "rawUrl",
+    "rawJsonRpc",
+    "commandOutput",
+    "fullDiff",
+    "privatePath",
+    "stack",
+    "cause",
+  ];
+  return unsafeReportKeys.flatMap((key) =>
+    new RegExp(`\\b${key}\\b`, "i").test(source) ? [`${path} contains unsafe real-check report key ${key}`] : [],
+  );
+}
+
+function checkRealCheckLatestReport(root) {
+  const reportPath = "logs/real-check/latest.json";
+  const absolutePath = join(root, reportPath);
+  if (!existsSync(absolutePath)) {
+    return [];
+  }
+
+  let report;
+  try {
+    report = JSON.parse(readText(root, reportPath));
+  } catch {
+    return [`${reportPath} is not valid JSON`];
+  }
+
+  const failures = [];
+  const rootKeys = new Set(["schemaVersion", "generatedAt", "summary", "checks"]);
+  const checkKeys = new Set(["name", "status", "durationMs", "detail"]);
+  const summaryKeys = new Set(["total", "realPass", "fixedPass", "realGap"]);
+  const detailKeys = new Set([
+    "status",
+    "durationMs",
+    "count",
+    "turns",
+    "sanitizedCode",
+    "reasonCode",
+    "transport",
+    "appServerConnected",
+    "codexVersion",
+    "protocolGeneratedAt",
+    "conversationRef",
+    "turnRef",
+    "taskRef",
+    "pageCount",
+    "cursorCount",
+  ]);
+  const unsafeValuePatterns = [
+    /\bsk-[A-Za-z0-9_-]{12,}\b/,
+    /\bBearer\s+[A-Za-z0-9._-]{8,}\b/i,
+    /\/Users\/[A-Za-z0-9._-]+\//,
+    /^ {2,}at .+\(.+:\d+:\d+\)$/m,
+    /\bcodex-remote-calibration\b/i,
+    /\bjsonrpc\b/i,
+    /\bdiff --git\b/i,
+  ];
+
+  for (const key of Object.keys(requireRecordForScan(report, failures, reportPath))) {
+    if (!rootKeys.has(key)) {
+      failures.push(`${reportPath} contains unsafe real-check key ${key}`);
+    }
+  }
+
+  if (report.summary !== undefined) {
+    for (const key of Object.keys(requireRecordForScan(report.summary, failures, reportPath))) {
+      if (!summaryKeys.has(key)) {
+        failures.push(`${reportPath} contains unsafe real-check key ${key}`);
+      }
+    }
+  }
+
+  if (Array.isArray(report.checks)) {
+    for (const check of report.checks) {
+      const record = requireRecordForScan(check, failures, reportPath);
+      for (const key of Object.keys(record)) {
+        if (!checkKeys.has(key)) {
+          failures.push(`${reportPath} contains unsafe real-check key ${key}`);
+        }
+      }
+      if (!["real-pass", "fixed-pass", "real-gap"].includes(record.status)) {
+        failures.push(`${reportPath} contains invalid real-check status`);
+      }
+      if (record.detail !== undefined) {
+        const detail = requireRecordForScan(record.detail, failures, reportPath);
+        for (const key of Object.keys(detail)) {
+          if (!detailKeys.has(key)) {
+            failures.push(`${reportPath} contains unsafe real-check key ${key}`);
+          }
+        }
+      }
+    }
+  } else {
+    failures.push(`${reportPath} missing checks array`);
+  }
+
+  const text = JSON.stringify(report);
+  if (unsafeValuePatterns.some((pattern) => pattern.test(text))) {
+    failures.push(`${reportPath} contains unsafe real-check value`);
+  }
+
+  return [...new Set(failures)];
+}
+
+function requireRecordForScan(value, failures, path) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  failures.push(`${path} contains non-object real-check record`);
+  return {};
 }
 
 function checkLoopbackDefaults(root) {
