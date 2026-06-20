@@ -30,6 +30,17 @@ The synthesis answers two questions:
 | Q15 reverse connection transport | Answered | Default WSS reverse connection; add app-level `msg_id/seq/ack/lease/resume/credit`; SSE+HTTP fallback, gRPC optional. |
 | Q16 device-bound token MVP | Partial | DPoP-compatible direction is strong, but MVP scope needs Stage 6 threat model and implementation validation. |
 | Q17 secret storage | Answered | Default OS keyring through thin `SecretStore`; explicit POSIX 0600 file fallback for headless; provider secrets excluded. |
+| Q18 app-server session lifecycle | Answered | Worker should use initialized long-lived app-server sessions; per-HTTP-request app-server connections are not suitable for approval/control. |
+| Q19 public project identity | Answered | Public project ids must be opaque; `allowedProjectRoot`, cwd, basename, and absolute paths are Worker-local implementation details. |
+| Q20 Worker-owned app-server transport | Answered | Stage 9 default target is stdio; loopback WebSocket is explicit debug fallback only. |
+| Q21 real command/control compatibility | Partial | Method semantics are usable, but current CLI/runtime must produce real-pass/fixed-pass/real-gap before exposing readiness. |
+| Q22 safe active turn and pending approval | Partial | Safe scenarios must be run in a disposable low-risk repo; unsafe approvals should become documented real-gap. |
+| Q23 `thread/list(cwd)` scope and pagination | Partial | Exact cwd scope and pagination need local verification against this installed Codex version. |
+| Q24 degraded versus empty data | Partial | Semantics are clear, but current Control Plane contract/implementation must prove Worker failure is not hidden as empty data. |
+| Q25 real Web E2E gate | Answered | Stage 9 needs a minimal browser smoke; HTTP-only `real:check` is not sufficient for Web readiness. |
+| Q26 calibration report and secret scanning | Answered | Default real-check artifacts belong in ignored `logs/real-check/`; tracked docs should contain only explicit sanitized evidence. |
+| Q27 task link integrity | Answered | Control Plane must validate resources and project ownership before storing verified task links; offline Worker checks may remain pending. |
+| Q28 local self-hosted asset policy | Answered | Runtime external font/static asset requests should be disallowed; use system fonts or vendored local assets. |
 
 ## Adopted Planning Decisions
 
@@ -71,6 +82,17 @@ Future multi-device / DB / productization stages:
 - Device-bound auth should be sender-constrained and DPoP-compatible as a long-term direction, but Stage 6 must first define a threat model.
 - Worker device identity secrets default to OS keyring; Linux/headless file fallback must be explicit opt-in and permission-checked.
 
+Stage 9 real local calibration:
+
+- Use one initialized long-lived app-server session first; split read pools only if measured contention appears.
+- Project discovery must not depend on existing conversations and must not expose raw local paths.
+- The Stage 9 single-project id may be a simple opaque local id such as `local-project`; future multi-root support needs a persistent project binding table.
+- Control Plane must not catch Worker failures and return `200 []` for required local project/conversation data.
+- `pnpm real:check` must record Q21-Q24 results as `real-pass`, `fixed-pass`, or `real-gap`.
+- Add a minimal browser smoke to prove Web env wiring, source banners, start UI, network accept, and DOM transition.
+- Store full real-check artifacts in ignored `logs/real-check/`; only sanitized evidence summaries may enter tracked docs.
+- Web readiness includes no runtime external font/static asset requests.
+
 ## Source Gaps And Local Verification Needed
 
 - Imported answers are ChatGPT exports. Critical conclusions must be verified against first sources before implementation.
@@ -83,6 +105,9 @@ Future multi-device / DB / productization stages:
 - WSS transport does not provide durable delivery by itself; the project must define message ack, lease, generation fencing, replay, and backpressure.
 - DPoP-like auth must not be half-implemented; partial custom signing can be worse than a simpler bearer-token MVP with clear limitations.
 - Linux Secret Service/headless behavior must be verified locally; file fallback is a conscious security tradeoff, not a default.
+- Q21-Q24 remain open until the real local stack records reproducible results.
+- If the Worker still depends on loopback WebSocket for self-started app-server, that is a Stage 9 readiness gap unless it is explicitly marked as debug fallback.
+- Current `RemoteProject.path` compatibility must not be used to expose `allowedProjectRoot`; schema cleanup should be scheduled if implementation still requires the field.
 
 ## New Research Questions
 

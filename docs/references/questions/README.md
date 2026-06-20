@@ -21,6 +21,17 @@ These answers still provide useful detail for upcoming stage specs:
 | Q15 | `q15-control-plane-reverse-connection-transport.md` | Stage 6 reverse connection |
 | Q16 | `q16-device-bound-token-mvp.md` | Stage 6 auth threat model input |
 | Q17 | `q17-cross-platform-secret-storage.md` | Worker identity secret storage |
+| Q18 | `q18-worker-app-server-session-lifecycle.md` | Worker 连接生命周期与 initialize/initialized 顺序 |
+| Q19 | `q19-public-project-identity-and-discovery.md` | project/projectId 身份映射与隐私边界 |
+| Q20 | `q20-owned-app-server-transport-choice.md` | Worker-owned app-server 传输策略与 debug fallback |
+| Q21 | `q21-real-command-control-protocol-compatibility.md` | write/follow-up/interrupt/steer 可复现能力核验 |
+| Q22 | `q22-safe-active-turn-and-pending-approval-scenarios.md` | active turn 与 pending approval 安全策略 |
+| Q23 | `q23-thread-list-cwd-scope-and-pagination-behavior.md` | thread/list(cwd/pagination) 语义 |
+| Q24 | `q24-control-plane-degraded-versus-empty-data-semantics.md` | 空态与退化态语义分离 |
+| Q25 | `q25-real-web-e2e-gate-and-playwright-decision.md` | web real:check 中的 E2E 最小门禁 |
+| Q26 | `q26-calibration-report-destination-and-secret-scanning.md` | 校准产物落地与扫描边界 |
+| Q27 | `q27-task-link-integrity-checks.md` | task-link 数据一致性校验规则 |
+| Q28 | `q28-local-self-hosted-external-asset-policy.md` | self-hosted 资源请求与离线策略 |
 
 ## Archived Process Material
 

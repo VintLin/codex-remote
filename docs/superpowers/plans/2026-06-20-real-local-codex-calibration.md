@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-8 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=8 fixedPass=0 realGap=11`; remaining work is the next vertical slice for readable post-start conversations, follow-up/control/approval closure, task-link invalid-id rejection, and Q23/Q24 real probes.
+**Current gap:** Tasks 1-8 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=8 fixedPass=0 realGap=11`; the next vertical slice is Task 9, which fixes task-link invalid-id acceptance before moving to readable post-start conversations, follow-up/control/approval closure, and Q23/Q24 real probes.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -1570,6 +1570,78 @@ Update:
 ```bash
 git add apps/worker/src scripts/start-real-local-stack.sh scripts/product-readiness-check.mjs scripts/product-readiness-check.test.mjs PLAN.md docs/references/development-context.md docs/references/local-self-hosting.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
 git commit -m "feat: add worker stdio app-server lifecycle"
+```
+
+---
+
+### Task 9: Reject Invalid Task Conversation Links
+
+**Files:**
+- Modify: `apps/control-plane/src/http/controlPlaneHttpApp.ts`
+- Modify: `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
+- Modify: `scripts/real-local-calibration.mjs` only if status wording needs to distinguish fixed-pass.
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+
+**Interfaces:**
+- Keeps existing public API schema and DB schema.
+- Uses current Control Plane routes and Worker client methods to prove `deviceId`, `projectId`, and `conversationId` before storing a task link.
+- Returns a sanitized 4xx error for unknown device, project, or conversation ids.
+- Leaves offline Worker verification as a later gap; this slice only prevents arbitrary ids from becoming verified links while the Worker is reachable.
+
+**Non-goals:**
+- No task-link schema changes.
+- No new persistent project binding table.
+- No Web UI changes.
+- No real multi-device fixture.
+
+- [ ] **Step 1: Add failing Control Plane tests**
+
+In `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`, add focused tests:
+
+- unknown `deviceId` in `POST /v1/tasks/{taskId}/conversation-links` returns sanitized 404/4xx and does not persist a link;
+- known device with unknown `projectId` returns sanitized 404/4xx and does not persist a link;
+- known device/project with unknown `conversationId` returns sanitized 404/4xx and does not persist a link;
+- existing valid link still returns 201.
+
+- [ ] **Step 2: Implement minimal validation**
+
+In `apps/control-plane/src/http/controlPlaneHttpApp.ts`, before `repository.linkConversation()`:
+
+- resolve `input.deviceId` through the existing registry;
+- read that device's projects and require `input.projectId`;
+- read that device's conversations and require `input.conversationId`;
+- require the conversation's `projectId` to equal `input.projectId`;
+- throw `ControlPlaneHttpError` with safe `project_not_found` / `conversation_not_found` style codes.
+
+- [ ] **Step 3: Run focused verification**
+
+```bash
+pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "conversation link"
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+- [ ] **Step 4: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+```
+
+Expected: `task link invalid ids` becomes `real-pass` or `fixed-pass`; no raw ids, URLs, paths, prompts, command output, stack/cause, or full diffs enter tracked docs.
+
+- [ ] **Step 5: Update docs and commit**
+
+Update `PLAN.md`, `docs/references/development-context.md`, and this plan with sanitized evidence counts, then commit:
+
+```bash
+git add apps/control-plane/src/http/controlPlaneHttpApp.ts apps/control-plane/src/http/controlPlaneHttpApp.test.ts scripts/real-local-calibration.mjs PLAN.md docs/references/development-context.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
+git commit -m "fix: reject invalid task conversation links"
 ```
 
 ---

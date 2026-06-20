@@ -38,32 +38,21 @@ Stage 9 reopened a narrower research queue: the unresolved questions are not bro
 | Q15 | `docs/references/questions/q15-control-plane-reverse-connection-transport.md` | answered |
 | Q16 | `docs/references/questions/q16-device-bound-token-mvp.md` | partial/adopt with caution; Stage 6 threat model required |
 | Q17 | `docs/references/questions/q17-cross-platform-secret-storage.md` | answered |
+| Q18 | `docs/references/questions/q18-worker-app-server-session-lifecycle.md` | answered |
+| Q19 | `docs/references/questions/q19-public-project-identity-and-discovery.md` | answered |
+| Q20 | `docs/references/questions/q20-owned-app-server-transport-choice.md` | answered |
+| Q21 | `docs/references/questions/q21-real-command-control-protocol-compatibility.md` | partial |
+| Q22 | `docs/references/questions/q22-safe-active-turn-and-pending-approval-scenarios.md` | partial |
+| Q23 | `docs/references/questions/q23-thread-list-cwd-scope-and-pagination-behavior.md` | partial |
+| Q24 | `docs/references/questions/q24-control-plane-degraded-versus-empty-data-semantics.md` | partial |
+| Q25 | `docs/references/questions/q25-real-web-e2e-gate-and-playwright-decision.md` | answered |
+| Q26 | `docs/references/questions/q26-calibration-report-destination-and-secret-scanning.md` | answered |
+| Q27 | `docs/references/questions/q27-task-link-integrity-checks.md` | answered |
+| Q28 | `docs/references/questions/q28-local-self-hosted-external-asset-policy.md` | answered |
 
 ## Open Stage 9 Research Questions
 
-### Q18. Worker app-server session lifecycle and initialization
-
-- Context: Real app-server requests may require an `initialize` / `initialized` handshake before `thread/list`, `thread/start`, or `turn/start`.
-- Reason: Current Worker sessions connect and then issue requests; approval observers also need a stable session.
-- Direction: Prefer local Codex CLI/app-server behavior, current `codex app-server --help`, and generated protocol types over older notes.
-- Desired result: Decide whether Worker owns one initialized long-lived session, initializes per HTTP request, or uses a small session pool.
-- Blocks: Worker runtime design, reconnect behavior, approval listening, and real-read/write calibration.
-
-### Q19. Public project identity and project discovery
-
-- Context: Web needs a project before starting a conversation, but current Web derives projects from conversations and real Worker projection may omit `projectId`.
-- Reason: Empty real conversation lists cannot support start-conversation unless `/v1/projects` exists and exposes a stable project id.
-- Direction: Verify whether `projectId` should be an opaque id, basename, app-server `cwd`, or another safe value; avoid exposing private paths unless explicitly required.
-- Desired result: Define `RemoteProject.id`, `RemoteProject.path`, conversation `projectId`, and task-link project semantics from one source of truth.
-- Blocks: `/v1/projects`, start conversation UI, task linking, and future multi-root support.
-
-### Q20. Owned app-server transport choice
-
-- Context: Project docs point to stdio as the target/default direction, while current Worker self-start uses loopback WebSocket.
-- Reason: WebSocket is documented as experimental, but stdio changes lifecycle, logging, and process supervision.
-- Direction: Spike list/start/follow-up over stdio and loopback WebSocket with the installed Codex CLI.
-- Desired result: Pick the Worker-owned transport for Stage 9 and document the fallback/debug posture.
-- Blocks: local stack scripts, productization path, installer/service design, and failure recovery.
+Q18-Q20 已闭环到回答库；Q25-Q28 已闭环并可作为实现约束。当前未闭环的是下面 4 个问题（均需实机复现）：
 
 ### Q21. Real command/control protocol compatibility
 
@@ -97,38 +86,6 @@ Stage 9 reopened a narrower research queue: the unresolved questions are not bro
 - Desired result: Define response/error semantics for all-workers-down and partial-device failure.
 - Blocks: Web source taxonomy, fallback banner, empty states, and multi-device readiness.
 
-### Q25. Real Web E2E gate and Playwright decision
-
-- Context: An HTTP-only `real:check` can prove Control Plane endpoints but not Web env wiring, fallback banners, start UI, or DOM states.
-- Reason: The Stage 9 goal includes Web behavior, and manual Chrome smoke is easy to stale.
-- Direction: Compare a minimal Playwright smoke against a no-new-dependency browser check; only add Playwright if it materially reduces false readiness.
-- Desired result: Decide whether `pnpm real:check` includes a Web E2E smoke and which tool owns it.
-- Blocks: final Stage 9 verification and product readiness wording.
-
-### Q26. Calibration report destination and secret scanning
-
-- Context: A real calibration report may include local ids, sanitized errors, and timestamps.
-- Reason: Writing reports into tracked docs can dirty the worktree and may bypass current secret/leak scanning if scan paths are too narrow.
-- Direction: Run one sanitized report into `logs/` and one into docs in a scratch branch; inspect contents and product-readiness scan coverage.
-- Desired result: Decide whether real reports default to `logs/`, stdout, or tracked `docs/references/`, and update scan scope accordingly.
-- Blocks: `pnpm real:check` side effects, commit hygiene, and leakage controls.
-
-### Q27. Task link integrity checks
-
-- Context: Web guards task linking with selected conversation metadata, but API clients can still submit arbitrary ids unless Control Plane validates them.
-- Reason: Task board persistence should not silently store links to nonexistent device/conversation/project triples.
-- Direction: Call task-link APIs with missing device, missing conversation, missing project, and stale conversation ids.
-- Desired result: Decide whether Control Plane must validate links against Worker/project discovery or intentionally allow external references.
-- Blocks: task board data integrity, future iOS/API behavior, and calibration task-link pass criteria.
-
-### Q28. Local self-hosted external asset policy
-
-- Context: UI styling currently may load external font assets.
-- Reason: A local self-hosted control surface should have a clear offline/external-request posture.
-- Direction: Run Web offline or with network blocked and inspect font/asset requests.
-- Desired result: Decide whether to vendor fonts, use system fonts, or allow documented external font requests.
-- Blocks: product readiness claims and self-hosted security posture.
-
 Summary and adopted decisions:
 
 - `docs/references/questions/SYNTHESIS.md`
@@ -142,7 +99,7 @@ Archived process material:
 
 ## Local Verification Backlog
 
-These are not broad research questions. Stage 9-critical items have been promoted to Q18-Q28 above; keep the remaining items with their later stage specs before coding:
+These are not broad research questions. Stage 9-critical items that remain open are Q21-Q24 above; keep the remaining items with their later stage specs before coding:
 
 - Verify whether generated protocol and local runtime support `thread/turns/list`.
 - Verify Node runtime and Hono assumptions for the Worker HTTP boundary.
@@ -155,6 +112,11 @@ These are not broad research questions. Stage 9-critical items have been promote
 ## Adding New Questions
 
 Add a new question only when local verification or phase design cannot answer it.
+
+当前基于 Q18-Q28 复核结果，未发现新的独立研究问题；新增问题只在以下场景触发：
+
+- 出现版本漂移导致现有协议/行为在实机上与已有研究结论冲突；
+- 或出现新的阶段性目标（例如 Stage 10 之后的 streaming/审批生产化）要求新增边界定义。
 
 Each new question must include:
 
