@@ -466,6 +466,41 @@ test("when public api types are exported, source files should not redeclare sche
   assert.match(publicExportSource, /from "\.\/generated\/openapi"/);
 });
 
+test("when public api operations are maintained, every versioned operation should have an operationId", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const missingOperationIds = extractVersionedPathLines(source).flatMap((path) => {
+    const pathBlockLines = extractPathBlock(source, path);
+    return extractMethodBlocks(pathBlockLines).flatMap((methodBlock) =>
+      methodBlock.lines.some((line) => /^ {6}operationId:\s*\S+\s*$/.test(line))
+        ? []
+        : `${methodBlock.method.toUpperCase()} ${path.replace(/:$/, "")}`,
+    );
+  });
+
+  assert.deepEqual(missingOperationIds, []);
+});
+
+test("when public object schemas are maintained, component schemas should stay closed", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const schemasBlock = extractBlockLines(source, /^  schemas:\s*$/);
+  const objectSchemaNames = schemasBlock.flatMap((line) => {
+    const schemaMatch = line.match(/^ {4}([A-Za-z0-9_-]+):\s*$/);
+    if (!schemaMatch) {
+      return [];
+    }
+
+    const schemaName = expectCapturedGroup(schemaMatch, "schema name should exist");
+    const schemaBlock = extractSchemaBlock(source, schemaName).join("\n");
+    return /^ {6}type:\s*object\s*$/m.test(schemaBlock) ? [schemaName] : [];
+  });
+  const openObjectSchemas = objectSchemaNames.filter((schemaName) => {
+    const schemaBlock = extractSchemaBlock(source, schemaName).join("\n");
+    return !/^ {6}additionalProperties:\s*false\s*$/m.test(schemaBlock);
+  });
+
+  assert.deepEqual(openObjectSchemas, []);
+});
+
 test("when read-only main-chain schemas are maintained, openapi should define the field floor", () => {
   const source = readFileSync(openApiPath, "utf8");
 

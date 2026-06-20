@@ -32,13 +32,14 @@
   - root script `product:check`
   - CLI command `node scripts/product-readiness-check.mjs`
 
-- [ ] Add failing tests for the readiness checker using temp fixtures.
-- [ ] Implement checks for required root scripts and package scripts.
-- [ ] Implement static loopback checks for Web dev/start scripts and Worker/Control Plane config defaults.
-- [ ] Implement secret-shape scanning for docs and scripts with placeholder allowlist.
-- [ ] Implement boundary/import checks that mirror Stage 8 productization invariants.
-- [ ] Add root `product:check` script.
-- [ ] Run `node --test scripts/product-readiness-check.test.mjs && pnpm product:check`.
+- [x] Add failing tests for the readiness checker using temp fixtures.
+- [x] Implement checks for required root scripts and package scripts.
+- [x] Implement static loopback checks for Web dev/start scripts and Worker/Control Plane config defaults.
+- [x] Implement secret-shape scanning for docs and scripts with placeholder allowlist; scan value shapes, not prose category names.
+- [x] Implement OpenAPI checks in `product-readiness-check.mjs` for every `/v1` operationId and public schema `additionalProperties: false` unless explicitly allowlisted.
+- [x] Implement boundary/import checks that mirror Stage 8 productization invariants, including `apps/control-plane` not importing `apps/worker` source, Worker package internals, or relative paths that cross into Worker.
+- [x] Add root `product:check` script.
+- [x] Run `node --test scripts/product-readiness-check.test.mjs && pnpm product:check`.
 - [ ] Request task review for safety, false positives, and scope control.
 
 ## Task 2: API And Future iOS Guardrails
@@ -52,10 +53,11 @@
 - Consumes: OpenAPI source of truth.
 - Produces: tests that prevent API drift away from future client reuse.
 
-- [ ] Add failing contract tests that every `/v1` operation has a stable `operationId`.
-- [ ] Add or tighten tests that public component schemas stay closed with `additionalProperties: false`, except explicit allowlist entries.
-- [ ] Avoid adding iOS-specific DTOs or app code.
-- [ ] Run `pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build`.
+- [x] Add package-level contract tests matching the product readiness OpenAPI checks so API drift is caught both by `pnpm product:check` and `pnpm --filter @codex-remote/api-contract test`.
+- [x] Add failing contract tests that every `/v1` operation has a stable `operationId`.
+- [x] Add or tighten tests that public component schemas stay closed with `additionalProperties: false`, except explicit allowlist entries.
+- [x] Avoid adding iOS-specific DTOs or app code.
+- [x] Run `pnpm --filter @codex-remote/api-contract test && pnpm --filter @codex-remote/api-contract build`.
 - [ ] Request task review for API source-of-truth, iOS reuse guardrails, and no parallel DTOs.
 
 ## Task 3: Local Self-Hosting Runbook
@@ -69,12 +71,12 @@
 - Consumes: existing Worker, Control Plane, Web, and DB runtime contracts.
 - Produces: operator-facing local self-hosting guidance.
 
-- [ ] Document local topology, ports, startup order, and component responsibilities.
-- [ ] Document required env vars using only placeholder values such as `REDACTED` or `example-token`.
-- [ ] Document that real secrets must stay in shell/local secret manager and outside repo files.
-- [ ] Document validation commands and troubleshooting for unavailable Worker, invalid Control Plane config, and empty DB.
-- [ ] Document remaining productization limitations without implementing them.
-- [ ] Run `pnpm product:check`.
+- [x] Document local topology, ports, startup order, and component responsibilities.
+- [x] Document required env vars using only placeholder values such as `REDACTED` or `example-token`.
+- [x] Document that real secrets must stay in shell/local secret manager and outside repo files.
+- [x] Document validation commands and troubleshooting for unavailable Worker, invalid Control Plane config, and empty DB.
+- [x] Document remaining productization limitations without implementing them.
+- [x] Run `pnpm product:check`.
 - [ ] Request task review for secret safety, operator clarity, and no product overclaim.
 
 ## Task 4: Chrome Product Smoke
@@ -87,13 +89,20 @@
 - Consumes: completed Tasks 1-3.
 - Produces: Chrome smoke evidence.
 
-- [ ] List Stage 8 feature points and normal/boundary cases before browser verification.
-- [ ] Start fake Workers, Control Plane with temp DB, and Web.
-- [ ] Use `chrome:control-chrome` to verify Web loads Control Plane-backed devices/conversations/tasks.
-- [ ] Verify task board remains usable through Control Plane.
-- [ ] Verify unavailable Control Plane shows sanitized failure or fallback state without raw URL/token/path/stack/cause/raw JSON-RPC/prompt/command output/full diff.
-- [ ] Stop all local smoke processes and confirm ports are free.
-- [ ] Record Chrome evidence in this plan.
+- [x] List Stage 8 feature points and normal/boundary cases before browser verification.
+- [x] Start fake Workers, Control Plane with temp DB, and Web.
+- [x] Use `chrome:control-chrome` to verify Web loads Control Plane-backed devices/conversations/tasks.
+- [x] Verify task board remains usable through Control Plane.
+- [x] Verify unavailable Control Plane shows sanitized failure or fallback state without raw URL/token/path/stack/cause/raw JSON-RPC/prompt/command output/full diff.
+- [x] Stop all local smoke processes and confirm ports are free.
+- [x] Record Chrome evidence in this plan.
+
+Chrome evidence:
+
+- Normal path loaded Control Plane-backed data: `Smoke A`, `Project A`, and `Project B` appeared; mock-only `MacBook Pro M4` / `Example worker` did not appear.
+- Task board path created `Stage 8 smoke task`, then linked the selected conversation; Web showed `1 links` and `Smoke complete conversation · smoke-device-a`.
+- Unavailable Control Plane path showed fallback plus `request_failure`; DOM did not include token, raw Worker URL/ports, private path, raw JSON-RPC, prompt, command output, full diff, or stack trace.
+- Smoke processes were stopped and ports `5173`, `8786`, `8791`, and `8792` were free after cleanup.
 
 ## Task 5: Final Verification, Docs, Commit
 

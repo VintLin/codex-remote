@@ -14,6 +14,7 @@ Use root documents for active decisions:
 
 - `codex-app-server.md`: explanatory app-server protocol reference. Generated protocol artifacts in `packages/codex-protocol` remain the type source of truth.
 - `development-context.md`: adopted stage context and future-stage technical guardrails that are too specific for `AGENTS.md`.
+- `local-self-hosting.md`: local self-hosting startup, validation, secret-boundary, and troubleshooting runbook.
 - `openai-codex-app-pages/pages/`: official Codex App product behavior snapshots. These are UX and behavior references, not API contracts.
 - `questions/SYNTHESIS.md`: research answer synthesis and adoption status.
 - `research/参考项目架构调研报告 v0.2.md`: reference-project architecture evidence and adoption/rejection rationale.

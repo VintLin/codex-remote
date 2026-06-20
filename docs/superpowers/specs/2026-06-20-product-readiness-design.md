@@ -70,10 +70,11 @@ Risk: productization can sprawl quickly. This Stage intentionally treats install
 - Root scripts expose the expected local commands.
 - Web dev/start commands bind to `127.0.0.1`.
 - Worker and Control Plane config code continues to reject non-loopback bind hosts and upstream URLs.
-- Docs and scripts do not contain real-looking provider secrets, raw app-server URLs with credentials, raw JSON-RPC frames, prompts, command output, full diff, stack/cause, or private paths.
+- Docs and scripts do not contain real-looking provider secrets, credential-bearing URLs, raw private paths, stack traces, or long pasted runtime artifacts. The scanner should flag value shapes, not harmless prose that names a forbidden category.
 - API contract keeps stable `operationId` for every versioned operation.
 - API schemas used by Web/Worker/Control Plane keep explicit `additionalProperties: false` unless a schema is intentionally open.
-- `apps/web` does not import DB or codex-protocol; `apps/control-plane` does not import codex-protocol; `apps/worker` remains the only app-server caller.
+- `pnpm product:check` itself covers operationId and public schema closedness drift; these checks are not delegated only to package tests.
+- `apps/web` does not import DB or codex-protocol; `apps/control-plane` does not import codex-protocol, `apps/worker` source, Worker package internals, or relative paths that cross into Worker; `apps/worker` remains the only app-server caller.
 
 ## Runbook Behavior
 
@@ -99,6 +100,7 @@ Chrome verification should use fake Workers and local temp DB only:
 ## Security
 
 - The readiness check must fail if docs or scripts introduce secret-shaped literals outside allowed placeholder strings such as `REDACTED` and `example-token`.
+- The readiness check must avoid over-broad keyword bans; prose may name forbidden categories so the runbook can explain them.
 - Service template examples, if added later, must not contain token values in command arguments.
 - Startup summaries remain safe: no raw Worker upstream URL or bearer token.
 - Productization docs must distinguish "development bearer token" from future device-bound auth.
