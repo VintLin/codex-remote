@@ -214,13 +214,29 @@ test("worker http config when app-server transport is explicit should expose the
     env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "stdio";
     env.CODEX_REMOTE_START_APP_SERVER = "true";
 
-    await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.appServerTransport, "stdio");
+    assert.equal(config.startAppServer, true);
+    assert.equal(config.appServerUrl, null);
   });
 
   await t.test("when transport is omitted with Worker app-server startup", async () => {
     const env = createBaseEnv(fixtureRoot);
     delete env.CODEX_REMOTE_APP_SERVER_TRANSPORT;
     env.CODEX_REMOTE_START_APP_SERVER = "true";
+
+    const config = await loadWorkerHttpConfig(env);
+
+    assert.equal(config.appServerTransport, "stdio");
+    assert.equal(config.startAppServer, true);
+    assert.equal(config.appServerUrl, null);
+  });
+
+  await t.test("when stdio is requested with an app-server url", async () => {
+    const env = createBaseEnv(fixtureRoot);
+    env.CODEX_REMOTE_APP_SERVER_TRANSPORT = "stdio";
+    env.CODEX_APP_SERVER_URL = "ws://127.0.0.1:4317";
 
     await assert.rejects(loadWorkerHttpConfig(env), /worker_config_invalid/);
   });

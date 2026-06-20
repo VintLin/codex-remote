@@ -5,7 +5,10 @@ import type {
   ServerRequest,
 } from "@codex-remote/codex-protocol";
 
-import { assertLoopbackWebSocketUrl } from "./appServerProcessService.ts";
+import {
+  assertLoopbackWebSocketUrl,
+  type StdioAppServerProcessHandle,
+} from "./appServerProcessService.ts";
 
 interface RpcResponse {
   id: string | number;
@@ -30,6 +33,24 @@ interface SocketLike {
   addEventListener(event: "open", handler: () => void, options?: AddEventListenerOptions): void;
   addEventListener(event: "error", handler: () => void, options?: AddEventListenerOptions): void;
   addEventListener(event: "close", handler: () => void, options?: AddEventListenerOptions): void;
+}
+
+interface StdioReadableLike {
+  on(event: "data", handler: (chunk: Buffer | string) => void): void;
+  on(event: "error" | "close", handler: () => void): void;
+  off?(event: "data", handler: (chunk: Buffer | string) => void): void;
+  off?(event: "error" | "close", handler: () => void): void;
+}
+
+interface StdioWritableLike {
+  write(data: string): void;
+  destroy?(): void;
+}
+
+interface StdioSocketLikeOptions {
+  stdin: StdioWritableLike;
+  stdout: StdioReadableLike;
+  onClose?(): void;
 }
 
 type WorkerAppServerMethod =
@@ -135,6 +156,112 @@ export async function connectAppServerRpcClient(
       ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
     },
   );
+}
+
+export async function connectStdioAppServerRpcClient(
+  handle: StdioAppServerProcessHandle,
+  options: ConnectAppServerRpcClientOptions = {},
+): Promise<AppServerRpcClient> {
+  await handle.spawned;
+  return new AppServerRpcClient(
+    createStdioSocketLike({
+      stdin: handle.child.stdin,
+      stdout: handle.child.stdout,
+      onClose: () => {
+        handle.child.kill("SIGTERM");
+      },
+    }),
+    {
+      ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
+      ...(options.onServerRequest === undefined ? {} : { onServerRequest: options.onServerRequest }),
+      ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
+    },
+  );
+}
+
+export function createStdioSocketLike(options: StdioSocketLikeOptions): SocketLike {
+  const handlers: {
+    close: Array<() => void>;
+    error: Array<() => void>;
+    message: Array<(event: { data: unknown }) => void>;
+    open: Array<() => void>;
+  } = {
+    close: [],
+    error: [],
+    message: [],
+    open: [],
+  };
+  let buffer = "";
+  let closed = false;
+
+  const emitClose = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    for (const handler of handlers.close) {
+      handler();
+    }
+  };
+  const emitError = () => {
+    for (const handler of handlers.error) {
+      handler();
+    }
+  };
+  const emitMessage = (data: string) => {
+    for (const handler of handlers.message) {
+      handler({ data });
+    }
+  };
+
+  options.stdout.on("data", (chunk) => {
+    buffer += chunk.toString();
+
+    while (true) {
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex < 0) {
+        break;
+      }
+
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line.length > 0) {
+        emitMessage(line);
+      }
+    }
+  });
+  options.stdout.on("error", emitError);
+  options.stdout.on("close", emitClose);
+
+  queueMicrotask(() => {
+    for (const handler of handlers.open) {
+      handler();
+    }
+  });
+
+  return {
+    send(data: string): void {
+      options.stdin.write(`${data}\n`);
+    },
+    close(): void {
+      options.stdin.destroy?.();
+      options.onClose?.();
+      emitClose();
+    },
+    addEventListener(
+      event: "message" | "open" | "error" | "close",
+      handler: ((event: { data: unknown }) => void) | (() => void),
+      _options?: AddEventListenerOptions,
+    ): void {
+      if (event === "message") {
+        handlers.message.push(handler as (event: { data: unknown }) => void);
+        return;
+      }
+
+      handlers[event].push(handler as () => void);
+    },
+  };
 }
 
 export class AppServerRpcClient {

@@ -9,7 +9,7 @@ PROJECT_ROOT="${CODEX_REMOTE_ALLOWED_PROJECT_ROOT:-$ROOT_DIR}"
 WORKER_PORT="${CODEX_REMOTE_WORKER_PORT:-8787}"
 CONTROL_PLANE_PORT="${CODEX_REMOTE_CONTROL_PLANE_PORT:-8786}"
 APP_SERVER_TRANSPORT="${CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio}"
-CODEX_REMOTE_START_APP_SERVER=false
+CODEX_REMOTE_START_APP_SERVER=true
 
 mkdir -p "$LOG_DIR"
 
@@ -24,9 +24,8 @@ is_pid_running() {
 
 case "$APP_SERVER_TRANSPORT" in
   stdio)
-    echo "real:start blocked: Worker stdio app-server transport is not implemented by the current Worker lifecycle."
-    echo "Use CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket only for the Stage 9 loopback debug fallback."
-    exit 1
+    echo "real:start using stdio: Worker will start codex app-server over stdio."
+    log_status "stdio transport selected"
     ;;
   debug-websocket)
     CODEX_REMOTE_START_APP_SERVER=true
@@ -56,8 +55,26 @@ start_background() {
     rm -f "$pid_file"
   fi
 
-  (cd "$ROOT_DIR" && "$@" >/dev/null 2>&1 & echo $! >"$pid_file")
-  echo "$name started: $(cat "$pid_file")"
+  local started_pid
+  started_pid="$(
+    START_ROOT="$ROOT_DIR" python3 - "$@" <<'PY'
+import os
+import subprocess
+import sys
+
+process = subprocess.Popen(
+    sys.argv[1:],
+    cwd=os.environ["START_ROOT"],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    start_new_session=True,
+)
+print(process.pid)
+PY
+  )"
+  echo "$started_pid" >"$pid_file"
+  echo "$name started: $started_pid"
   log_status "$name started"
 }
 

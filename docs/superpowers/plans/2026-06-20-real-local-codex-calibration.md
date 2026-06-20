@@ -6,6 +6,8 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
+**Current gap:** Tasks 1-8 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=8 fixedPass=0 realGap=11`; remaining work is the next vertical slice for readable post-start conversations, follow-up/control/approval closure, task-link invalid-id rejection, and Q23/Q24 real probes.
+
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
 ## Global Constraints
@@ -19,21 +21,76 @@
 - No real multi-device validation in this stage.
 - No installer, LaunchAgent, keychain, pairing, token rotation, reverse WSS, external deployment, iOS app, or production auth.
 - Do not display or log raw prompt text, command output, full diff, raw JSON-RPC frames, provider secrets, tokens, private paths, or stack traces.
+- Do not write raw response bodies, raw request bodies, raw prompt text, raw ids, raw URLs, stack/cause, or private paths into `logs/real-check/*.json` or lifecycle logs; reports use an allowlist schema with counts, statuses, durations, sanitized codes, and short opaque hashes only.
 - Calibration conversations and tasks must use a `codex-remote-calibration` prefix.
 - Fake Worker results cannot satisfy the real E2E gate.
+
+## Subagent Plan Review
+
+Reviewer: `019ee4e7-23c3-7431-8638-6c631ef2a101`
+
+Result: fix plan before implementation.
+
+Findings addressed in this plan:
+
+- Critical: `real:check` must explicitly prove Q21-Q24 and reject fake Worker readiness; Task 5 now requires app-server transport/version/capability evidence plus cwd scope, pagination, control, approval decision, degraded-vs-empty, and invalid task-link checks.
+- Critical: calibration reports and lifecycle logs must not persist raw bodies or raw ids; Task 5 now requires an allowlist report schema, redaction helper, gitignore/readiness guard, and leak scan.
+- Important: start UI tests must use opaque `local-project`, not repo basename.
+- Important: Control Plane projection must not become a second schema source; Task 1 now requires deriving from `api-contract` where possible or adding a drift guard if the existing projector style is retained.
+- Minor: nonfunctional composer controls should be deleted, not hidden behind dead JSX.
+
+Reviewer: `019ee55b-f3dc-7e93-9cdc-6d38edbc925f`
+
+Result: changes requested.
+
+Findings addressed by adding Task 8:
+
+- Critical: current plan cannot move Stage 9 from `real-gap` to verifiable completion until Worker-owned `codex app-server --stdio` lifecycle exists.
+- Critical: Task 2 created lifecycle shell commands, but current default behavior is still fail-closed; Task 2 must not be treated as real stdio readiness.
+- Important: stdio implementation must use `packages/codex-protocol` generated types or explicit local transport adapters only; do not handwrite upstream protocol DTOs.
+- Important: stdio stdout/stderr, raw JSON-RPC frames, initialize responses, local paths, and process output must not be written to lifecycle logs, public health responses, Web UI, or real-check reports.
+- Important: add focused tests for newline framing, split chunks, multi-message reads, invalid JSON, close/error cleanup, request timeout, Worker session startup, and health/capabilities proof.
+
+Reviewer: `019ee576-ed95-7d83-9799-8c332e2561fb`
+
+Result: clean after Task 8 implementation.
+
+Residual risks retained for later Stage 9 slices:
+
+- `apps/web/e2e/real-local-smoke.spec.ts` covers real Web start/task flow, but follow-up remains conditional until the post-start readable conversation gap is closed.
+- Worker health proves readiness through `client.readyz()` and config-validated transport. Future session abstraction changes must avoid reporting `stdio` when the actual session is not stdio-backed.
+
+## Integrated Research Decisions
+
+Q18-Q28 are now imported under `docs/references/questions/`. This plan adopts the answered items as execution constraints and keeps only Q21-Q24 as real-stack verification work.
+
+- Q18: Worker app-server connections must be initialized before business RPCs. Stage 9 should use one initialized long-lived Worker-owned app-server session first; do not create one app-server connection per HTTP request.
+- Q19: public project identity must be opaque. `allowedProjectRoot`/`cwd` stays inside Worker; Web and task links must not depend on basename or absolute paths. If the current `RemoteProject.path` field is still required by schema, return an empty or display-safe value and treat the field as compatibility debt, not as an execution path.
+- Q20: Worker-owned app-server default target is stdio. Loopback WebSocket is only an explicit local debug fallback and cannot be used as quiet production/readiness evidence.
+- Q21-Q24: real command/control compatibility, safe active-turn/approval scenarios, `thread/list(cwd)` scope/pagination, and Control Plane degraded-vs-empty semantics must be proven by the Stage 9 real stack.
+- Q25: Stage 9 needs a minimal real Web browser smoke. HTTP-only `real:check` is insufficient for final readiness because it does not prove Web env wiring, fallback banners, start UI, or DOM state.
+- Q26: `real:check` writes ignored local artifacts under `logs/real-check/` by default. Tracked docs may contain only explicit sanitized evidence.
+- Q27: task links must validate Control Plane-owned resources and project ownership; offline Worker verification can be pending, but arbitrary ids must not become verified links.
+- Q28: the local self-hosted Web UI must not make runtime external font/static asset requests. Use system fonts or vendored assets only.
 
 ---
 
 ## File Structure
 
-- `packages/api-contract/openapi.yaml`: add versioned project list endpoints so Web can discover the allowed local project without guessing from conversations.
+- `packages/api-contract/openapi.yaml`: add versioned project list endpoints so Web can discover an opaque local project id without guessing from conversations or paths.
 - `packages/api-contract/src/generated/openapi.ts`: regenerated by `pnpm --filter @codex-remote/api-contract generate`.
-- `apps/worker/src/http/readOnlyHandlers.ts`: add `listProjects()` projection from `allowedProjectRoot`.
+- `apps/worker/src/http/readOnlyHandlers.ts`: add `listProjects()` projection from `allowedProjectRoot` without exposing the raw root.
+- `apps/worker/src/app-server/appServerRpcClient.ts`: add stdio-compatible newline JSON-RPC transport support while keeping WebSocket debug fallback.
+- `apps/worker/src/app-server/appServerProcessService.ts`: start and stop Worker-owned `codex app-server --stdio` without logging raw frames or process output.
+- `apps/worker/src/app-server/readOnlyAppServerSession.ts`: route default Worker-owned sessions through stdio when configured.
+- `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`: support sanitized readiness proof for stdio sessions without HTTP readyz.
+- `apps/worker/src/http/workerHttpConfig.ts`: allow explicit/default `stdio` startup when `CODEX_REMOTE_START_APP_SERVER=true`, and keep `debug-websocket` explicit only.
+- `apps/worker/src/http/writeHandlers.ts`: accept the same opaque local project id when starting conversations.
 - `apps/worker/src/http/workerHttpApp.ts`: expose `GET /v1/projects`.
-- `apps/worker/src/http/readOnlyHandlers.test.ts` and `apps/worker/src/http/workerHttpApp.test.ts`: cover project projection and route.
+- `apps/worker/src/http/readOnlyHandlers.test.ts`, `apps/worker/src/http/writeHandlers.test.ts`, and `apps/worker/src/http/workerHttpApp.test.ts`: cover project projection, start validation, and route.
 - `apps/control-plane/src/client/workerClient.ts`: add upstream `listProjects()`.
-- `apps/control-plane/src/http/controlPlaneHttpApp.ts`: expose `GET /v1/projects` and `GET /v1/devices/{deviceId}/projects`.
-- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`: cover project aggregation and device-scoped project route.
+- `apps/control-plane/src/http/controlPlaneHttpApp.ts`: expose `GET /v1/projects` and `GET /v1/devices/{deviceId}/projects` without turning Worker failures into empty lists.
+- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`: cover project aggregation, device-scoped project route, and Worker failure semantics.
 - `apps/web/src/data/workerApi/client.ts`: add `listProjects()`.
 - `apps/web/src/data/workerApi/workbenchData.ts`: load projects from Control Plane instead of deriving only from conversations.
 - `apps/web/src/data/workerApi/workbenchData.test.ts`: cover empty real conversations with real project list.
@@ -44,10 +101,12 @@
 - `apps/web/src/components/conversation/codex-assistant-thread.tsx`: hide or clearly disable nonfunctional future controls.
 - `apps/web/src/data/app-server/mockData.ts`: rename fixture-facing labels so examples cannot be mistaken for live data.
 - `scripts/start-real-local-stack.sh`, `scripts/stop-real-local-stack.sh`, `scripts/status-real-local-stack.sh`: repeatable local stack lifecycle.
-- `scripts/real-local-calibration.mjs`: real HTTP calibration runner that records real-pass/fixed-pass/real-gap outcomes.
-- `package.json`: add `real:start`, `real:status`, `real:stop`, and `real:check`.
+- `scripts/real-local-calibration.mjs`: real HTTP calibration runner that records real-pass/fixed-pass/real-gap outcomes into ignored local artifacts using a sanitized allowlist schema.
+- `apps/web/e2e/real-local-smoke.spec.ts`: one Chromium-only browser smoke for the real Web entrypoint.
+- `package.json`: add `real:start`, `real:status`, `real:stop`, `real:check`, and `web:e2e:smoke`.
 - `docs/references/local-self-hosting.md`: fix Web env variables and document real local stack commands.
 - `PLAN.md` and `docs/references/development-context.md`: update status so fake smoke and real E2E evidence are clearly separated.
+- `.gitignore`: keep real-check reports, lifecycle logs, pid files, and local SQLite artifacts out of version control.
 
 ---
 
@@ -57,8 +116,10 @@
 - Modify: `packages/api-contract/openapi.yaml`
 - Modify generated: `packages/api-contract/src/generated/openapi.ts`
 - Modify: `apps/worker/src/http/readOnlyHandlers.ts`
+- Modify: `apps/worker/src/http/writeHandlers.ts`
 - Modify: `apps/worker/src/http/workerHttpApp.ts`
 - Modify: `apps/worker/src/http/readOnlyHandlers.test.ts`
+- Modify: `apps/worker/src/http/writeHandlers.test.ts`
 - Modify: `apps/worker/src/http/workerHttpApp.test.ts`
 - Modify: `apps/control-plane/src/client/workerClient.ts`
 - Modify: `apps/control-plane/src/http/controlPlaneHttpApp.ts`
@@ -76,6 +137,7 @@
   - `GET /v1/devices/{deviceId}/projects -> RemoteProject[]`
 - Produces Web client method: `listProjects(): Promise<RemoteProject[]>`
 - Later tasks consume `WorkbenchData.projects` as the authoritative project list.
+- Uses one Stage 9 local project id: `local-project`. It is public and opaque; `allowedProjectRoot` remains Worker-local.
 
 - [ ] **Step 1: Add failing API contract tests for versioned project endpoints**
 
@@ -181,10 +243,10 @@ test("worker read-only handlers when listing projects, should expose the allowed
 
   assert.deepEqual(projects, [
     {
-      id: basename(allowedRoot),
+      id: "local-project",
       name: basename(allowedRoot),
       deviceId: "local-device",
-      path: allowedRoot,
+      path: "",
       branch: "unknown",
       hasChanges: false,
       pinned: false,
@@ -203,10 +265,10 @@ export function listProjects(context: WorkerReadOnlyHandlerContext): RemoteProje
   const projectName = basename(context.config.allowedProjectRoot);
   return [
     {
-      id: projectName,
+      id: "local-project",
       name: projectName,
       deviceId: context.config.deviceId,
-      path: context.config.allowedProjectRoot,
+      path: "",
       branch: "unknown",
       hasChanges: false,
       pinned: false,
@@ -216,9 +278,13 @@ export function listProjects(context: WorkerReadOnlyHandlerContext): RemoteProje
 }
 ```
 
-- [ ] **Step 7: Add Worker route test and route**
+- [ ] **Step 7: Update Worker write validation, route test, and route**
 
-In `apps/worker/src/http/workerHttpApp.test.ts`, add a route test for `GET /v1/projects` that expects one project with `id === context.projectId`.
+In `apps/worker/src/http/writeHandlers.test.ts`, replace basename-based `projectId` fixtures with `local-project`.
+
+In `apps/worker/src/http/writeHandlers.ts`, update `validateProjectId()` so start conversation accepts `local-project` and still maps internally to `context.config.allowedProjectRoot` for app-server `cwd`. Do not accept basename or absolute path as public identity.
+
+In `apps/worker/src/http/workerHttpApp.test.ts`, add a route test for `GET /v1/projects` that expects one project with `id === "local-project"` and `path === ""`.
 
 In `apps/worker/src/http/workerHttpApp.ts`, import `listProjects` and add:
 
@@ -253,6 +319,8 @@ function projectRemoteProject(value: unknown): RemoteProject {
 }
 ```
 
+Prefer a validation helper derived from `@codex-remote/api-contract` if one exists. If the current Control Plane client still uses local exact-field projectors, add a source-of-truth drift test that compares the projector field list with `RemoteProject` schema keys from `packages/api-contract/openapi.yaml`; do not let this field list become an untested second schema source.
+
 Return implementation:
 
 ```ts
@@ -279,15 +347,11 @@ Add helper:
 
 ```ts
 async function readDeviceProjects(client: WorkerUpstreamClient, device: ConfiguredWorkerDevice): Promise<RemoteProject[]> {
-  try {
-    return (await client.listProjects(device)).map((project) => ({ ...project, deviceId: device.id }));
-  } catch {
-    return [];
-  }
+  return (await client.listProjects(device)).map((project) => ({ ...project, deviceId: device.id }));
 }
 ```
 
-Add tests that `/v1/projects` aggregates one project and `/v1/devices/device-a/projects` returns only device A.
+Add tests that `/v1/projects` aggregates one project, `/v1/devices/device-a/projects` returns only device A, and a required local Worker failure returns an error instead of `200 []`.
 
 - [ ] **Step 10: Load projects directly in Web datasource**
 
@@ -327,6 +391,8 @@ git commit -m "feat: expose real local project discovery"
 ---
 
 ### Task 2: Real Local Stack Lifecycle
+
+**Current result:** complete as lifecycle shell scaffolding only. The command set exists and fails closed for default `stdio`, which is correct until Task 8 lands. Do not treat Task 2 as real app-server readiness evidence.
 
 **Files:**
 - Create: `scripts/start-real-local-stack.sh`
@@ -399,6 +465,7 @@ start_background worker env \
   CODEX_REMOTE_ALLOWED_PROJECT_ROOT="$PROJECT_ROOT" \
   CODEX_REMOTE_DEVICE_ID="local-device" \
   CODEX_REMOTE_HTTP_PORT="$WORKER_PORT" \
+  CODEX_REMOTE_APP_SERVER_TRANSPORT="${CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio}" \
   CODEX_REMOTE_START_APP_SERVER=true \
   pnpm --filter @codex-remote/worker serve:read
 
@@ -410,6 +477,10 @@ NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL="http://127.0.0.1:$CONTROL_PLANE
 NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN="$TOKEN" \
 pnpm web:start
 ```
+
+The stack logs are local diagnostics only. Do not write request/response bodies, tokens, raw JSON-RPC, command output, full diffs, stack/cause, or private paths to these logs. If a dependency logs too much by default, reduce log level or redirect that process to a sanitized status-only log before claiming Stage 9 readiness.
+
+If the Worker does not yet support `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio`, Task 6 must add that support or record the remaining loopback WebSocket dependency as a Stage 9 readiness gap. Do not silently fall back from stdio to WebSocket.
 
 - [ ] **Step 4: Create stop and status scripts**
 
@@ -591,19 +662,9 @@ Render before `ConversationControlStrip`:
 ) : null}
 ```
 
-- [ ] **Step 5: Hide nonfunctional composer controls**
+- [ ] **Step 5: Delete nonfunctional composer controls**
 
-In `apps/web/src/components/conversation/codex-assistant-thread.tsx`, hide disabled future controls unless they are implemented:
-
-```tsx
-{false ? (
-  <button aria-label="添加附件" className="codex-assistant-composer-icon" disabled type="button">
-    <Icon name="plus" />
-  </button>
-) : null}
-```
-
-Remove or hide the disabled `5.5` model and mic buttons the same way. Keep the follow-up input and send button.
+In `apps/web/src/components/conversation/codex-assistant-thread.tsx`, delete disabled future controls that are not implemented. Do not leave dead JSX such as `{false ? (...) : null}`. Keep only the follow-up input and send button.
 
 - [ ] **Step 6: Add minimal CSS if needed**
 
@@ -671,7 +732,7 @@ test("start conversation submit: when project and token exist, should call start
     createClientRequestId: () => "client-start-1",
     deviceId: "local-device",
     message: "codex-remote-calibration start",
-    projectId: "050_codex_remote",
+    projectId: "local-project",
     refreshWorkbenchData: async (conversationKey) => events.push(`refresh:${conversationKey}`),
     setStatus: (status) => events.push(`status:${status}`),
     workerClient: {
@@ -685,7 +746,7 @@ test("start conversation submit: when project and token exist, should call start
   assert.equal(result, "accepted");
   assert.deepEqual(events, [
     "status:submitting",
-    "local-device:050_codex_remote:codex-remote-calibration start:client-start-1",
+    "local-device:local-project:codex-remote-calibration start:client-start-1",
     "status:accepted",
     "refresh:local-device\u001fthread-1",
   ]);
@@ -851,12 +912,26 @@ git commit -m "feat: add minimal start conversation UI"
 - Modify: `package.json`
 - Modify: `scripts/product-readiness-check.mjs`
 - Modify: `scripts/product-readiness-check.test.mjs`
-- Create: `docs/references/real-local-calibration-report.md`
+- Modify: `.gitignore`
+- Create ignored runtime artifacts: `logs/real-check/<timestamp>.json` and `logs/real-check/latest.json`
+- Create only if explicitly exporting evidence: `docs/references/real-local-calibration-evidence.md`
 
 **Interfaces:**
 - Produces command: `pnpm real:check`
 - Produces report format with statuses: `real-pass`, `fixed-pass`, `real-gap`.
+- Writes full local reports to ignored `logs/real-check/`; stdout prints only a short summary and report path.
+- Report detail schema is allowlisted: `status`, `durationMs`, `count`, `sanitizedCode`, `reasonCode`, `transport`, `appServerConnected`, `codexVersion`, `protocolGeneratedAt`, and short opaque hashes. It must not include raw request/response bodies, prompt text, raw ids, raw URLs, raw JSON-RPC, command output, full diff, token, private path, stack, or cause.
 - Consumes the real stack from Task 2.
+
+Required real evidence:
+
+- `real:check` must fail closed unless Worker health/capabilities prove the real Stage 9 app-server path: app-server connected, transport recorded as `stdio`, Codex version present when available, and protocol generation metadata present. `debug-websocket` may be recorded as sanitized debug evidence only; it must be `real-gap` for readiness proof.
+- A Control Plane-compatible fake Worker must not be enough for `real-pass`.
+- Q21 coverage: start, follow-up, interrupt, steer, and approval decision each record `real-pass`, `fixed-pass`, or `real-gap`.
+- Q22 coverage: active-turn and pending-approval scenarios record safe-trigger outcome or sanitized `real-gap`; destructive or broad approvals are not accepted.
+- Q23 coverage: `thread/list(cwd)` scope and pagination record counts/cursor/page metadata only, not paths.
+- Q24 coverage: all-workers-down and invalid-worker-token scenarios return degraded/error evidence, not `200 []`.
+- Task link coverage: valid real conversation link passes; invalid device/project/conversation ids do not create verified links.
 
 - [ ] **Step 1: Add readiness test for `real:check`**
 
@@ -878,10 +953,11 @@ Create `scripts/real-local-calibration.mjs`:
 
 ```js
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
+const reportDir = join(root, "logs/real-check");
 const baseUrl = process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? "http://127.0.0.1:8786";
 const token = process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.CODEX_REMOTE_LOCAL_TOKEN ?? "example-token";
 const headers = { accept: "application/json", authorization: `Bearer ${token}` };
@@ -896,12 +972,67 @@ async function request(path, init = {}) {
   return { response, body };
 }
 
+function hashRef(value) {
+  if (typeof value !== "string" || value.length === 0) return null;
+  return `ref-${Buffer.from(value).toString("base64url").slice(0, 10)}`;
+}
+
+function safeDetail(detail) {
+  return Object.fromEntries(
+    Object.entries(detail).filter(([key]) =>
+      ["status", "durationMs", "count", "turns", "sanitizedCode", "reasonCode", "transport", "appServerConnected", "codexVersion", "protocolGeneratedAt", "conversationRef", "turnRef", "taskRef"].includes(key),
+    ),
+  );
+}
+
 function record(name, status, detail) {
-  report.push({ name, status, detail });
+  if (!["real-pass", "fixed-pass", "real-gap"].includes(status)) throw new Error(`invalid real-check status: ${status}`);
+  if (JSON.stringify(detail).match(/codex-remote-calibration|Bearer|\/Users\/|raw|stack|cause/i)) throw new Error(`unsafe real-check detail for ${name}`);
+  report.push({ name, status, detail: safeDetail(detail) });
+}
+
+function checkRequiredNames() {
+  const required = [
+    "control-plane health",
+    "worker app-server proof",
+    "devices",
+    "projects",
+    "conversations",
+    "thread/list cwd scope",
+    "thread/list pagination",
+    "start conversation",
+    "timeline",
+    "follow-up",
+    "interrupt",
+    "steer",
+    "approval pending scenario",
+    "approval decision",
+    "control-plane all-workers-down",
+    "control-plane invalid-worker-token",
+    "task create",
+    "task link",
+    "task link invalid ids",
+  ];
+  for (const name of required) {
+    if (!report.some((item) => item.name === name)) throw new Error(`missing real-check coverage: ${name}`);
+  }
 }
 
 const health = await request("/v1/control-plane/health");
-record("control-plane health", health.response.ok ? "real-pass" : "real-gap", { status: health.response.status, body: health.body });
+record("control-plane health", health.response.ok ? "real-pass" : "real-gap", { status: health.response.status });
+
+const workerProof = await request("/v1/devices/local-device/worker/health");
+const workerTransport = workerProof.body?.transport === "stdio" || workerProof.body?.transport === "debug-websocket"
+  ? workerProof.body.transport
+  : "unknown";
+record("worker app-server proof", workerProof.body?.appServerConnected === true && workerTransport === "stdio" ? "real-pass" : "real-gap", {
+  status: workerProof.response.status,
+  appServerConnected: workerProof.body?.appServerConnected === true,
+  transport: workerTransport,
+  reasonCode: workerTransport === "debug-websocket" ? "debug_transport_not_readiness" : undefined,
+  codexVersion: typeof workerProof.body?.codexVersion === "string" ? workerProof.body.codexVersion : "unknown",
+  protocolGeneratedAt: typeof workerProof.body?.protocolGeneratedAt === "string" ? workerProof.body.protocolGeneratedAt : "unknown",
+});
 
 const devices = await request("/v1/devices");
 record("devices", devices.response.ok && Array.isArray(devices.body) ? "real-pass" : "real-gap", { status: devices.response.status, count: Array.isArray(devices.body) ? devices.body.length : 0 });
@@ -911,6 +1042,10 @@ record("projects", projects.response.ok && Array.isArray(projects.body) && proje
 
 const conversations = await request("/v1/conversations");
 record("conversations", conversations.response.ok && Array.isArray(conversations.body) ? "real-pass" : "real-gap", { status: conversations.response.status, count: Array.isArray(conversations.body) ? conversations.body.length : 0 });
+
+// Implement these against real Worker/app-server behavior before accepting the script.
+record("thread/list cwd scope", "real-gap", { reasonCode: "not_implemented" });
+record("thread/list pagination", "real-gap", { reasonCode: "not_implemented" });
 
 let conversationId = Array.isArray(conversations.body) ? conversations.body[0]?.id : null;
 let deviceId = Array.isArray(devices.body) ? devices.body[0]?.id : null;
@@ -926,7 +1061,7 @@ if (deviceId && projectId) {
     }),
   });
   conversationId = started.body?.conversationId ?? conversationId;
-  record("start conversation", started.response.status === 202 ? "real-pass" : "real-gap", { status: started.response.status, conversationId });
+  record("start conversation", started.response.status === 202 ? "real-pass" : "real-gap", { status: started.response.status, conversationRef: hashRef(conversationId) });
 }
 
 if (deviceId && conversationId) {
@@ -941,21 +1076,26 @@ if (deviceId && conversationId) {
       expectedConversationId: conversationId,
     }),
   });
-  record("follow-up", followUp.response.status === 202 ? "real-pass" : "real-gap", { status: followUp.response.status, turnId: followUp.body?.turnId ?? null });
+  record("follow-up", followUp.response.status === 202 ? "real-pass" : "real-gap", { status: followUp.response.status, turnRef: hashRef(followUp.body?.turnId) });
 
   const approvals = await request(`/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/approvals`);
-  record("approval list", approvals.response.ok ? "real-pass" : "real-gap", { status: approvals.response.status, count: Array.isArray(approvals.body) ? approvals.body.length : 0 });
+  record("approval pending scenario", approvals.response.ok ? "real-pass" : "real-gap", { status: approvals.response.status, count: Array.isArray(approvals.body) ? approvals.body.length : 0 });
+  record("approval decision", "real-gap", { reasonCode: "no_safe_pending_approval" });
 } else {
-  record("timeline", "real-gap", { reason: "no conversation id" });
-  record("follow-up", "real-gap", { reason: "no conversation id" });
-  record("approval list", "real-gap", { reason: "no conversation id" });
+  record("timeline", "real-gap", { reasonCode: "no_conversation_id" });
+  record("follow-up", "real-gap", { reasonCode: "no_conversation_id" });
+  record("approval pending scenario", "real-gap", { reasonCode: "no_conversation_id" });
+  record("approval decision", "real-gap", { reasonCode: "no_conversation_id" });
 }
+
+record("interrupt", "real-gap", { reasonCode: "no_safe_active_turn" });
+record("steer", "real-gap", { reasonCode: "no_safe_active_turn" });
 
 const task = await request("/v1/tasks", {
   method: "POST",
   body: JSON.stringify({ title: `codex-remote-calibration ${new Date().toISOString()}`, clientRequestId: `task-${Date.now()}` }),
 });
-record("task create", task.response.status === 201 ? "real-pass" : "real-gap", { status: task.response.status, taskId: task.body?.id ?? null });
+record("task create", task.response.status === 201 ? "real-pass" : "real-gap", { status: task.response.status, taskRef: hashRef(task.body?.id) });
 
 if (task.body?.id && deviceId && conversationId && projectId) {
   const link = await request(`/v1/tasks/${encodeURIComponent(task.body.id)}/conversation-links`, {
@@ -965,17 +1105,19 @@ if (task.body?.id && deviceId && conversationId && projectId) {
   record("task link", link.response.status === 201 ? "real-pass" : "real-gap", { status: link.response.status });
 }
 
-const markdown = [
-  "# Real Local Calibration Report",
-  "",
-  `Generated: ${new Date().toISOString()}`,
-  "",
-  ...report.map((item) => `- ${item.status}: ${item.name} ${JSON.stringify(item.detail)}`),
-  "",
-].join("\n");
+record("control-plane all-workers-down", "real-gap", { reasonCode: "not_implemented" });
+record("control-plane invalid-worker-token", "real-gap", { reasonCode: "not_implemented" });
+record("task link invalid ids", "real-gap", { reasonCode: "not_implemented" });
 
-writeFileSync(join(root, "docs/references/real-local-calibration-report.md"), markdown);
-console.log(markdown);
+const generatedAt = new Date().toISOString();
+const payload = { schemaVersion: "real-check-report/v1", generatedAt, checks: report };
+const reportPath = join(reportDir, `${generatedAt.replaceAll(":", "-")}.json`);
+
+mkdirSync(reportDir, { recursive: true });
+checkRequiredNames();
+writeFileSync(reportPath, JSON.stringify(payload, null, 2));
+writeFileSync(join(reportDir, "latest.json"), JSON.stringify(payload, null, 2));
+console.log(`real:check ${report.every((item) => item.status !== "real-gap") ? "PASS" : "GAP"} report=${reportPath}`);
 ```
 
 - [ ] **Step 3: Wire package script and readiness check**
@@ -988,7 +1130,23 @@ In `package.json`, add:
 
 Add `real:check` to `requiredScripts` in `scripts/product-readiness-check.mjs`.
 
-- [ ] **Step 4: Run static checks**
+- [ ] **Step 4: Ignore and scan local runtime artifacts**
+
+In `.gitignore`, ensure these paths are ignored:
+
+```gitignore
+logs/*.log
+logs/*.pid
+logs/*.sqlite
+logs/*.sqlite-*
+logs/real-check/
+```
+
+In `scripts/product-readiness-check.mjs`, add a guard that fails when `.gitignore` does not ignore `logs/real-check/`, `logs/*.log`, `logs/*.pid`, and local SQLite artifacts.
+
+Add a focused leak check for `logs/real-check/latest.json` after `pnpm real:check`: it must reject raw prompt text, raw command output, full diff, raw JSON-RPC frames, bearer/token values, private paths, stack/cause, and raw response/request body keys.
+
+- [ ] **Step 5: Run static checks**
 
 Run:
 
@@ -999,7 +1157,7 @@ pnpm product:check
 
 Expected: pass.
 
-- [ ] **Step 5: Run real calibration manually with stack running**
+- [ ] **Step 6: Run real calibration manually with stack running**
 
 Run:
 
@@ -1015,15 +1173,40 @@ Expected:
 - `devices`: `real-pass`
 - `projects`: `real-pass`
 - `conversations`: `real-pass` or real empty state before start
+- `thread/list cwd scope`: `real-pass` or `real-gap` with exact sanitized cwd-scope reason
+- `thread/list pagination`: `real-pass` or `real-gap` with page/cursor count only
 - `start conversation`: `real-pass` or a concrete sanitized protocol failure to fix
 - `follow-up`: `real-pass` or a concrete sanitized protocol failure to fix
+- `interrupt`: `real-pass`, `fixed-pass`, or `real-gap` with safe active-turn reason
+- `steer`: `real-pass`, `fixed-pass`, or `real-gap` with safe active-turn reason
+- `approval pending scenario`: `real-pass`, `fixed-pass`, or `real-gap`; do not trigger destructive approvals
+- `control-plane all-workers-down`: non-200 error, not `200 []`
+- `control-plane invalid-worker-token`: auth/dependency error, not empty data
 - `task create`: `real-pass`
 - `task link`: `real-pass` when a conversation id exists
+- `task link invalid ids`: missing device/project/conversation should not create a verified link
+- `logs/real-check/latest.json` exists and contains no raw prompt text, raw command output, full diff, raw JSON-RPC frames, token, private path, or stack trace.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Add minimal Web E2E smoke**
+
+Add a Chromium-only Playwright smoke as a separate command, not part of broad unit tests:
+
+```json
+"web:e2e:smoke": "playwright test apps/web/e2e/real-local-smoke.spec.ts --project=chromium"
+```
+
+The smoke must run against `pnpm real:start` and assert:
+
+- Web root loads with Control Plane env variables.
+- fallback/example banner is absent when real data is loaded.
+- start conversation UI is visible and can submit a `codex-remote-calibration` prompt.
+- the browser observes an accepted start/follow-up network response and corresponding DOM state.
+- no runtime requests go to external font/static asset hosts.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add package.json scripts/real-local-calibration.mjs scripts/product-readiness-check.mjs scripts/product-readiness-check.test.mjs docs/references/real-local-calibration-report.md
+git add .gitignore package.json scripts/real-local-calibration.mjs scripts/product-readiness-check.mjs scripts/product-readiness-check.test.mjs apps/web/e2e
 git commit -m "feat: add real local calibration runner"
 ```
 
@@ -1041,7 +1224,7 @@ git commit -m "feat: add real local calibration runner"
 
 **Interfaces:**
 - Consumes `pnpm real:check` from Task 5.
-- Produces either fixed real-pass behavior or explicit `real-gap` entries in the report.
+- Produces either fixed real-pass behavior or explicit `real-gap` entries in `logs/real-check/latest.json`.
 
 - [ ] **Step 1: Run focused real check**
 
@@ -1074,7 +1257,7 @@ test("worker write handlers when real app-server turn start shape is required, s
   });
 
   const result = await startConversation(context, {
-    projectId: basename(paths.allowedRoot),
+    projectId: "local-project",
     message: "codex-remote-calibration",
     clientRequestId: "client-real",
   });
@@ -1087,12 +1270,15 @@ test("worker write handlers when real app-server turn start shape is required, s
 
 - [ ] **Step 3: Apply the minimal Worker fix**
 
-Fix only the protocol mapping that failed. Keep:
+Fix only the protocol/session mapping that failed. Keep:
 
 - `allowedProjectRoot` as Worker-owned `cwd`
+- `local-project` as the public project id for Stage 9
+- one initialized long-lived app-server session as the default Worker path
 - public input sanitized
 - no raw app-server response in HTTP output
 - idempotency behavior unchanged
+- stdio as the target Worker-owned transport; loopback WebSocket only as an explicit debug fallback
 
 - [ ] **Step 4: Repeat for interrupt, steer, and approval**
 
@@ -1103,7 +1289,7 @@ For each real failure:
 3. Run the focused test.
 4. Run `pnpm real:check` again.
 
-If a capability cannot be safely triggered against real Codex in this stage, record `real-gap` in `docs/references/real-local-calibration-report.md` with a sanitized reason.
+If a capability cannot be safely triggered against real Codex in this stage, record `real-gap` in `logs/real-check/latest.json` with a sanitized reason.
 
 - [ ] **Step 5: Run Worker and real checks**
 
@@ -1120,7 +1306,7 @@ Expected: unit tests pass; report contains real-pass/fixed-pass/real-gap for eve
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/worker/src docs/references/real-local-calibration-report.md
+git add apps/worker/src
 git commit -m "fix: calibrate worker against real app-server"
 ```
 
@@ -1132,10 +1318,11 @@ git commit -m "fix: calibrate worker against real app-server"
 - Modify: `PLAN.md`
 - Modify: `docs/references/development-context.md`
 - Modify: `docs/references/local-self-hosting.md`
+- Create if exporting tracked evidence: `docs/references/real-local-calibration-evidence.md`
 - Modify: `docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md` if implementation discovers a scoped correction.
 
 **Interfaces:**
-- Consumes final `docs/references/real-local-calibration-report.md`.
+- Consumes final `logs/real-check/latest.json`.
 - Produces accurate roadmap status and operator guidance.
 
 - [ ] **Step 1: Update PLAN stage status**
@@ -1167,7 +1354,7 @@ Stage 9 completed context:
 
 - Real local stack uses Worker, Control Plane, Web, SQLite task DB, and Codex app-server on one Mac.
 - Fake Worker smoke no longer satisfies real readiness claims.
-- Real calibration report lives at `docs/references/real-local-calibration-report.md`.
+- Real calibration report lives in ignored local artifacts under `logs/real-check/`; tracked docs contain only sanitized evidence summaries.
 - Output streaming remains a separate stage.
 ```
 
@@ -1197,29 +1384,210 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm real:check
+pnpm web:e2e:smoke
 ```
 
-Expected: static gate passes; `pnpm real:check` records real-pass/fixed-pass/real-gap without fake Worker evidence.
+Expected: static gate passes; `pnpm real:check` records real-pass/fixed-pass/real-gap without fake Worker evidence; `pnpm web:e2e:smoke` proves the real Web entrypoint.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add PLAN.md docs/references/development-context.md docs/references/local-self-hosting.md docs/references/real-local-calibration-report.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md
+git add PLAN.md docs/references/development-context.md docs/references/local-self-hosting.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md
+# Add docs/references/real-local-calibration-evidence.md only if a sanitized tracked evidence summary was generated.
 git commit -m "docs: reconcile real local calibration status"
+```
+
+---
+
+### Task 8: Worker-Owned Stdio App-Server Lifecycle
+
+**Files:**
+- Modify: `apps/worker/src/app-server/appServerRpcClient.ts`
+- Modify: `apps/worker/src/app-server/appServerRpcClient.test.ts`
+- Modify: `apps/worker/src/app-server/appServerProcessService.ts`
+- Modify: `apps/worker/src/app-server/appServerProcessService.test.ts`
+- Modify: `apps/worker/src/app-server/readOnlyAppServerSession.ts`
+- Modify: `apps/worker/src/app-server/readOnlyAppServerSession.test.ts`
+- Modify: `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`
+- Modify: `apps/worker/src/probe/appServerReadOnlyProbeClient.test.ts`
+- Modify: `apps/worker/src/http/workerHttpConfig.ts`
+- Modify: `apps/worker/src/http/workerHttpConfig.test.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.ts`
+- Modify: `apps/worker/src/http/readOnlyHandlers.test.ts`
+- Modify: `scripts/start-real-local-stack.sh`
+- Modify: `scripts/product-readiness-check.mjs` and `scripts/product-readiness-check.test.mjs` only if readiness wording or guardrails change.
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+- Modify: `docs/references/local-self-hosting.md`
+- Modify: `docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md`
+
+**Interfaces:**
+- Produces Worker-owned process path: `codex app-server --stdio`.
+- Produces newline-delimited JSON-RPC transport compatible with `AppServerRpcClient`.
+- Keeps loopback WebSocket as `debug-websocket` fallback only.
+- Allows default `pnpm real:start` to start Worker, Control Plane, and Web with `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` and `CODEX_REMOTE_START_APP_SERVER=true`.
+- Produces sanitized Worker health proof: app-server connected, `appServer.transport === "stdio"`, ready true, and a safe version/capability value when available.
+- Does not expose app-server URL, raw JSON-RPC frames, raw prompts, raw command output, stderr/stdout, `codexHome`, cwd, `allowedProjectRoot`, private paths, stack/cause, or provider secrets.
+
+**Source-of-truth rules:**
+- Use `packages/codex-protocol` generated types for app-server methods and notifications.
+- The stdio adapter may own local transport framing, buffering, and child-process lifecycle only; it must not define a parallel upstream protocol schema.
+- If generated protocol types are missing required fields, stop and record `real-gap` or regenerate protocol artifacts with the approved generation command; do not handwrite missing upstream DTOs.
+
+- [x] **Step 1: Add failing stdio transport tests**
+
+In `apps/worker/src/app-server/appServerRpcClient.test.ts`, add focused tests for a stdio socket adapter:
+
+- `send()` writes one JSON string followed by `\n`.
+- split chunks are buffered until newline before emitting a message.
+- multiple newline-delimited JSON messages in one chunk emit separately.
+- invalid JSON line rejects pending requests with `app_server_protocol_error`.
+- child close/error rejects pending requests.
+- request timeout clears pending state.
+
+Run:
+
+```bash
+pnpm --filter @codex-remote/worker test -- --test-name-pattern "stdio|AppServerRpcClient"
+```
+
+Expected: FAIL before implementation.
+
+- [x] **Step 2: Implement stdio process and transport**
+
+In `apps/worker/src/app-server/appServerProcessService.ts`, add a Worker-owned stdio starter that spawns:
+
+```bash
+codex app-server --stdio
+```
+
+Use `stdio: ["pipe", "pipe", "pipe"]`. The process service may hold stderr for lifecycle failure detection in memory only, but it must not write stderr/stdout or raw frames to logs or public responses.
+
+In `apps/worker/src/app-server/appServerRpcClient.ts`, add a local adapter that implements the existing `SocketLike` boundary:
+
+- `send(data)` writes `${data}\n` to child stdin.
+- stdout bytes are decoded as UTF-8 and split on `\n`.
+- each complete line emits a `message` event with the raw line string.
+- close/error events map to existing connection errors.
+- `close()` terminates the child and closes stdin.
+
+Keep `connectAppServerRpcClient(url)` for loopback WebSocket debug fallback. Add a separate factory such as `connectStdioAppServerRpcClient(handle, options)` rather than overloading public URL semantics.
+
+- [x] **Step 3: Initialize and prove stdio sessions without HTTP readyz**
+
+In `apps/worker/src/app-server/readOnlyAppServerSession.ts`, add transport-aware session opening:
+
+- If `configuredUrl` exists, keep loopback WebSocket path.
+- If `appServerTransport === "stdio"` and `startAppServer === true`, start `codex app-server --stdio` and connect with the stdio transport.
+- If `appServerTransport === "debug-websocket"` and `startAppServer === true`, keep existing loopback WebSocket debug fallback.
+- Do not silently fall back from stdio to WebSocket.
+
+In `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`, support readiness for stdio by doing a safe initialized protocol handshake instead of HTTP `/readyz`:
+
+- call `initialize` with generated `InitializeParams` shape, including required `clientInfo` fields;
+- send `initialized`;
+- retain only sanitized proof values such as safe user-agent/version text when available;
+- do not expose or persist `codexHome`, cwd, raw response, raw notification, stderr, stdout, or private paths.
+
+- [x] **Step 4: Update Worker config semantics**
+
+In `apps/worker/src/http/workerHttpConfig.ts`, replace the temporary fail-closed rule:
+
+- default no URL with `CODEX_REMOTE_START_APP_SERVER=true` should resolve to `appServerTransport: "stdio"` and `startAppServer: true`.
+- explicit `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` with `CODEX_REMOTE_START_APP_SERVER=true` should be valid.
+- explicit `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` with `CODEX_APP_SERVER_URL` should remain invalid.
+- `CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket` remains explicit local debug fallback.
+
+Update `apps/worker/src/http/workerHttpConfig.test.ts` to cover all four cases and to prevent fake stdio reporting when a session actually uses loopback WebSocket.
+
+- [x] **Step 5: Update health proof**
+
+In `apps/worker/src/http/readOnlyHandlers.ts`, make `getHealth()` prove the actual app-server path:
+
+- for stdio sessions, `readyz()` must exercise the stdio RPC handshake;
+- return `appServer.transport` from the actual configured/session transport;
+- return `appServer.readyz: true` only after the real check succeeds;
+- return `codexVersion` only from a sanitized version/user-agent value if available, otherwise keep `null` and make `real:check` record a sanitized `real-gap` for version proof rather than fabricating a value.
+
+Update tests so fake clients cannot satisfy stdio readiness without the stdio proof path.
+
+- [x] **Step 6: Update real stack startup**
+
+In `scripts/start-real-local-stack.sh`:
+
+- remove the default `stdio` fail-closed branch;
+- start the Worker with `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` and `CODEX_REMOTE_START_APP_SERVER=true` by default;
+- keep `CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket` as an explicit debug branch with warning text;
+- keep lifecycle logs status-only and do not write tokens, raw URLs, raw frames, prompts, command output, stderr/stdout, stack/cause, or private paths.
+
+Update product readiness tests only if they currently require the temporary fail-closed text.
+
+- [x] **Step 7: Run focused verification**
+
+Run:
+
+```bash
+pnpm --filter @codex-remote/worker test -- --test-name-pattern "stdio|app-server transport|app-server session|worker http config|health"
+pnpm --filter @codex-remote/worker test
+pnpm --filter @codex-remote/worker typecheck
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+Expected: all pass.
+
+- [x] **Step 8: Run real runtime verification**
+
+Run:
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+```
+
+Expected:
+
+- `pnpm real:start` starts Worker, Control Plane, and Web by default.
+- `pnpm real:status` shows Worker, Control Plane, and Web running on the expected loopback ports.
+- `pnpm real:check` records real stdio app-server evidence as `real-pass` or `fixed-pass`; remaining Q21-Q24 items may stay `real-gap` only with sanitized reasons.
+- `pnpm web:e2e:smoke` runs against the real stack and cannot pass through fake Worker evidence.
+- `logs/real-check/latest.json` remains ignored and contains no raw prompt, command output, raw JSON-RPC, token, private path, stack/cause, raw ids, raw URLs, or full diff.
+
+- [x] **Step 9: Update docs and roadmap**
+
+Update:
+
+- `PLAN.md`: replace “real:start default stdio fail-closed” with the latest real runtime evidence.
+- `docs/references/development-context.md`: move Stage 9 context from stdio missing to current stdio behavior and remaining gaps.
+- `docs/references/local-self-hosting.md`: remove “stdio lifecycle is not implemented yet” after the implementation passes.
+- `docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md`: keep stdio lifecycle and safety constraints aligned with implementation.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add apps/worker/src scripts/start-real-local-stack.sh scripts/product-readiness-check.mjs scripts/product-readiness-check.test.mjs PLAN.md docs/references/development-context.md docs/references/local-self-hosting.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
+git commit -m "feat: add worker stdio app-server lifecycle"
 ```
 
 ---
 
 ## Final Acceptance Checklist
 
-- [ ] `pnpm real:start` starts Worker, Control Plane, and Web.
-- [ ] `pnpm real:status` shows ports `5173`, `8786`, and `8787` listening.
-- [ ] Web uses `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_*`.
+- [x] `pnpm real:start` starts Worker, Control Plane, and Web.
+- [x] `pnpm real:status` shows ports `5173`, `8786`, and `8787` listening.
+- [x] Web uses `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_*`.
 - [ ] Web marks fallback/example data clearly.
-- [ ] Web can discover the real local project even when there are zero conversations.
-- [ ] Web has a minimal start conversation entrypoint.
+- [x] Web can discover the real local project even when there are zero conversations.
+- [x] Web does not display absolute local project paths from `allowedProjectRoot`.
+- [x] Web has a minimal start conversation entrypoint.
 - [ ] `pnpm real:check` creates or uses a `codex-remote-calibration` real conversation.
 - [ ] Real read/timeline/start/follow-up/task-link are `real-pass` or `fixed-pass`.
 - [ ] Real interrupt/steer/approval are `real-pass`, `fixed-pass`, or documented `real-gap` with sanitized reasons.
+- [x] `pnpm web:e2e:smoke` passes against the real local stack.
+- [x] Web makes no runtime external font/static asset requests.
+- [ ] Control Plane Worker failure is visible as degraded/error state, not empty real data.
 - [ ] Output streaming is explicitly out of scope and listed as the next separate stage.
-- [ ] Fake Worker smoke is no longer described as real product readiness.
+- [x] Fake Worker smoke is no longer described as real product readiness.

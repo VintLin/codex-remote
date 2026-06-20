@@ -51,8 +51,8 @@ Notes:
 
 - Worker must bind loopback.
 - Worker is the only app that talks to Codex app-server.
-- `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` is the target Worker-owned app-server transport.
-- Current Stage 9 lifecycle scripts fail closed for `stdio` because the Worker lifecycle does not implement stdio app-server startup yet.
+- `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` is the default Worker-owned app-server transport.
+- With `stdio`, the Worker starts `codex app-server` as its own child process and speaks JSON-RPC over stdio.
 - `CODEX_REMOTE_APP_SERVER_TRANSPORT=debug-websocket` is an explicit loopback WebSocket debug fallback only; it is a Stage 9 readiness gap, not real stdio readiness evidence.
 
 ## Control Plane
@@ -115,14 +115,15 @@ Defaults:
 - Local token placeholder: `example-token`
 - App-server transport: `stdio`
 
-With the default transport, `pnpm real:start` exits before starting services because Worker stdio app-server lifecycle is not implemented yet. This is intentional fail-closed behavior.
+With the default transport, `pnpm real:start` starts Worker, Control Plane, and Web. The Worker owns the local Codex app-server process over stdio; app-server output is not persisted by the lifecycle scripts.
 
 Current default evidence:
 
-- `pnpm real:start`: fail-closed with exit 1 because Worker stdio app-server lifecycle is missing.
-- `pnpm real:check`: writes ignored `logs/real-check/latest.json`; current summary is `total=19 realPass=0 fixedPass=0 realGap=19`.
-- `pnpm real:status`: Worker, Control Plane, and Web are stopped.
-- `pnpm web:e2e:smoke`: should fail when the real stack is missing; it must not skip or fake-pass as readiness.
+- `pnpm real:start`: starts the default stdio real local stack.
+- `pnpm real:check`: writes ignored `logs/real-check/latest.json`; current summary is `total=19 realPass=8 fixedPass=0 realGap=11`.
+- `pnpm real:status`: Worker, Control Plane, and Web should be running after startup.
+- `pnpm web:e2e:smoke`: passes against the real stack and must not skip or fake-pass as readiness.
+- Remaining Stage 9 gaps include readable post-start conversation closure for timeline/follow-up/control/approval, task-link invalid-id rejection, Q23 cwd/pagination probes, and Q24 degradation fixtures.
 
 For local debugging only, run the current loopback WebSocket fallback explicitly:
 

@@ -193,16 +193,12 @@ function parseAppServerUrl(value: string | undefined): string | null {
 
 function parseAppServerTransport(value: string | undefined, appServerUrl: string | null, startAppServer: boolean): AppServerTransport {
   if (!value || !value.trim()) {
-    if (!appServerUrl && startAppServer) {
-      throw new Error("worker_config_invalid");
-    }
-
     return appServerUrl ? "loopbackWebSocket" : "stdio";
   }
 
   const transport = value.trim();
   if (transport === "stdio") {
-    if (appServerUrl || startAppServer) {
+    if (appServerUrl) {
       throw new Error("worker_config_invalid");
     }
 

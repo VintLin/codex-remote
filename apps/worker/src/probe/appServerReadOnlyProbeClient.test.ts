@@ -36,3 +36,51 @@ test("when readyz hangs, should abort with a safe timeout error", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("when readyz uses rpc mode, should initialize with generated client info and expose sanitized version", async () => {
+  const requests: Array<{ method: string; params: unknown }> = [];
+  const notifications: unknown[] = [];
+  const client = new AppServerReadOnlyProbeClient(
+    {
+      close() {},
+      notify(notification: unknown) {
+        notifications.push(notification);
+      },
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        return {
+          userAgent: "Codex/0.0.0 test",
+          codexHome: "/private/path/that/must/not/be/projected",
+          platformFamily: "unix",
+          platformOs: "macos",
+        };
+      },
+    } as never,
+    "",
+    "/repo/project",
+    { readyzMode: "rpc" },
+  );
+
+  await client.readyz();
+  await client.initialize();
+  await client.initialized();
+
+  assert.deepEqual(requests, [
+    {
+      method: "initialize",
+      params: {
+        clientInfo: {
+          name: "codex-remote-worker",
+          title: "Codex Remote Worker",
+          version: "0.0.0",
+        },
+        capabilities: {
+          experimentalApi: true,
+          requestAttestation: false,
+        },
+      },
+    },
+  ]);
+  assert.deepEqual(notifications, [{ method: "initialized" }]);
+  assert.equal(client.getCodexVersion(), "Codex/0.0.0 test");
+});

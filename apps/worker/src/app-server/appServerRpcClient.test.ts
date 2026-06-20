@@ -8,11 +8,12 @@ import {
 import {
   AppServerRpcClient,
   connectAppServerRpcClient,
+  createStdioSocketLike,
 } from "./appServerRpcClient.ts";
 
 class FakeSocket {
   public readonly sent: string[] = [];
-  private readonly handlers: {
+  private handlers: {
     close: Array<() => void>;
     error: Array<() => void>;
     message: Array<(event: { data: unknown }) => void>;
@@ -87,6 +88,67 @@ class CloseOnTimeoutSocket extends FakeSocket {
   override close(): void {
     this.closeCalls += 1;
     this.emitClose();
+  }
+}
+
+class FakeStdioStream {
+  public readonly writes: string[] = [];
+  public destroyed = false;
+  private readonly handlers: {
+    close: Array<() => void>;
+    data: Array<(chunk: Buffer | string) => void>;
+    error: Array<() => void>;
+  } = {
+    close: [],
+    data: [],
+    error: [],
+  };
+
+  write(data: string): void {
+    this.writes.push(data);
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.emitClose();
+  }
+
+  on(event: "close" | "data" | "error", handler: ((chunk: Buffer | string) => void) | (() => void)): this {
+    if (event === "data") {
+      this.handlers.data.push(handler as (chunk: Buffer | string) => void);
+      return this;
+    }
+
+    this.handlers[event].push(handler as () => void);
+    return this;
+  }
+
+  off(event: "close" | "data" | "error", handler: ((chunk: Buffer | string) => void) | (() => void)): this {
+    if (event === "data") {
+      this.handlers.data = this.handlers.data.filter((candidate) => candidate !== handler);
+      return this;
+    }
+
+    this.handlers[event] = this.handlers[event].filter((candidate) => candidate !== handler);
+    return this;
+  }
+
+  emitData(data: string): void {
+    for (const handler of this.handlers.data) {
+      handler(data);
+    }
+  }
+
+  emitError(): void {
+    for (const handler of this.handlers.error) {
+      handler();
+    }
+  }
+
+  emitClose(): void {
+    for (const handler of this.handlers.close) {
+      handler();
+    }
   }
 }
 
@@ -303,6 +365,71 @@ test("when notify send throws, should throw a safe local error", () => {
     },
     /app_server_connection_error/,
   );
+});
+
+test("when stdio transport sends requests, should newline-delimit JSON frames", async () => {
+  const stdin = new FakeStdioStream();
+  const stdout = new FakeStdioStream();
+  const socket = createStdioSocketLike({ stdin, stdout });
+  const client = new AppServerRpcClient(socket);
+
+  const response = client.request("model/list", {});
+
+  assert.match(stdin.writes[0] ?? "", /"method":"model\/list"/);
+  assert.equal(stdin.writes[0]?.endsWith("\n"), true);
+
+  stdout.emitData(`${JSON.stringify({ id: 1, result: { data: [], nextCursor: null } })}\n`);
+
+  assert.deepEqual(await response, { data: [], nextCursor: null });
+});
+
+test("when stdio transport receives split and multiple lines, should emit complete messages only", async () => {
+  const stdin = new FakeStdioStream();
+  const stdout = new FakeStdioStream();
+  const socket = createStdioSocketLike({ stdin, stdout });
+  const client = new AppServerRpcClient(socket);
+
+  const first = client.request("model/list", {});
+  const second = client.request("thread/list", {
+    cwd: "/repo",
+    sourceKinds: ["cli", "vscode", "appServer"],
+    archived: false,
+    limit: 25,
+    sortDirection: "desc",
+    cursor: null,
+  });
+
+  stdout.emitData('{"id":1,"result":{"data":["first"],');
+  stdout.emitData('"nextCursor":null}}\n{"id":2,"result":{"data":[],"nextCursor":null,"backwardsCursor":null}}\n');
+
+  assert.deepEqual(await first, { data: ["first"], nextCursor: null });
+  assert.deepEqual(await second, { data: [], nextCursor: null, backwardsCursor: null });
+});
+
+test("when stdio transport receives invalid JSON, should reject pending requests safely", async () => {
+  const stdin = new FakeStdioStream();
+  const stdout = new FakeStdioStream();
+  const socket = createStdioSocketLike({ stdin, stdout });
+  const client = new AppServerRpcClient(socket, { requestTimeoutMs: 1_000 });
+
+  const response = client.request("model/list", {});
+
+  stdout.emitData("not-json\n");
+
+  await assert.rejects(response, /app_server_protocol_error/);
+});
+
+test("when stdio transport closes, should reject pending requests safely", async () => {
+  const stdin = new FakeStdioStream();
+  const stdout = new FakeStdioStream();
+  const socket = createStdioSocketLike({ stdin, stdout });
+  const client = new AppServerRpcClient(socket, { requestTimeoutMs: 1_000 });
+
+  const response = client.request("model/list", {});
+
+  stdout.emitClose();
+
+  await assert.rejects(response, /app_server_connection_error/);
 });
 
 test("when url is not loopback websocket root, should reject it", () => {

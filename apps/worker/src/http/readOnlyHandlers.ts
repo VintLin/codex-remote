@@ -24,6 +24,7 @@ export interface WorkerReadOnlyAppServerClient {
   readyz(): Promise<void>;
   initialize(): Promise<void>;
   initialized(): Promise<void>;
+  getCodexVersion?(): string | null;
   listThreads(params: ThreadListParams): Promise<v2.ThreadListResponse>;
   readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse>;
   close(): void;
@@ -56,7 +57,7 @@ export async function getHealth(context: WorkerReadOnlyHandlerContext): Promise<
       deviceId: context.config.deviceId,
       status: "connected",
       checkedAt,
-      codexVersion: null,
+      codexVersion: client.getCodexVersion?.() ?? null,
       appServer: {
         transport: context.config.appServerTransport,
         readyz: true,

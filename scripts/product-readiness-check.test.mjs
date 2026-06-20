@@ -300,15 +300,15 @@ test("product readiness check when calibration runner writes dangerous report ke
   }
 });
 
-test("product readiness check when real start lacks stdio fail-closed guard should fail", () => {
+test("product readiness check when real start lacks stdio startup path should fail", () => {
   const root = createFixture();
   try {
     const scriptPath = join(root, "scripts/start-real-local-stack.sh");
     writeFileSync(
       scriptPath,
-      readFileSync(scriptPath, "utf8").replace("Worker stdio app-server transport is not implemented", "Worker transport is ready"),
+      readFileSync(scriptPath, "utf8").replace("real:start using stdio", "real:start skipped stdio"),
     );
-    assert.match(runProductReadinessCheck(root).join("\n"), /missing stdio fail-closed guard/);
+    assert.match(runProductReadinessCheck(root).join("\n"), /missing stdio startup path/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -318,8 +318,8 @@ test("product readiness check when real start captures full service output shoul
   const root = createFixture();
   try {
     const scriptPath = join(root, "scripts/start-real-local-stack.sh");
-    writeFileSync(scriptPath, readFileSync(scriptPath, "utf8").replace('"$@" >/dev/null 2>&1', '"$@" >"$LOG_DIR/$name.log" 2>&1'));
-    assert.match(runProductReadinessCheck(root).join("\n"), /redirects full service output to lifecycle logs/);
+    writeFileSync(scriptPath, readFileSync(scriptPath, "utf8").replace("stdout=subprocess.DEVNULL", "stdout=subprocess.PIPE"));
+    assert.match(runProductReadinessCheck(root).join("\n"), /missing suppressed service output/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -429,15 +429,18 @@ test("product readiness check when reference docs contain token assignments shou
   }
 });
 
-test("real local stack start script should fail closed for default stdio app-server transport", () => {
+test("real local stack start script should start default stdio app-server transport", () => {
   const source = readFileSync(join(repoRoot, "scripts/start-real-local-stack.sh"), "utf8");
   assert.match(source, /APP_SERVER_TRANSPORT="\$\{CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio\}"/);
-  assert.match(source, /Worker stdio app-server transport is not implemented/);
-  assert.match(source, /CODEX_REMOTE_START_APP_SERVER=false/);
+  assert.match(source, /real:start using stdio/);
+  assert.match(source, /CODEX_REMOTE_START_APP_SERVER=true/);
 });
 
 test("real local stack start script should not redirect full service output into lifecycle logs", () => {
   const source = readFileSync(join(repoRoot, "scripts/start-real-local-stack.sh"), "utf8");
   assert.doesNotMatch(source, />"\$LOG_DIR\/\$name\.log" 2>&1/);
-  assert.match(source, /\(cd "\$ROOT_DIR" && "\$@" >\/dev\/null 2>&1 & echo \$! >"\$pid_file"\)/);
+  assert.match(source, /start_new_session=True/);
+  assert.match(source, /stdout=subprocess\.DEVNULL/);
+  assert.match(source, /stderr=subprocess\.DEVNULL/);
+  assert.match(source, /echo "\$started_pid" >"\$pid_file"/);
 });

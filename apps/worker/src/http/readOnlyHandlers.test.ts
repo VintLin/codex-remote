@@ -171,12 +171,13 @@ test("worker read-only handlers when health and capabilities are requested, shou
 
 test("worker read-only handlers when health is requested, should report the configured app-server transport", async () => {
   const paths = await createTempProjectPaths();
-  const client = new FakeClient();
+  const client = new FakeClient({ codexVersion: "Codex/0.0.0 test" });
   const context = createContext(paths.allowedRoot, client, { appServerTransport: "stdio", appServerUrl: null });
 
   const health = await getHealth(context);
 
   assert.equal(health.appServer.transport, "stdio");
+  assert.equal(health.codexVersion, "Codex/0.0.0 test");
   assert.equal(getCapabilities(context).appServerTransport, "stdio");
 });
 
@@ -221,8 +222,10 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
   private readonly listResponses: v2.ThreadListResponse[];
   private readonly readResponses: Record<string, v2.ThreadReadResponse>;
   private readonly listError: Error | null;
+  private readonly codexVersion: string | null;
 
   constructor(options: {
+    codexVersion?: string;
     listResponses?: v2.ThreadListResponse[];
     readResponses?: Record<string, v2.ThreadReadResponse>;
     listError?: Error;
@@ -230,6 +233,7 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
     this.listResponses = options.listResponses ?? [{ data: [], nextCursor: null, backwardsCursor: null }];
     this.readResponses = options.readResponses ?? {};
     this.listError = options.listError ?? null;
+    this.codexVersion = options.codexVersion ?? null;
   }
 
   async readyz(): Promise<void> {}
@@ -237,6 +241,10 @@ class FakeClient implements WorkerReadOnlyAppServerClient {
   async initialize(): Promise<void> {}
 
   async initialized(): Promise<void> {}
+
+  getCodexVersion(): string | null {
+    return this.codexVersion;
+  }
 
   async listThreads(params: Parameters<WorkerReadOnlyAppServerClient["listThreads"]>[0]): Promise<v2.ThreadListResponse> {
     this.listCalls.push(params);

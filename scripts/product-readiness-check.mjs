@@ -95,8 +95,8 @@ function checkRealLocalStackScripts(root) {
   if (!/APP_SERVER_TRANSPORT="\$\{CODEX_REMOTE_APP_SERVER_TRANSPORT:-stdio\}"/.test(startSource)) {
     failures.push("scripts/start-real-local-stack.sh missing stdio transport default");
   }
-  if (!/Worker stdio app-server transport is not implemented/.test(startSource)) {
-    failures.push("scripts/start-real-local-stack.sh missing stdio fail-closed guard");
+  if (!/real:start using stdio/.test(startSource) || !/CODEX_REMOTE_START_APP_SERVER=true/.test(startSource)) {
+    failures.push("scripts/start-real-local-stack.sh missing stdio startup path");
   }
   if (!/debug-websocket fallback/.test(startSource)) {
     failures.push("scripts/start-real-local-stack.sh missing debug fallback label");
@@ -104,7 +104,12 @@ function checkRealLocalStackScripts(root) {
   if (/>"\$LOG_DIR\/\$name\.log" 2>&1/.test(startSource)) {
     failures.push("scripts/start-real-local-stack.sh redirects full service output to lifecycle logs");
   }
-  if (!/\(cd "\$ROOT_DIR" && "\$@" >\/dev\/null 2>&1 & echo \$! >"\$pid_file"\)/.test(startSource)) {
+  if (
+    !/start_new_session=True/.test(startSource) ||
+    !/stdout=subprocess\.DEVNULL/.test(startSource) ||
+    !/stderr=subprocess\.DEVNULL/.test(startSource) ||
+    !/echo "\$started_pid" >"\$pid_file"/.test(startSource)
+  ) {
     failures.push("scripts/start-real-local-stack.sh missing suppressed service output");
   }
   for (const envName of ["CODEX_REMOTE_WEB_PORT", "CODEX_REMOTE_CONTROL_PLANE_PORT", "CODEX_REMOTE_WORKER_PORT"]) {

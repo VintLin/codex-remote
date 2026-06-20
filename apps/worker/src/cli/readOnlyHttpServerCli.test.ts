@@ -164,6 +164,7 @@ function createFakeWorkerClient(): AppServerWorkerClient {
     readyz: async () => {},
     initialize: async () => {},
     initialized: async () => {},
+    getCodexVersion: () => null,
     listThreads: async () => [],
     listThreadsWithParams: async () => ({ data: [], nextCursor: null, backwardsCursor: null }),
     readFirstAllowedThread: async () => ({}),

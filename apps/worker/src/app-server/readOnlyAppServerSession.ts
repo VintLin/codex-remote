@@ -1,13 +1,19 @@
 import {
   assertLoopbackWebSocketUrl,
   chooseLoopbackPort,
+  startStdioAppServer,
   startLoopbackAppServer,
   stopAppServer,
   toReadyzUrl,
   waitForReadyz,
   type AppServerProcessHandle,
+  type StdioAppServerProcessHandle,
 } from "./appServerProcessService.ts";
-import { connectAppServerRpcClient } from "./appServerRpcClient.ts";
+import {
+  connectAppServerRpcClient,
+  connectStdioAppServerRpcClient,
+} from "./appServerRpcClient.ts";
+import type { AppServerTransport } from "@codex-remote/api-contract";
 import type { ServerRequest, v2 } from "@codex-remote/codex-protocol";
 import {
   AppServerReadOnlyProbeClient,
@@ -17,6 +23,7 @@ import {
 export interface OpenReadOnlyAppServerSessionOptions {
   configuredUrl: string | null;
   startAppServer: boolean;
+  appServerTransport?: AppServerTransport;
   allowedProjectRoot: string;
   connectTimeoutMs?: number;
   onServerRequest?(request: ServerRequest): void;
@@ -85,7 +92,7 @@ async function openAppServerSession<TClient extends AppServerReadOnlyProbeClient
     rpc: Awaited<ReturnType<typeof connectAppServerRpcClient>>,
     readyzUrl: string,
     allowedProjectRoot: string,
-    options?: { readyzTimeoutMs?: number },
+    options?: { readyzMode?: "http" | "rpc"; readyzTimeoutMs?: number },
   ) => TClient,
 ): Promise<{ client: TClient; startedByWorker: boolean; close(): void }> {
   const configuredUrl = options.configuredUrl?.trim() ? options.configuredUrl : null;
@@ -93,31 +100,30 @@ async function openAppServerSession<TClient extends AppServerReadOnlyProbeClient
   let client: TClient | null = null;
 
   try {
-    const appServerUrl = configuredUrl
-      ? assertLoopbackWebSocketUrl(configuredUrl)
-      : options.startAppServer
-        ? `ws://127.0.0.1:${await chooseLoopbackPort()}`
-        : null;
+    const appServerTransport = options.appServerTransport ?? (configuredUrl ? "loopbackWebSocket" : "stdio");
+    const session = await openRpcSession({
+      configuredUrl,
+      startAppServer: options.startAppServer,
+      appServerTransport,
+      ...(options.readyzTimeoutMs === undefined ? {} : { readyzTimeoutMs: options.readyzTimeoutMs }),
+    });
+    appServer = session.appServer;
 
-    if (!appServerUrl) {
-      throw createReadOnlyAppServerSessionError("app_server_env_not_configured");
-    }
-
-    if (!configuredUrl) {
-      appServer = startLoopbackAppServer(Number(new URL(appServerUrl).port));
-      await appServer.spawned;
-      await waitForReadyz(appServer.readyzUrl, options.readyzTimeoutMs);
-    }
-
-    const readyzUrl = appServer?.readyzUrl ?? toReadyzUrl(appServerUrl);
-    const rpc = await connectAppServerRpcClient(appServerUrl, {
+    const rpc = session.transport === "stdio"
+      ? await connectStdioAppServerRpcClient(session.appServer, {
+          ...(options.onServerRequest === undefined ? {} : { onServerRequest: options.onServerRequest }),
+          ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
+          ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
+        })
+      : await connectAppServerRpcClient(session.appServerUrl, {
       ...(options.connectTimeoutMs === undefined ? {} : { connectTimeoutMs: options.connectTimeoutMs }),
       ...(options.onServerRequest === undefined ? {} : { onServerRequest: options.onServerRequest }),
       ...(options.onServerRequestResolved === undefined ? {} : { onServerRequestResolved: options.onServerRequestResolved }),
       ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
-    });
+        });
 
-    client = new Client(rpc, readyzUrl, options.allowedProjectRoot, {
+    client = new Client(rpc, session.readyzUrl, options.allowedProjectRoot, {
+      readyzMode: session.transport === "stdio" ? "rpc" : "http",
       ...(options.readyzTimeoutMs === undefined ? {} : { readyzTimeoutMs: options.readyzTimeoutMs }),
     });
 
@@ -146,4 +152,59 @@ async function openAppServerSession<TClient extends AppServerReadOnlyProbeClient
 
     throw error;
   }
+}
+
+type RpcSession =
+  | {
+      appServer: AppServerProcessHandle | null;
+      appServerUrl: string;
+      readyzUrl: string;
+      transport: "loopbackWebSocket";
+    }
+  | {
+      appServer: StdioAppServerProcessHandle;
+      readyzUrl: "";
+      transport: "stdio";
+    };
+
+async function openRpcSession(options: {
+  configuredUrl: string | null;
+  startAppServer: boolean;
+  appServerTransport: AppServerTransport;
+  readyzTimeoutMs?: number;
+}): Promise<RpcSession> {
+  if (options.configuredUrl) {
+    const appServerUrl = assertLoopbackWebSocketUrl(options.configuredUrl);
+    return {
+      appServer: null,
+      appServerUrl,
+      readyzUrl: toReadyzUrl(appServerUrl),
+      transport: "loopbackWebSocket",
+    };
+  }
+
+  if (!options.startAppServer) {
+    throw createReadOnlyAppServerSessionError("app_server_env_not_configured");
+  }
+
+  if (options.appServerTransport === "stdio") {
+    const appServer = startStdioAppServer();
+    await appServer.spawned;
+    return {
+      appServer,
+      readyzUrl: "",
+      transport: "stdio",
+    };
+  }
+
+  const appServerUrl = `ws://127.0.0.1:${await chooseLoopbackPort()}`;
+  const appServer = startLoopbackAppServer(Number(new URL(appServerUrl).port));
+  await appServer.spawned;
+  await waitForReadyz(appServer.readyzUrl, options.readyzTimeoutMs);
+  return {
+    appServer,
+    appServerUrl,
+    readyzUrl: appServer.readyzUrl,
+    transport: "loopbackWebSocket",
+  };
 }

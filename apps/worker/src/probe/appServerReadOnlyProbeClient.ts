@@ -1,4 +1,4 @@
-import type { v2 } from "@codex-remote/codex-protocol";
+import type { InitializeResponse, v2 } from "@codex-remote/codex-protocol";
 
 import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
@@ -6,6 +6,7 @@ import { PreconditionMissingError, type ReadOnlyProbeClient } from "./readOnlyPr
 
 interface AppServerReadOnlyProbeClientOptions {
   readyzTimeoutMs?: number;
+  readyzMode?: "http" | "rpc";
 }
 
 export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
@@ -15,6 +16,9 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   private readonly readyzUrl: string;
   private readonly allowedProjectRoot: string;
   private readonly readyzTimeoutMs: number;
+  private readonly readyzMode: "http" | "rpc";
+  private codexVersion: string | null = null;
+  private handshakeComplete = false;
 
   constructor(
     rpc: AppServerRpcClient,
@@ -26,9 +30,16 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
     this.readyzUrl = readyzUrl;
     this.allowedProjectRoot = allowedProjectRoot;
     this.readyzTimeoutMs = options.readyzTimeoutMs ?? 5_000;
+    this.readyzMode = options.readyzMode ?? "http";
   }
 
   async readyz(): Promise<void> {
+    if (this.readyzMode === "rpc") {
+      await this.initialize();
+      await this.initialized();
+      return;
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
@@ -53,18 +64,36 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   }
 
   async initialize(): Promise<void> {
-    await this.rpc.request("initialize", {
+    if (this.handshakeComplete) {
+      return;
+    }
+
+    const response = (await this.rpc.request("initialize", {
       clientInfo: {
         name: "codex-remote-worker",
         title: "Codex Remote Worker",
         version: "0.0.0",
       },
-      capabilities: null,
-    });
+      capabilities: {
+        experimentalApi: true,
+        requestAttestation: false,
+      },
+    })) as InitializeResponse;
+
+    this.codexVersion = sanitizeCodexVersion(response.userAgent);
   }
 
   async initialized(): Promise<void> {
+    if (this.handshakeComplete) {
+      return;
+    }
+
     this.rpc.notify({ method: "initialized" });
+    this.handshakeComplete = true;
+  }
+
+  getCodexVersion(): string | null {
+    return this.codexVersion;
   }
 
   async listModels(): Promise<unknown> {
@@ -151,6 +180,19 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
   close(): void {
     this.rpc.close();
   }
+}
+
+function sanitizeCodexVersion(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 160 || /\/Users\/|Bearer|token|codexHome|stack|cause/i.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
 }
 
 export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {

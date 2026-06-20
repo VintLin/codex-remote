@@ -1,13 +1,23 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer } from "node:net";
 
-export interface AppServerProcessHandle {
+export interface LoopbackAppServerProcessHandle {
   child: ChildProcess;
   spawned: Promise<void>;
+  transport: "loopbackWebSocket";
   url: string;
   readyzUrl: string;
   startedByWorker: true;
 }
+
+export interface StdioAppServerProcessHandle {
+  child: ChildProcessWithoutNullStreams;
+  spawned: Promise<void>;
+  transport: "stdio";
+  startedByWorker: true;
+}
+
+export type AppServerProcessHandle = LoopbackAppServerProcessHandle | StdioAppServerProcessHandle;
 
 function createAppServerProcessError(
   kind: "app_server_request_timeout" | "app_server_spawn_failed",
@@ -99,7 +109,7 @@ export async function waitForReadyz(readyzUrl: string, timeoutMs = 5_000): Promi
   }
 }
 
-export function startLoopbackAppServer(port: number): AppServerProcessHandle {
+export function startLoopbackAppServer(port: number): LoopbackAppServerProcessHandle {
   const url = assertLoopbackWebSocketUrl(`ws://127.0.0.1:${port}`);
   const child = spawn("codex", ["app-server", "--listen", url], {
     stdio: "ignore",
@@ -116,8 +126,33 @@ export function startLoopbackAppServer(port: number): AppServerProcessHandle {
   return {
     child,
     spawned,
+    transport: "loopbackWebSocket",
     url,
     readyzUrl: toReadyzUrl(url),
+    startedByWorker: true,
+  };
+}
+
+export function startStdioAppServer(): StdioAppServerProcessHandle {
+  const child = spawn("codex", ["app-server", "--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stderr.on("data", () => {
+    // Consume stderr so the child cannot block on a full pipe; never persist raw app-server output.
+  });
+  const spawned = new Promise<void>((resolve, reject) => {
+    child.once("spawn", () => {
+      resolve();
+    });
+    child.once("error", () => {
+      reject(createAppServerProcessError("app_server_spawn_failed"));
+    });
+  });
+
+  return {
+    child,
+    spawned,
+    transport: "stdio",
     startedByWorker: true,
   };
 }

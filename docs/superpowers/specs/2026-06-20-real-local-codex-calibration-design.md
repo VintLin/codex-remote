@@ -68,7 +68,7 @@ The stage keeps the existing ownership boundaries:
 ## Runtime Flow
 
 1. Worker starts with a local bearer token, a single `allowedProjectRoot`, and `CODEX_REMOTE_START_APP_SERVER=true` unless an explicit loopback `CODEX_APP_SERVER_URL` is used.
-2. Worker opens a real app-server session and exposes public `/v1` Worker endpoints on loopback.
+2. Worker starts or connects to a real app-server session and exposes public `/v1` Worker endpoints on loopback. The default Worker-owned path is `codex app-server --stdio`; loopback WebSocket is an explicit `debug-websocket` fallback only and cannot satisfy real readiness evidence.
 3. Control Plane starts with one configured device pointing at the Worker and a local SQLite task DB.
 4. Web starts with `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL` and `NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN`.
 5. Web loads devices and conversations from Control Plane, not fallback fixtures.
@@ -81,6 +81,16 @@ The stage keeps the existing ownership boundaries:
 - Web must load `/v1/devices` and `/v1/conversations` through Control Plane.
 - Worker must map conversations from real `thread/list(cwd=allowedProjectRoot)`.
 - If there are no real conversations, Web must show a real empty state, not mock data.
+
+### Worker-Owned Stdio Lifecycle
+
+- `pnpm real:start` must start the Worker with `CODEX_REMOTE_APP_SERVER_TRANSPORT=stdio` and `CODEX_REMOTE_START_APP_SERVER=true` by default.
+- Worker must spawn `codex app-server --stdio` as a child process and communicate with newline-delimited JSON-RPC frames over stdio.
+- Transport framing, buffering, child process close/error handling, request timeout, and pending-request cleanup belong inside `apps/worker`.
+- Worker must not log or expose raw stdio frames, child stderr/stdout, raw initialize results, cwd, `allowedProjectRoot`, `codexHome`, private paths, tokens, stack/cause, raw prompts, command output, or full diffs.
+- Worker health may expose only sanitized readiness proof: configured transport, connected/ready state, and a safe version or user-agent value when available.
+- Stdio app-server method and notification types must come from `packages/codex-protocol` generated artifacts. If generated artifacts lack a needed upstream type, the stage must record `real-gap` or regenerate artifacts through the approved generation command instead of hand-writing parallel protocol DTOs.
+- `debug-websocket` remains available only when explicitly selected for local debugging and must be labeled as non-readiness evidence.
 
 ### Timeline
 

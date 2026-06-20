@@ -89,6 +89,7 @@ logs/web-dev.log
 coverage/
 .nyc_output/
 .jest/
+test-results/
 *.lcov
 
 # ============================================

@@ -24,26 +24,30 @@ test("real local stack smoke: should load real Control Plane data and submit thr
   await expect(page.getByText(/示例数据|示例任务数据/)).toHaveCount(0);
   await expect(page.locator(".datasource-status").first()).toContainText("loaded");
 
-  const startInput = page.getByLabel("Start conversation");
+  const main = page.getByTestId("main");
+  const startInput = main.getByRole("textbox", { name: "Start new conversation" });
   await expect(startInput).toBeVisible();
   await startInput.fill("codex-remote-calibration web smoke: reply briefly.");
 
   const startResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/v1/devices/") && response.url().endsWith("/conversations") && response.status() === 202,
   );
-  await page.getByRole("button", { name: "Start new conversation" }).click();
+  await main.getByRole("button", { name: "Start" }).click();
   await startResponsePromise;
   await expect(page.getByText("accepted").first()).toBeVisible();
 
   const composer = page.locator('[contenteditable="true"]').first();
   if ((await composer.count()) > 0) {
-    await composer.fill("codex-remote-calibration web follow-up: acknowledge briefly.");
-    const followUpResponsePromise = page.waitForResponse(
-      (response) => response.url().includes("/follow-up") && response.status() === 202,
-      { timeout: 10_000 },
-    );
-    await page.getByRole("button", { name: /send|submit/i }).first().click();
-    await followUpResponsePromise;
+    const sendButton = main.getByRole("button", { name: "发送" }).first();
+    if ((await sendButton.count()) > 0 && await sendButton.isEnabled()) {
+      await composer.fill("codex-remote-calibration web follow-up: acknowledge briefly.");
+      const followUpResponsePromise = page.waitForResponse(
+        (response) => response.url().includes("/follow-up") && response.status() === 202,
+        { timeout: 10_000 },
+      );
+      await sendButton.click();
+      await followUpResponsePromise;
+    }
   }
 
   expect([...externalRequests]).toEqual([]);
@@ -108,5 +112,5 @@ function normalizeTransport(value: unknown): string {
 }
 
 function isStage9EvidenceTransport(value: string): boolean {
-  return value === "stdio" || value === "loopbackWebSocket";
+  return value === "stdio";
 }

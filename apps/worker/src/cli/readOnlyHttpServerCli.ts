@@ -59,9 +59,10 @@ function createDefaultWorkerHandlerContext(
     writeState: createWorkerWriteHandlerState(),
     openClient: async () => {
       sharedSession ??= openWorkerSession({
-          configuredUrl: config.appServerUrl,
-          startAppServer: config.startAppServer,
-          allowedProjectRoot: config.allowedProjectRoot,
+        configuredUrl: config.appServerUrl,
+        startAppServer: config.startAppServer,
+        appServerTransport: config.appServerTransport,
+        allowedProjectRoot: config.allowedProjectRoot,
           connectTimeoutMs: config.connectTimeoutMs,
           onServerRequest: (request) => {
             approvalRegistry.captureServerRequest(request);
@@ -92,6 +93,7 @@ function createSessionClient(
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
     initialized: () => client.initialized(),
+    getCodexVersion: () => client.getCodexVersion(),
     listThreads: (params) => client.listThreadsWithParams(params),
     readThread: (params) => client.readThread(params),
     startThread: (params) => client.startThread(params),
