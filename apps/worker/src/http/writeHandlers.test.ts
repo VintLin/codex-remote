@@ -46,6 +46,23 @@ test("worker write handlers when starting a conversation, should map public inpu
   assert.equal(accepted.turnId, "turn-started");
 });
 
+test("worker write handlers when starting a conversation, should initialize session before business rpc", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeWriteClient({
+    threads: [createThread({ cwd: paths.allowedRoot, id: "thread-started", turns: [] })],
+    startTurnResponse: { turn: createTurn({ id: "turn-started", status: "inProgress" }) },
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await startConversation(context, {
+    projectId: "local-project",
+    message: "Start after handshake",
+    clientRequestId: "client-start-readyz-1",
+  });
+
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "startThread", "startTurn"]);
+});
+
 test("worker write handlers when starting with project basename, should reject before app-server write", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeWriteClient({
@@ -101,6 +118,45 @@ test("worker write handlers when following up, should prove conversation is allo
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.conversationId, "thread-1");
   assert.equal(accepted.turnId, "turn-follow-up");
+});
+
+test("worker write handlers when following up, should initialize session before allowlist and business rpc", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeWriteClient({
+    threads: [createThread({ cwd: paths.allowedChild, id: "thread-1" })],
+    startTurnResponse: { turn: createTurn({ id: "turn-follow-up", status: "inProgress" }) },
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await followUpConversation(context, "thread-1", {
+    message: "Continue after handshake",
+    clientRequestId: "client-follow-up-readyz-1",
+    expectedConversationId: "thread-1",
+  });
+
+  assert.deepEqual(client.callOrder.slice(0, 3), ["readyz", "listThreads", "startTurn"]);
+});
+
+test("worker write handlers when session initialization times out, should fail closed before business rpc", async () => {
+  const paths = await createTempProjectPaths();
+  const client = new FakeWriteClient({
+    readyzError: new Error("app_server_request_timeout"),
+    threads: [createThread({ cwd: paths.allowedRoot, id: "thread-started", turns: [] })],
+  });
+  const context = createContext(paths.allowedRoot, client);
+
+  await assert.rejects(
+    startConversation(context, {
+      projectId: "local-project",
+      message: "Start after handshake",
+      clientRequestId: "client-start-readyz-timeout-1",
+    }),
+    (error) => error instanceof WorkerHttpError && error.status === 408 && error.code === "app_server_timeout",
+  );
+  assert.deepEqual(client.startThreadCalls, []);
+  assert.deepEqual(client.startTurnCalls, []);
+  assert.deepEqual(client.callOrder, ["readyz", "close"]);
+  assert.equal(client.closed, true);
 });
 
 test("worker write handlers when allowed conversation is on a later page, should still allow follow-up", async () => {
@@ -401,12 +457,14 @@ test("worker write handlers when app-server start fails, should not leak message
 
 class FakeWriteClient implements WorkerWriteAppServerClient {
   closed = false;
+  readonly callOrder: string[] = [];
   readonly listCalls: Parameters<WorkerWriteAppServerClient["listThreads"]>[0][] = [];
   readonly readCalls: Parameters<WorkerWriteAppServerClient["readThread"]>[0][] = [];
   readonly startThreadCalls: Partial<v2.ThreadStartParams>[] = [];
   readonly startTurnCalls: Partial<v2.TurnStartParams>[] = [];
   private readonly threads: v2.Thread[];
   private readonly listResponses: v2.ThreadListResponse[] | null;
+  private readonly readyzError: Error | null;
   private readonly startThreadError: Error | null;
   private readonly startTurnError: Error | null;
   private readonly startTurnResponse: v2.TurnStartResponse;
@@ -414,24 +472,32 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
   constructor(options: {
     threads?: v2.Thread[];
     listResponses?: v2.ThreadListResponse[];
+    readyzError?: Error;
     startThreadError?: Error;
     startTurnError?: Error;
     startTurnResponse?: v2.TurnStartResponse;
   } = {}) {
     this.threads = options.threads ?? [];
     this.listResponses = options.listResponses ?? null;
+    this.readyzError = options.readyzError ?? null;
     this.startThreadError = options.startThreadError ?? null;
     this.startTurnError = options.startTurnError ?? null;
     this.startTurnResponse = options.startTurnResponse ?? { turn: createTurn({ id: "turn-started" }) };
   }
 
-  async readyz(): Promise<void> {}
+  async readyz(): Promise<void> {
+    this.callOrder.push("readyz");
+    if (this.readyzError) {
+      throw this.readyzError;
+    }
+  }
 
   async initialize(): Promise<void> {}
 
   async initialized(): Promise<void> {}
 
   async listThreads(params: Parameters<WorkerWriteAppServerClient["listThreads"]>[0]): Promise<v2.ThreadListResponse> {
+    this.callOrder.push("listThreads");
     this.listCalls.push(params);
     if (this.listResponses) {
       const response = this.listResponses[Math.min(this.listCalls.length - 1, this.listResponses.length - 1)];
@@ -443,6 +509,7 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
   }
 
   async readThread(params: Parameters<WorkerWriteAppServerClient["readThread"]>[0]): Promise<v2.ThreadReadResponse> {
+    this.callOrder.push("readThread");
     this.readCalls.push(params);
     const thread = this.threads.find((candidate) => candidate.id === params.threadId);
     if (!thread) {
@@ -452,6 +519,7 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
   }
 
   async startThread(params: v2.ThreadStartParams): Promise<v2.ThreadStartResponse> {
+    this.callOrder.push("startThread");
     this.startThreadCalls.push(selectThreadStartCall(params));
     if (this.startThreadError) {
       throw this.startThreadError;
@@ -460,6 +528,7 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
   }
 
   async startTurn(params: v2.TurnStartParams): Promise<v2.TurnStartResponse> {
+    this.callOrder.push("startTurn");
     this.startTurnCalls.push(selectTurnStartCall(params));
     if (this.startTurnError) {
       throw this.startTurnError;
@@ -468,6 +537,7 @@ class FakeWriteClient implements WorkerWriteAppServerClient {
   }
 
   close(): void {
+    this.callOrder.push("close");
     this.closed = true;
   }
 }

@@ -217,6 +217,7 @@ async function withWriteClient<T>(
   }
 
   try {
+    await client.readyz();
     return await run(client);
   } catch (error) {
     throw mapUnknownError(error, operation);

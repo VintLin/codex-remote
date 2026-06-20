@@ -104,6 +104,8 @@ The stage keeps the existing ownership boundaries:
 - The entrypoint uses the current local device and current allowed project.
 - Calibration test messages must include `codex-remote-calibration`.
 - Worker maps start to `thread/start` followed by `turn/start`.
+- Worker write/control paths must prove the app-server session is initialized before the first business RPC. A direct start or follow-up request cannot rely on a prior health/probe request to have performed the handshake.
+- Task 11 covers the Worker write path only. Any remaining control-path or post-start readable-conversation gap must be proven and fixed in a separate Stage 9 slice.
 
 ### Follow-Up
 

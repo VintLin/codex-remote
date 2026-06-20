@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the current package boundaries. Add only the missing project discovery contract needed for real start-conversation, then fix startup, Web fallback clarity, start UI, and real E2E calibration evidence.
 
-**Current gap:** Tasks 1-10 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=12 fixedPass=0 realGap=7`; remaining work is the next vertical slice for start/follow-up/control/approval closure and Q23 real probes. Q24 all-workers-down and invalid-worker-token fixtures now record `real-pass`.
+**Current gap:** Tasks 1-11 are implemented, but Stage 9 is not complete. `pnpm real:start` now defaults to Worker-owned `stdio` and starts Worker, Control Plane, and Web. Latest `pnpm real:check` records `total=19 realPass=11 fixedPass=0 realGap=8`; `start conversation` now records `real-pass`, but the newly started conversation is not yet readable through timeline/follow-up and records sanitized `conversation_not_found`. Remaining work is the next vertical slice for post-start readable conversation, follow-up/control/approval closure, and Q23 real probes. Q24 all-workers-down and invalid-worker-token fixtures still record `real-pass`.
 
 **Tech Stack:** TypeScript, pnpm, Turborepo, Next.js, Hono, OpenAPI 3.1, openapi-typescript, Node built-in test runner, SQLite/Drizzle, Codex CLI app-server.
 
@@ -74,6 +74,22 @@ Findings addressed by adding Task 10:
 - Critical: endpoint semantics for `/v1/control-plane/health`, `/v1/devices`, and `/v1/conversations` were not pinned tightly enough to prevent all Worker failures from being presented as `200 []`.
 - Important: Web/source taxonomy must preserve the distinction between healthy empty data and dependency failure. Task 10 keeps Web changes minimal and only requires degraded/error visibility if the Control Plane returns a dependency error.
 - Important: historical Stage 6 wording in `PLAN.md` could be read as allowing all-workers-down to become an empty conversation state; Task 10 updates that wording as fake-smoke-only history, not Stage 9 readiness.
+
+Reviewer: `019ee604-c0ff-7ba2-a6ee-149bdae0a782`
+
+Result: clean enough to execute after scope clarification.
+
+Findings addressed by Task 11:
+
+- Important: Task 11 fixes the Worker write path handshake only. Control-path handshake coverage and post-start readable conversations remain separate Stage 9 gaps unless proven by later real-check evidence.
+- Minor: readyz failure tests use mapped sentinel errors such as `app_server_request_timeout`, not generic errors that intentionally map to `worker_internal_error`.
+- Minor: readyz failure tests assert the client is closed and business RPCs are not called.
+
+Pre-review root cause evidence for Task 11:
+
+- A direct Worker start request against a fresh stdio app-server session returns sanitized `worker_internal_error`; a direct app-server diagnostic that calls `thread/start` before `initialize` / `initialized` returns `app_server_protocol_error`.
+- Q18 requires initialized long-lived Worker-owned sessions before business RPCs.
+- Current read health/probe paths call `readyz()` for stdio, which performs the handshake, but write paths can be the first request and currently call `thread/start` / `turn/start` without first proving the handshake.
 
 ## Integrated Research Decisions
 
@@ -1768,6 +1784,98 @@ Update `PLAN.md`, `docs/references/development-context.md`, and this plan with s
 ```bash
 git add apps/control-plane/src/http/controlPlaneHttpApp.ts apps/control-plane/src/http/controlPlaneHttpApp.test.ts scripts/real-local-calibration.mjs PLAN.md docs/references/development-context.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
 git commit -m "fix: distinguish degraded control plane reads"
+```
+
+---
+
+### Task 11: Initialize Worker Sessions Before Write RPCs
+
+**Files:**
+- Modify: `apps/worker/src/http/writeHandlers.ts`
+- Modify: `apps/worker/src/http/writeHandlers.test.ts`
+- Modify: `scripts/real-local-calibration.mjs` only if status wording needs a sanitized reason update.
+- Modify: `docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md`
+- Modify: `docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md`
+- Modify: `PLAN.md`
+- Modify: `docs/references/development-context.md`
+
+**Interfaces:**
+- Keeps the public API and DB schema unchanged.
+- Uses the existing Worker client `readyz()` method as the single app-server handshake gate. For stdio sessions, `readyz()` already maps to `initialize()` + `initialized()`.
+- Ensures `startConversation()` and `followUpConversation()` call the handshake before write-path business RPCs.
+- Keeps `apps/worker` as the only app-server caller; Control Plane and Web remain unchanged.
+
+**Non-goals:**
+- No Q23 cwd-scope or pagination work.
+- No approval, interrupt, or steer scenario construction.
+- No control-path handshake changes.
+- No post-start readable-conversation fix.
+- No protocol generation or handwritten app-server DTOs.
+- No timeout tuning unless the post-handshake real check still proves timeout is the remaining root cause.
+- No raw app-server response, raw prompt, raw JSON-RPC, command output, full diff, stack/cause, token, raw URL, or private path in logs, reports, tests, or docs.
+
+- [x] **Step 1: Add failing Worker write tests**
+
+In `apps/worker/src/http/writeHandlers.test.ts`, extend the fake write client to record `readyz()` calls and add focused tests:
+
+- start conversation calls `readyz()` before `thread/start`;
+- follow-up calls `readyz()` before `thread/list` / `turn/start`;
+- if `readyz()` fails, write handlers return sanitized `app_server_timeout` / `app_server_unavailable` mapping through existing `mapUnknownError` and do not call business RPCs.
+
+- [x] **Step 2: Implement minimal handshake gate**
+
+In `apps/worker/src/http/writeHandlers.ts`, update `withWriteClient()`:
+
+- after `context.openClient()` succeeds, call `await client.readyz()` before running the write operation;
+- keep the existing close behavior and error mapping;
+- do not add a new session abstraction.
+
+- [x] **Step 3: Run focused verification**
+
+```bash
+pnpm --filter @codex-remote/worker test -- --test-name-pattern "starting a conversation|following up|readyz"
+pnpm --filter @codex-remote/worker typecheck
+node --test scripts/product-readiness-check.test.mjs
+pnpm product:check
+```
+
+- [x] **Step 4: Run real runtime verification**
+
+```bash
+pnpm real:start
+pnpm real:status
+pnpm real:check
+pnpm web:e2e:smoke
+pnpm real:stop
+pnpm real:status
+```
+
+Expected: start conversation and follow-up improve to `real-pass` or move to a narrower sanitized `real-gap`; no fake Worker evidence is counted.
+
+Observed after the Worker write handshake fix:
+
+- `pnpm real:start` and `pnpm real:status` start and report Worker, Control Plane, and Web running on the real stdio path.
+- `pnpm real:check` records `total=19 realPass=11 fixedPass=0 realGap=8`.
+- `start conversation` records `real-pass` with HTTP 202, proving the direct write no longer fails before `thread/start`.
+- `timeline`, `follow-up`, and approval pending scenario now fail with sanitized `conversation_not_found` for the newly accepted conversation. This is the next Stage 9 gap: post-start readable conversation through Control Plane/Worker, not write-session initialization.
+
+- [x] **Step 5: Run full gates**
+
+```bash
+pnpm product:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+- [x] **Step 6: Update docs and commit**
+
+Update `PLAN.md`, `docs/references/development-context.md`, and this plan with sanitized evidence, then commit:
+
+```bash
+git add apps/worker/src/http/writeHandlers.ts apps/worker/src/http/writeHandlers.test.ts PLAN.md docs/references/development-context.md docs/superpowers/specs/2026-06-20-real-local-codex-calibration-design.md docs/superpowers/plans/2026-06-20-real-local-codex-calibration.md
+git commit -m "fix: initialize worker writes before rpc"
 ```
 
 ---

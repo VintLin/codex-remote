@@ -133,12 +133,13 @@ Stage 9 in-progress context:
 - Task 5/6 implemented the real calibration runner and smoke gate; fake Worker smoke no longer satisfies real readiness claims.
 - Worker-owned `stdio` app-server lifecycle is implemented and is the default `pnpm real:start` path.
 - The local real stack uses Worker, Control Plane, Web, SQLite task DB, and Codex app-server on one Mac; `pnpm real:start` starts all three HTTP surfaces and `pnpm real:status` reports them running.
-- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=12 fixedPass=0 realGap=7`.
+- `pnpm real:check` writes ignored local artifacts under `logs/real-check/`; current `logs/real-check/latest.json` summary is `total=19 realPass=11 fixedPass=0 realGap=8`.
 - Worker app-server readiness evidence requires `appServerConnected=true`, `transport=stdio`, and sanitized version metadata; `debug-websocket` does not satisfy readiness.
 - `pnpm web:e2e:smoke` now passes against the real stack and checks that Web does not make runtime external asset requests.
 - Task link invalid ids are now rejected before persistence, and both `task link` and `task link invalid ids` record `real-pass`.
 - Q24 Control Plane degraded-vs-empty fixtures now record `real-pass`: all-workers-down and invalid-worker-token return a sanitized dependency error for `/v1/conversations` instead of `200 []`.
-- Remaining real gaps include start timing out or not being accepted by the calibration runner, follow-up returning a sanitized Worker error, approval decision lacking a safe pending approval, interrupt/steer lacking a safe active turn, and Q23 probes still absent.
+- Worker write paths initialize the stdio app-server session before `thread/start` / `turn/start`; `start conversation` now records `real-pass` with HTTP 202.
+- Remaining real gaps include the newly accepted start conversation not yet being readable through Control Plane timeline/follow-up and returning sanitized `conversation_not_found`, approval decision lacking a safe pending approval, interrupt/steer lacking a safe active turn, and Q23 probes still absent.
 - Q23 remains an explicit gap: `no_control_plane_cwd_scope_probe` and `no_control_plane_pagination_probe`.
 - Q24 Task 10 semantics are now implemented for the current slice: `/v1/control-plane/health` and `/v1/devices` may return sanitized degraded state, partial Worker conversation failures keep reachable conversations available, and all-workers-down or invalid-worker-token makes `/v1/conversations` return a sanitized dependency error instead of `200 []`.
 - `debug-websocket` is an explicit local debug fallback only. `real:check` and readiness accept only `stdio` proof.
