@@ -4,7 +4,15 @@ import { useState } from "react";
 
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
-import type { CodexConversation, Device, DeviceConnectionStatus, PendingApproval, TaskStatus } from "@codex-remote/api-contract";
+import type {
+  BoardTask,
+  CodexConversation,
+  Device,
+  DeviceConnectionStatus,
+  PendingApproval,
+  TaskConversationLink,
+  TaskStatus,
+} from "@codex-remote/api-contract";
 import type { SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
@@ -49,6 +57,22 @@ interface DevicesPageProps {
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
   devices: Device[];
+}
+
+interface TaskBoardPageProps {
+  conversations: CodexConversation[];
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  onBack?: () => void;
+  onCreateTask: (title: string) => Promise<void>;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
+  onLinkSelectedConversation: (task: BoardTask) => Promise<void>;
+  onUnlinkConversation: (task: BoardTask, link: TaskConversationLink) => Promise<void>;
+  selectedConversation: CodexConversation | null;
+  taskStatus: "failed" | "idle" | "submitting";
+  tasks: BoardTask[];
 }
 
 interface SearchDialogProps {
@@ -420,21 +444,24 @@ export function DeviceDetailPane({
   );
 }
 
-export function AutomationsPage({
+export function TaskBoardPage({
+  conversations,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
   onBack,
+  onCreateTask,
   onExpandDetail,
   onExpandSidebar,
-}: {
-  isDetailCollapsed: boolean;
-  isMobile?: boolean;
-  isSidebarCollapsed: boolean;
-  onBack?: () => void;
-  onExpandDetail: () => void;
-  onExpandSidebar: () => void;
-}) {
+  onLinkSelectedConversation,
+  onUnlinkConversation,
+  selectedConversation,
+  taskStatus,
+  tasks,
+}: TaskBoardPageProps) {
+  const [taskTitle, setTaskTitle] = useState("");
+  const disabled = taskStatus === "submitting";
+
   return (
     <main className="main-pane devices-page">
       <header className="topbar">
@@ -445,27 +472,106 @@ export function AutomationsPage({
           {!isMobile && isSidebarCollapsed ? (
             <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
           ) : null}
-          <div className="workspace-title automations-title">
-            <h1>自动化</h1>
+          <div className="workspace-title tasks-title">
+            <h1>任务</h1>
           </div>
         </div>
-        <div className="toolbar automations-toolbar">
+        <div className="toolbar tasks-toolbar">
+          <span className="datasource-status">{taskStatus}</span>
           {!isMobile && isDetailCollapsed ? (
             <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
       <div className="content-scroll">
-        <section className="empty-state automation-empty-state">
-          <h2>暂无自动化 mock</h2>
-          <p>此处只保留入口和空状态样式，避免提前定义不稳定的数据结构。</p>
+        <form
+          className="conversation-control-strip"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const title = taskTitle.trim();
+            if (!title || disabled) {
+              return;
+            }
+            void (async () => {
+              await onCreateTask(title);
+              setTaskTitle("");
+            })();
+          }}
+        >
+          <div className="conversation-control-row">
+            <input
+              aria-label="Task title"
+              className="conversation-control-input"
+              disabled={disabled}
+              onChange={(event) => setTaskTitle(event.target.value)}
+              value={taskTitle}
+            />
+            <button className="button secondary conversation-control-button" disabled={disabled || !taskTitle.trim()} type="submit">
+              Create
+            </button>
+          </div>
+        </form>
+        <section aria-label="Task board" className="device-grid">
+          {tasks.length === 0 ? (
+            <article className="empty-state">
+              <h2>暂无任务</h2>
+              <p>创建任务后可链接当前对话。</p>
+            </article>
+          ) : tasks.map((task) => {
+            const selectedLinked = selectedConversation
+              ? task.linkedConversations.some(
+                  (link) => link.deviceId === selectedConversation.deviceId && link.conversationId === selectedConversation.id,
+                )
+              : false;
+
+            return (
+              <article className="device-card" key={task.id}>
+                <div className="device-card-main">
+                  <span className="device-card-copy">
+                    <span className="device-card-title">
+                      <span>{task.title}</span>
+                      <StatusBadge status={task.status} />
+                    </span>
+                    <span className="device-card-meta">{task.linkedConversations.length} links</span>
+                  </span>
+                </div>
+                <div className="device-card-actions">
+                  <button
+                    className="button secondary conversation-control-button"
+                    disabled={disabled || !selectedConversation || selectedLinked}
+                    onClick={() => void onLinkSelectedConversation(task)}
+                    type="button"
+                  >
+                    Link
+                  </button>
+                </div>
+                {task.linkedConversations.length > 0 ? (
+                  <div className="conversation-control-strip">
+                    {task.linkedConversations.map((link) => (
+                      <div className="conversation-control-row" key={`${link.deviceId}:${link.conversationId}`}>
+                        <span className="conversation-control-meta">{formatTaskLink(link, conversations)}</span>
+                        <button
+                          className="button secondary conversation-control-button"
+                          disabled={disabled}
+                          onClick={() => void onUnlinkConversation(task, link)}
+                          type="button"
+                        >
+                          Unlink
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
         </section>
       </div>
     </main>
   );
 }
 
-export function AutomationDetailPane({
+export function TaskDetailPane({
   isCollapsed,
   isMobile = false,
   onBack,
@@ -478,17 +584,22 @@ export function AutomationDetailPane({
 }) {
   return (
     <RightDetailPane
-      ariaLabel="Automation detail"
-      backLabel="返回自动化列表"
+      ariaLabel="Task detail"
+      backLabel="返回任务列表"
       className="device-detail-pane"
       isCollapsed={isCollapsed}
       isMobile={isMobile}
       onBack={onBack}
       onCollapse={onCollapse}
-      title="自动化详情"
+      title="任务详情"
       titleIcon="reload"
     />
   );
+}
+
+function formatTaskLink(link: TaskConversationLink, conversations: CodexConversation[]): string {
+  return conversations.find((conversation) => conversation.deviceId === link.deviceId && conversation.id === link.conversationId)?.title ??
+    `${link.deviceId}/${link.conversationId}`;
 }
 
 export function SearchDialog({

@@ -111,6 +111,19 @@ test("workbench datasource when endpoint responses are valid should create snaps
         },
       ],
     }),
+    "/v1/tasks": jsonResponse([
+      {
+        id: "task-live",
+        title: "Live task",
+        status: "in_progress",
+        linkedConversations: [
+          {
+            deviceId: "w1",
+            conversationId: "conv-live-1",
+          },
+        ],
+      },
+    ]),
   };
 
   const data = await loadWorkbenchData({
@@ -126,6 +139,8 @@ test("workbench datasource when endpoint responses are valid should create snaps
   assert.equal(data.source.error, undefined);
   assert.equal(data.projects[0]?.id, "p-live");
   assert.equal(data.searchRecents[0]?.conversationId, "conv-live-1");
+  assert.equal(data.tasks[0]?.id, "task-live");
+  assert.equal(data.tasks[0]?.linkedConversations[0]?.deviceId, "w1");
   assert.equal(data.assistantThreads.length, 2);
 });
 
@@ -146,6 +161,7 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.equal(requestCount, 0);
   assert.equal(data.source.reason, "not_configured");
   assert.deepEqual(data.conversations, mockConversations);
+  assert.deepEqual(data.tasks, fallback.tasks);
   assert.deepEqual(data.searchRecents, fallback.searchRecents);
   assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
   assert.equal(data.assistantThreads.length, mockConversations.length);
@@ -174,6 +190,7 @@ test("workbench datasource when remote conversations are empty should keep remot
         },
       ]),
       "/v1/conversations": jsonResponse([]),
+      "/v1/tasks": jsonResponse([]),
     }),
   });
 
@@ -182,6 +199,7 @@ test("workbench datasource when remote conversations are empty should keep remot
   assert.equal(data.devices.length, 1);
   assert.equal(data.projects.length, 0);
   assert.equal(data.conversations.length, 0);
+  assert.equal(data.tasks.length, 0);
   assert.equal(data.assistantThreads.length, 0);
   assert.equal(data.searchRecents.length, 0);
   assert.notDeepEqual(data.conversations, mockConversations);
@@ -301,6 +319,7 @@ test("workbench datasource when conversations are projectless should not create 
           approval: "never",
         },
       ]),
+      "/v1/tasks": jsonResponse([]),
       "/v1/devices/w2/conversations/p-less/timeline": jsonResponse({
         deviceId: "w2",
         conversationId: "p-less",
@@ -370,6 +389,7 @@ test("workbench datasource when timeline loads should create metadata-only nodes
           approval: "never",
         },
       ]),
+      "/v1/tasks": jsonResponse([]),
       "/v1/devices/w3/conversations/timeline/timeline": jsonResponse({
         deviceId: "w3",
         conversationId: "timeline",
@@ -494,6 +514,7 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
           approval: "never",
         },
       ]),
+      "/v1/tasks": jsonResponse([]),
       "/v1/devices/w4/conversations/timeline-error/timeline": jsonResponse(
         {
           code: "timeline_read_failed",
@@ -570,6 +591,19 @@ test("workbench datasource when conversation ids collide across devices, should 
     if (requestUrl.pathname === "/v1/conversations") {
       return jsonResponse(conversations);
     }
+    if (requestUrl.pathname === "/v1/tasks") {
+      return jsonResponse([
+        {
+          id: "task-shared",
+          title: "Shared task",
+          status: "waiting",
+          linkedConversations: [
+            { deviceId: "device-a", conversationId: "shared-thread" },
+            { deviceId: "device-b", conversationId: "shared-thread" },
+          ],
+        },
+      ]);
+    }
     if (requestUrl.pathname === "/v1/devices/device-b/conversations/shared-thread/timeline") {
       return jsonResponse({
         deviceId: "device-b",
@@ -598,6 +632,10 @@ test("workbench datasource when conversation ids collide across devices, should 
   assert.equal(data.assistantThreads.find((thread) => thread.deviceId === "device-b")?.loadState, "loaded");
   assert.equal(data.assistantThreads.find((thread) => thread.deviceId === "device-a")?.loadState, "missingRead");
   assert.equal(data.searchRecents.find((item) => item.conversationKey === createConversationKey({ deviceId: "device-b", id: "shared-thread" }))?.active, true);
+  assert.deepEqual(data.tasks[0]?.linkedConversations, [
+    { deviceId: "device-a", conversationId: "shared-thread" },
+    { deviceId: "device-b", conversationId: "shared-thread" },
+  ]);
 });
 
 test("workbench datasource when project ids collide across devices, should keep device-scoped projects", async () => {
@@ -637,6 +675,7 @@ test("workbench datasource when project ids collide across devices, should keep 
         { id: "device-b", icon: "laptop", name: "B", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Shared B", model: "Codex" },
       ]),
       "/v1/conversations": jsonResponse(conversations),
+      "/v1/tasks": jsonResponse([]),
       "/v1/devices/device-a/conversations/conversation-a/timeline": jsonResponse({
         deviceId: "device-a",
         conversationId: "conversation-a",
@@ -712,6 +751,7 @@ test("workbench datasource search recents should be derived from conversations",
         supportedSourceKinds: ["cli", "vscode", "appServer"],
       }),
       "/v1/conversations": jsonResponse(conversations),
+      "/v1/tasks": jsonResponse([]),
       "/v1/devices/w-search/conversations/search-1/timeline": jsonResponse({
         deviceId: "w-search",
         conversationId: "search-1",
@@ -738,4 +778,37 @@ test("workbench datasource search recents should be derived from conversations",
   assert.equal(data.searchRecents[0]?.project, expected[0]?.project);
   assert.equal("active" in data.searchRecents[0]!, false);
   assert.equal("marker" in data.searchRecents[0]!, false);
+});
+
+test("workbench datasource when task API fails should not replace tasks with persisted mocks", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://task-failure.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "task-device",
+          icon: "laptop",
+          name: "Task device",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "now",
+          currentProject: "tasks",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/tasks": jsonResponse(
+        {
+          code: "task_store_unavailable",
+          message: "Task store unavailable.",
+        },
+        500,
+      ),
+    }),
+  });
+
+  assert.equal(data.source.reason, "request_failure");
+  assert.equal(data.source.error?.code, "task_store_unavailable");
+  assert.deepEqual(data.tasks, []);
 });

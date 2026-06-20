@@ -1,15 +1,19 @@
 import type {
   CodexConversation,
+  BoardTask,
   CommandAccepted,
   ConversationTimeline,
+  CreateTaskInput,
   Device,
   ErrorEnvelope,
   FollowUpInput,
   ApprovalDecisionInput,
   InterruptTurnInput,
+  LinkTaskConversationInput,
   PendingApproval,
   StartConversationInput,
   SteerTurnInput,
+  TaskConversationLink,
   WorkerCapabilities,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -25,6 +29,10 @@ export interface WorkerApiClientLike {
   getCapabilities(deviceId: string): Promise<WorkerCapabilities>;
   listDevices(): Promise<Device[]>;
   listConversations(): Promise<CodexConversation[]>;
+  listTasks(): Promise<BoardTask[]>;
+  createTask(input: CreateTaskInput): Promise<BoardTask>;
+  linkTaskConversation(taskId: string, input: LinkTaskConversationInput): Promise<TaskConversationLink>;
+  unlinkTaskConversation(taskId: string, deviceId: string, conversationId: string): Promise<void>;
   getTimeline(deviceId: string, conversationId: string): Promise<ConversationTimeline>;
   startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted>;
   followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
@@ -97,6 +105,33 @@ export class WorkerApiClient implements WorkerApiClientLike {
   public async listConversations(): Promise<CodexConversation[]> {
     const response = await this.request<CodexConversation[]>("/v1/conversations");
     return response;
+  }
+
+  public async listTasks(): Promise<BoardTask[]> {
+    return this.request<BoardTask[]>("/v1/tasks");
+  }
+
+  public async createTask(input: CreateTaskInput): Promise<BoardTask> {
+    return this.request<BoardTask>("/v1/tasks", {
+      body: input,
+      method: "POST",
+    });
+  }
+
+  public async linkTaskConversation(taskId: string, input: LinkTaskConversationInput): Promise<TaskConversationLink> {
+    return this.request<TaskConversationLink>(`/v1/tasks/${encodeURIComponent(taskId)}/conversation-links`, {
+      body: input,
+      method: "POST",
+    });
+  }
+
+  public async unlinkTaskConversation(taskId: string, deviceId: string, conversationId: string): Promise<void> {
+    await this.request<void>(
+      `/v1/tasks/${encodeURIComponent(taskId)}/conversation-links/${encodeURIComponent(deviceId)}/${encodeURIComponent(conversationId)}`,
+      {
+        method: "DELETE",
+      },
+    );
   }
 
   public async getTimeline(deviceId: string, conversationId: string): Promise<ConversationTimeline> {
@@ -176,6 +211,10 @@ export class WorkerApiClient implements WorkerApiClientLike {
     if (!response.ok) {
       const envelope = await this.parseErrorEnvelope(response);
       throw new WorkerApiRequestError(response.status, envelope);
+    }
+
+    if (response.status === 204) {
+      return undefined as TResponse;
     }
 
     return response.json() as Promise<TResponse>;

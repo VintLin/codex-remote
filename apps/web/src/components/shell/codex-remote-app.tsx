@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient } from "../../data/workerApi/client";
-import type { PendingApproval } from "@codex-remote/api-contract";
+import type { BoardTask, PendingApproval, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -23,13 +23,13 @@ import {
 } from "./controlSubmitController";
 import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
 import {
-  AutomationDetailPane,
-  AutomationsPage,
   ConversationDetailPane,
   ConversationMain,
   DeviceDetailPane,
   DevicesPage,
   SearchDialog,
+  TaskBoardPage,
+  TaskDetailPane,
 } from "../detail/main-panels";
 import { type AppView, Sidebar, type SidebarPressedItem } from "../sidebar/sidebar";
 
@@ -64,11 +64,12 @@ export function CodexRemoteApp() {
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
   const [followUpStatus, setFollowUpStatus] = useState<FollowUpSubmitStatus>("idle");
   const [controlStatus, setControlStatus] = useState<ControlSubmitStatus>("idle");
+  const [taskStatus, setTaskStatus] = useState<"failed" | "idle" | "submitting">("idle");
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, assistantThreads, searchRecents, source } = workbenchData;
+  const { devices, projects, conversations, tasks, assistantThreads, searchRecents, source } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
     findConversationByKey(conversations, selectedConversationKey) ??
@@ -187,6 +188,54 @@ export function CodexRemoteApp() {
     });
   }, [conversation?.deviceId, conversation?.id, refreshApprovals, refreshWorkbenchData, workerClient]);
 
+  const createTask = useCallback(async (taskTitle: string) => {
+    if (!controlPlaneToken) {
+      setTaskStatus("failed");
+      return;
+    }
+
+    setTaskStatus("submitting");
+    try {
+      await workerClient.createTask({ title: taskTitle });
+      await refreshWorkbenchData(conversation ? createConversationKey(conversation) : selectedConversationKey);
+      setTaskStatus("idle");
+    } catch {
+      setTaskStatus("failed");
+    }
+  }, [conversation, refreshWorkbenchData, selectedConversationKey, workerClient]);
+
+  const linkSelectedConversationToTask = useCallback(async (task: BoardTask) => {
+    if (!conversation || !controlPlaneToken) {
+      setTaskStatus("failed");
+      return;
+    }
+
+    setTaskStatus("submitting");
+    try {
+      await workerClient.linkTaskConversation(task.id, { deviceId: conversation.deviceId, conversationId: conversation.id });
+      await refreshWorkbenchData(createConversationKey(conversation));
+      setTaskStatus("idle");
+    } catch {
+      setTaskStatus("failed");
+    }
+  }, [conversation, refreshWorkbenchData, workerClient]);
+
+  const unlinkConversationFromTask = useCallback(async (task: BoardTask, link: TaskConversationLink) => {
+    if (!controlPlaneToken) {
+      setTaskStatus("failed");
+      return;
+    }
+
+    setTaskStatus("submitting");
+    try {
+      await workerClient.unlinkTaskConversation(task.id, link.deviceId, link.conversationId);
+      await refreshWorkbenchData(conversation ? createConversationKey(conversation) : selectedConversationKey);
+      setTaskStatus("idle");
+    } catch {
+      setTaskStatus("failed");
+    }
+  }, [conversation, refreshWorkbenchData, selectedConversationKey, workerClient]);
+
   useEffect(() => {
     let shouldIgnore = false;
     void (async () => {
@@ -271,6 +320,7 @@ export function CodexRemoteApp() {
     setSelectedDetailTarget(null);
     setFollowUpStatus("idle");
     setControlStatus("idle");
+    setTaskStatus("idle");
   }, [selectedConversationKey]);
 
   useEffect(() => {
@@ -375,10 +425,10 @@ export function CodexRemoteApp() {
       };
     }
 
-    if (activeView === "automations") {
+    if (activeView === "tasks") {
       return {
         detail: (
-          <AutomationDetailPane
+          <TaskDetailPane
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -386,13 +436,20 @@ export function CodexRemoteApp() {
           />
         ),
         main: (
-          <AutomationsPage
+          <TaskBoardPage
+            conversations={conversations}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
             onBack={() => setMobilePane("sidebar")}
+            onCreateTask={createTask}
             onExpandDetail={() => setIsDetailCollapsed(false)}
             onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onLinkSelectedConversation={linkSelectedConversationToTask}
+            onUnlinkConversation={unlinkConversationFromTask}
+            selectedConversation={conversation}
+            taskStatus={taskStatus}
+            tasks={tasks}
           />
         ),
       };

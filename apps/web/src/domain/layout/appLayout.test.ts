@@ -154,11 +154,12 @@ test("when device rows expose status and actions, should use a status dot plus i
   assert.match(styles, /\.device-action-button-danger\s*\{[^}]*color:\s*var\(--cr-danger-ink\);/s);
 });
 
-test("when the automations page is aligned with the rest of the workspace, should keep the header minimal and the empty state as plain copy", () => {
-  assert.match(mainPanelsComponent, /className="workspace-title automations-title"/);
-  assert.match(mainPanelsComponent, /className="toolbar automations-toolbar"/);
-  assert.match(mainPanelsComponent, /className="empty-state automation-empty-state"/);
-  assert.doesNotMatch(mainPanelsComponent, /后续用于展示当前设备上的自动化任务/);
+test("when the task board is aligned with the rest of the workspace, should keep the header minimal and the empty state as plain copy", () => {
+  assert.match(mainPanelsComponent, /className="workspace-title tasks-title"/);
+  assert.match(mainPanelsComponent, /className="toolbar tasks-toolbar"/);
+  assert.match(mainPanelsComponent, /aria-label="Task board"/);
+  assert.match(mainPanelsComponent, /暂无任务/);
+  assert.doesNotMatch(mainPanelsComponent, /暂无自动化 mock/);
   assert.match(styles, /\.empty-state\s*\{[^}]*padding:\s*8px 0 0;/s);
   assert.match(styles, /\.empty-state h2\s*\{[^}]*font-size:\s*var\(--cr-text-body\);/s);
   assert.match(styles, /\.empty-state p\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
@@ -210,11 +211,11 @@ test("when the detail workspace is rendered, should inherit the sidebar backgrou
   assert.doesNotMatch(detailWorkspaceComponent, /当前未选中具体目标/);
 });
 
-test("when device and automation detail panes are rendered, should share the same white sidebar shell as conversation detail", () => {
+test("when device and task detail panes are rendered, should share the same white sidebar shell as conversation detail", () => {
   assert.match(mainPanelsComponent, /<RightDetailPane/);
   assert.match(mainPanelsComponent, /className="device-detail-pane"/);
   assert.match(mainPanelsComponent, /title="设备详情"/);
-  assert.match(mainPanelsComponent, /title="自动化详情"/);
+  assert.match(mainPanelsComponent, /title="任务详情"/);
   assert.match(styles, /\.right-detail-pane-glyph\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
   assert.match(styles, /\.device-detail-pane \.linked-task,\s*\.device-detail-pane \.diff-panel\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.device-detail-pane \.linked-task h2,[^}]*font-weight:\s*var\(--cr-weight-regular\);/s);

@@ -26,3 +26,20 @@ test("codex remote app when selection changes, should refresh device-scoped appr
   assert.doesNotMatch(shellSource, /refreshApprovals\(conversation\?\.id \?\? null\)/);
   assert.doesNotMatch(shellSource, /\[assistantThread\?\.id, conversation\?\.id\]/);
 });
+
+test("codex remote app when task board is wired, should create tasks and link the selected device conversation", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
+
+  assert.match(sidebarSource, /label="任务"/);
+  assert.doesNotMatch(mainPanelsSource, /暂无自动化 mock/);
+  assert.match(mainPanelsSource, /TaskBoardPage/);
+  assert.match(mainPanelsSource, /aria-label="Task title"/);
+  assert.match(mainPanelsSource, /onCreateTask/);
+  assert.match(mainPanelsSource, /onLinkSelectedConversation/);
+  assert.match(shellSource, /tasks/);
+  assert.match(shellSource, /createTask\(\{ title: taskTitle \}\)/);
+  assert.match(shellSource, /linkTaskConversation\(task\.id, \{ deviceId: conversation\.deviceId, conversationId: conversation\.id \}\)/);
+  assert.match(shellSource, /unlinkTaskConversation\(task\.id, link\.deviceId, link\.conversationId\)/);
+});

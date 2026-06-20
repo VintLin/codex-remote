@@ -1,6 +1,7 @@
 import type {
   ConversationTimeline,
   ConversationTimelineTurn,
+  BoardTask,
   Device,
   RemoteProject,
   CodexConversation,
@@ -11,7 +12,12 @@ import type { AssistantTimelineTurn, AssistantThreadSnapshot } from "../../domai
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
 import { createProjectKey } from "../../domain/sidebar/sidebarModel.ts";
 
-import { conversations as mockConversations, devices as mockDevices, sidebarProjects as mockProjects } from "../app-server/mockData.ts";
+import {
+  conversations as mockConversations,
+  devices as mockDevices,
+  sidebarProjects as mockProjects,
+  tasks as mockTasks,
+} from "../app-server/mockData.ts";
 
 import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
 
@@ -40,6 +46,7 @@ export interface WorkbenchData {
   devices: Device[];
   projects: RemoteProject[];
   conversations: CodexConversation[];
+  tasks: BoardTask[];
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
 }
@@ -65,6 +72,7 @@ export function createFallbackWorkbenchData(
     devices: [...mockDevices],
     projects: [...mockProjects],
     conversations,
+    tasks: [...mockTasks],
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
   };
@@ -299,6 +307,13 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
   try {
     const devices = await client.listDevices();
     const conversations = await client.listConversations();
+    let tasks: BoardTask[] = [];
+    let taskError: unknown = null;
+    try {
+      tasks = await client.listTasks();
+    } catch (error: unknown) {
+      taskError = error;
+    }
 
     const selectedConversation = findConversationByKey(conversations, options.selectedConversationKey) ?? conversations[0];
     const timelineConversationKey = selectedConversation ? createConversationKey(selectedConversation) : conversations[0] ? createConversationKey(conversations[0]) : null;
@@ -328,6 +343,19 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         devices,
         projects: createProjectsFromConversations(conversations),
         conversations,
+        tasks,
+        assistantThreads,
+        searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
+      };
+    }
+
+    if (taskError) {
+      return {
+        source: createSourceFromError(taskError),
+        devices,
+        projects: createProjectsFromConversations(conversations),
+        conversations,
+        tasks: [],
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -338,6 +366,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       devices,
       projects: createProjectsFromConversations(conversations),
       conversations,
+      tasks,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
     };

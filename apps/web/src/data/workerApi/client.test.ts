@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { CommandAccepted, WorkerHealth } from "@codex-remote/api-contract";
+import type { BoardTask, CommandAccepted, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
 
 import { WorkerApiClient } from "./client.ts";
 
@@ -136,4 +136,66 @@ test("WorkerApiClient control methods when called, should use versioned control 
     "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/approvals/approval-1/decision",
   ]);
   assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+});
+
+test("WorkerApiClient task methods when called, should use task board routes", async () => {
+  const task: BoardTask = {
+    id: "task-1",
+    title: "Task one",
+    status: "in_progress",
+    linkedConversations: [],
+  };
+  const link: TaskConversationLink = {
+    deviceId: "device-a",
+    conversationId: "thread-1",
+  };
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    const index = requests.length;
+    if (index === 1) {
+      return new Response(JSON.stringify([task]), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    }
+    if (index === 2) {
+      return new Response(JSON.stringify(task), {
+        headers: { "content-type": "application/json" },
+        status: 201,
+      });
+    }
+    if (index === 3) {
+      return new Response(JSON.stringify(link), {
+        headers: { "content-type": "application/json" },
+        status: 201,
+      });
+    }
+    return new Response(null, { status: 204 });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  await client.listTasks();
+  await client.createTask({ title: "Task one", status: "in_progress" });
+  await client.linkTaskConversation("task-1", { deviceId: "device-a", conversationId: "thread-1" });
+  await client.unlinkTaskConversation("task-1", "device-a", "thread-1");
+
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "GET http://127.0.0.1:8787/v1/tasks",
+    "POST http://127.0.0.1:8787/v1/tasks",
+    "POST http://127.0.0.1:8787/v1/tasks/task-1/conversation-links",
+    "DELETE http://127.0.0.1:8787/v1/tasks/task-1/conversation-links/device-a/thread-1",
+  ]);
+  assert.equal((requests[2]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+  assert.equal(
+    requests[2]?.init.body,
+    JSON.stringify({
+      deviceId: "device-a",
+      conversationId: "thread-1",
+    }),
+  );
 });

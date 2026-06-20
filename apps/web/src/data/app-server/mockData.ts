@@ -93,13 +93,18 @@ export const tasks: BoardTask[] = [
     id: "task-worker-probe",
     title: "codex-remote worker probe",
     status: "in_progress",
-    linkedConversationIds: ["demo-thread-running", "demo-thread-review"],
+    linkedConversations: [
+      { deviceId: "macbook", conversationId: "demo-thread-running" },
+      { deviceId: "macbook", conversationId: "demo-thread-review" },
+    ],
   },
   {
     id: "task-loose-notes",
     title: "independent planning notes",
     status: "done",
-    linkedConversationIds: ["demo-thread-projectless"],
+    linkedConversations: [
+      { deviceId: "macbook", conversationId: "demo-thread-projectless" },
+    ],
   },
 ];
 
