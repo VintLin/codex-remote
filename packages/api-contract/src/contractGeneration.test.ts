@@ -184,6 +184,28 @@ const stage12ForbiddenLeakFields = [
   "marketplacePath",
   "contents",
 ] as const;
+const stage12ForbiddenRootPathFields = [
+  "projectPath",
+  "rootPath",
+  "workspacePath",
+  "cwd",
+] as const;
+const stage12ExtensionInventoryAllowedTopLevelProperties = [
+  "deviceId",
+  "projectId",
+  "skills",
+  "hooks",
+  "plugins",
+  "marketplaceEntries",
+  "apps",
+] as const;
+const stage12ExtensionInventoryForbiddenNestedFields = [
+  "absolutePath",
+  "sourcePath",
+  "marketplacePath",
+  "command",
+  "contents",
+] as const;
 const stage7TaskWritePathMethodPairs = [
   "/v1/tasks:post",
   "/v1/tasks/{taskId}/conversation-links:post",
@@ -294,6 +316,13 @@ function expectSchemaDisallowsAdditionalProperties(source: string, schemaName: s
   assert.equal(schemaBlockLines.length > 0, true, `${schemaName} should exist`);
   assert.match(schemaBlockLines.join("\n"), /^      additionalProperties:\s*false$/m);
   return schemaBlockLines;
+}
+
+function extractPropertyNames(schemaBlockLines: string[]): string[] {
+  return schemaBlockLines.flatMap((line) => {
+    const propertyMatch = line.match(/^        ([A-Za-z0-9_-]+):\s*$/);
+    return propertyMatch ? [expectCapturedGroup(propertyMatch, "property name should exist")] : [];
+  });
 }
 
 function expectPropertyMaxLength(schemaBlockLines: string[], propertyName: string, maxLength: number): void {
@@ -935,6 +964,41 @@ test("when stage 12 public schemas are maintained, local workbench schemas shoul
     for (const leakField of stage12ForbiddenLeakFields) {
       assert.doesNotMatch(schemaBlockLines.join("\n"), new RegExp(`\\b${escapeRegExp(leakField)}\\b`));
     }
+  }
+});
+
+test("when stage 12 local workbench schemas are maintained, public responses should not expose ambiguous root path fields", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of [
+    "LocalWorkbenchSummary",
+    "ProjectDirectoryListing",
+    "ProjectFilePreview",
+    "ProjectGitSummary",
+    "ProjectSearchResult",
+  ] as const) {
+    const schemaBlockLines = expectSchemaDisallowsAdditionalProperties(source, schemaName);
+    const propertyNames = extractPropertyNames(schemaBlockLines);
+
+    for (const forbiddenProperty of stage12ForbiddenRootPathFields) {
+      assert.equal(
+        propertyNames.includes(forbiddenProperty),
+        false,
+        `${schemaName} should not expose ${forbiddenProperty}`,
+      );
+    }
+  }
+});
+
+test("when extension inventory schemas are maintained, public fields should stay whitelist-only", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const extensionInventoryBlock = expectSchemaDisallowsAdditionalProperties(source, "ExtensionInventory");
+  const propertyNames = extractPropertyNames(extensionInventoryBlock);
+
+  assert.deepEqual(new Set(propertyNames), new Set(stage12ExtensionInventoryAllowedTopLevelProperties));
+
+  for (const forbiddenField of stage12ExtensionInventoryForbiddenNestedFields) {
+    assert.doesNotMatch(extensionInventoryBlock.join("\n"), new RegExp(`\\b${escapeRegExp(forbiddenField)}\\b`));
   }
 });
 

@@ -964,7 +964,6 @@ export interface components {
         LocalWorkbenchSummary: {
             deviceId: string;
             projectId: string;
-            projectPath: string;
             projectName: string;
             fileCount: number;
             directoryCount: number;
@@ -976,7 +975,6 @@ export interface components {
             previewAvailable?: boolean;
         };
         ProjectDirectoryListing: {
-            projectPath: string;
             entries: {
                 path: string;
                 name: string;
@@ -989,7 +987,6 @@ export interface components {
             }[];
         };
         ProjectFilePreview: {
-            projectPath: string;
             path: string;
             /** @enum {string} */
             previewKind: "text" | "unavailable";
@@ -1001,7 +998,6 @@ export interface components {
             reason?: string | null;
         };
         ProjectGitSummary: {
-            projectPath: string;
             branch: string;
             /** @enum {string} */
             status: "clean" | "dirty" | "detached" | "unavailable" | "unknown";
@@ -1021,7 +1017,6 @@ export interface components {
             }[];
         };
         ProjectSearchResult: {
-            projectPath: string;
             query: string;
             matches: {
                 path: string;

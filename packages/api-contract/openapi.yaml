@@ -2390,7 +2390,6 @@ components:
       required:
         - deviceId
         - projectId
-        - projectPath
         - projectName
         - fileCount
         - directoryCount
@@ -2403,9 +2402,6 @@ components:
           type: string
         projectId:
           type: string
-        projectPath:
-          type: string
-          maxLength: 400
         projectName:
           type: string
           maxLength: 200
@@ -2437,12 +2433,8 @@ components:
       type: object
       additionalProperties: false
       required:
-        - projectPath
         - entries
       properties:
-        projectPath:
-          type: string
-          maxLength: 400
         entries:
           type: array
           maxItems: 200
@@ -2485,14 +2477,10 @@ components:
       type: object
       additionalProperties: false
       required:
-        - projectPath
         - path
         - previewKind
         - truncated
       properties:
-        projectPath:
-          type: string
-          maxLength: 400
         path:
           type: string
           maxLength: 400
@@ -2532,7 +2520,6 @@ components:
       type: object
       additionalProperties: false
       required:
-        - projectPath
         - branch
         - status
         - aheadCount
@@ -2542,9 +2529,6 @@ components:
         - untrackedCount
         - changedFiles
       properties:
-        projectPath:
-          type: string
-          maxLength: 400
         branch:
           type: string
           maxLength: 200
@@ -2617,13 +2601,9 @@ components:
       type: object
       additionalProperties: false
       required:
-        - projectPath
         - query
         - matches
       properties:
-        projectPath:
-          type: string
-          maxLength: 400
         query:
           type: string
           maxLength: 200
