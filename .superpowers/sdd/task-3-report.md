@@ -1,73 +1,91 @@
-# Task 3 Report: Honest Fallback And Example UI
+# Task 3 Report: Control Plane Routing
 
 ## Status
 
-Implemented.
+Implemented and verified.
 
-## Changes
+## Changed Files
 
-- Labeled fallback fixture-facing device, project, conversation, projectName, and summary copy as Example data.
-- Added explicit `source.reason !== "loaded"` banner in `ConversationMain`:
-  - `未连接真实 Control Plane`
-  - `当前显示示例数据`
-- Removed nonfunctional future composer controls from the assistant composer:
-  - attachment button
-  - approval/access mode menu
-  - model selector
-  - voice input button
-- Added compact `.conversation-source-banner` styling in the shared UI stylesheet.
-- Updated datasource and source-code tests to make fallback/example behavior explicit.
+- `apps/control-plane/src/client/workerClient.ts`
+- `apps/control-plane/src/client/workerClient.test.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.ts`
+- `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
+- `.superpowers/sdd/task-3-report.md`
 
-## Scope Boundaries
+## Scope
 
-- Did not implement start UI.
-- Did not implement `real:check`.
-- Did not change runtime scripts.
-- Did not change Worker or Control Plane behavior.
-- Did not introduce app-server, protocol, or DB imports into Web.
+- Added Control Plane route: `POST /v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start`.
+- Added Worker upstream client method: `startReview(device, conversationId, input)`.
+- Worker upstream path is `/v1/conversations/{conversationId}/local-actions/review-start`.
+- Request body uses `StartReviewInput` from `@codex-remote/api-contract`: `projectId`, `expectedConversationId`, `clientRequestId`, `confirmationText`.
+- Control Plane only routes to the selected configured device and performs route-vs-`expectedConversationId` stale guard.
+- Project ownership/stale `projectId` verification remains Worker-owned; Control Plane preserves sanitized Worker failure.
 
-## Verification
+## RED Evidence
+
+Worker client focused RED:
 
 ```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "fallback|source is not loaded"
-pnpm --filter @codex-remote/web test
-pnpm --filter @codex-remote/web typecheck
+pnpm --filter @codex-remote/control-plane test -- src/client/workerClient.test.ts
 ```
 
-All commands passed in this task run.
+Expected failures before implementation:
+
+- `TypeError: client.startReview is not a function`
+- 16 passed, 2 failed.
+
+Control Plane HTTP focused RED:
+
+```bash
+pnpm --filter @codex-remote/control-plane test -- src/http/controlPlaneHttpApp.test.ts
+```
+
+Expected failures before implementation:
+
+- Review-start route returned `404` instead of `202`.
+- Stale `expectedConversationId` route returned `404` instead of `409`.
+- Upstream unavailable path returned route `404` instead of sanitized `424`.
+- 32 passed, 4 failed.
+
+## GREEN Evidence
+
+Focused GREEN:
+
+```bash
+pnpm --filter @codex-remote/control-plane test -- src/client/workerClient.test.ts
+pnpm --filter @codex-remote/control-plane test -- src/http/controlPlaneHttpApp.test.ts
+```
+
+Results:
+
+- Worker client: 18 passed, 0 failed.
+- Control Plane HTTP: 36 passed, 0 failed.
+
+Package verification:
+
+```bash
+pnpm --filter @codex-remote/control-plane test
+```
+
+Result:
+
+- 62 passed, 0 failed.
+
+## Boundary Checks
+
+```bash
+rg -n "@codex-remote/codex-protocol|apps/worker|../worker|worker/src" \
+  apps/control-plane/src/client/workerClient.ts \
+  apps/control-plane/src/http/controlPlaneHttpApp.ts \
+  apps/control-plane/src/client/workerClient.test.ts \
+  apps/control-plane/src/http/controlPlaneHttpApp.test.ts
+```
+
+Result:
+
+- No `@codex-remote/codex-protocol`, Worker internals, or Worker source imports were introduced.
+- Matches were only existing public Worker HTTP route/test URL strings and local `workerClient` imports.
 
 ## Concerns
 
-- Existing unrelated Stage 9 documentation changes were present before Task 3 and were not staged.
-
-## Review Fix: Task Fallback Explicitness
-
-Status: implemented.
-
-Fix details:
-
-- Passed `workbenchData.source` into `TaskBoardPage`.
-- Reused the existing restrained `conversation-source-banner` treatment in Tasks when `source.reason !== "loaded"`.
-- Added Tasks-specific copy: `未连接真实 Control Plane` and `当前显示示例任务数据`.
-- Labeled fallback task fixture titles with an `Example ` prefix.
-
-RED evidence:
-
-```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "fallback|source is not loaded|task"
-```
-
-Failed as expected before implementation:
-
-- `task board when source is not loaded, should render explicit example data copy`
-- `when fixture tasks are used, should label them as examples`
-
-GREEN evidence:
-
-```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "fallback|source is not loaded|task"
-pnpm --filter @codex-remote/web test
-pnpm --filter @codex-remote/web typecheck
-```
-
-All three commands passed after the fix.
+- Only the requested Control Plane package test was run. Repo-wide `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` were not run for this task slice.

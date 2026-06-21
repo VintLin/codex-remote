@@ -22,6 +22,7 @@ import type {
   ProjectFilePreview,
   ProjectGitSummary,
   StartConversationInput,
+  StartReviewInput,
   ProjectSearchResult,
   RemoteProject,
   SendQueuedConversationMessageInput,
@@ -268,6 +269,22 @@ export function createControlPlaneHttpApp(params: {
       await runForDevice(device, "conversation/follow-up", () =>
         params.workerClient.followUp(device, c.req.param("conversationId"), input),
       ),
+      202,
+    );
+  });
+
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/local-actions/review-start", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const conversationId = c.req.param("conversationId");
+    const input = await readStartReviewInputBody(c);
+    if (input.expectedConversationId !== conversationId) {
+      throw new ControlPlaneHttpError(409, "duplicate_request", "Duplicate request conflicts with the original request.", {
+        operation: "local-action/review-start",
+        retryable: false,
+      });
+    }
+    return c.json(
+      await runForDevice(device, "local-action/review-start", () => params.workerClient.startReview(device, conversationId, input)),
       202,
     );
   });
@@ -611,6 +628,17 @@ async function readFollowUpInputBody(c: Context<ControlPlaneHonoEnv>): Promise<F
     message: getRequiredStringField(body, "message", messageMaxLength),
     clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
     ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readStartReviewInputBody(c: Context<ControlPlaneHonoEnv>): Promise<StartReviewInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["projectId", "expectedConversationId", "clientRequestId", "confirmationText"]);
+  return {
+    projectId: getRequiredStringField(body, "projectId"),
+    expectedConversationId: getRequiredStringField(body, "expectedConversationId"),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
+    confirmationText: getRequiredStringField(body, "confirmationText", 200),
   };
 }
 

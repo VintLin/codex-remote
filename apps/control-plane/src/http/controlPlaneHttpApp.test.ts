@@ -25,6 +25,7 @@ import type {
   RemoteProject,
   RenameConversationInput,
   StartConversationInput,
+  StartReviewInput,
   SteerTurnInput,
   TaskConversationLink,
   WorkerCapabilities,
@@ -35,6 +36,7 @@ import type {
 import type { ControlPlaneConfig, ConfiguredWorkerDevice } from "../config/controlPlaneConfig.ts";
 import type { WorkerUpstreamClient } from "../client/workerClient.ts";
 import { createControlPlaneHttpApp } from "./controlPlaneHttpApp.ts";
+import { ControlPlaneHttpError } from "./errors.ts";
 
 const config: ControlPlaneConfig = {
   allowedOrigins: ["http://127.0.0.1:5173"],
@@ -496,6 +498,90 @@ test("control plane http app when write and control routes are used, should prox
   ]);
 });
 
+test("control plane http app when review start is requested, should route only selected device with public stale-context body", async () => {
+  const client = new FakeWorkerClient();
+  const app = createApp(client);
+  const input: StartReviewInput = {
+    projectId: "local-project",
+    expectedConversationId: "thread-b",
+    clientRequestId: "review-1",
+    confirmationText: "Start review",
+  };
+
+  const response = await request(app, "/v1/devices/device-b/conversations/thread-b/local-actions/review-start", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), createAccepted("device-b", "review-1"));
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["startReview:device-b"]);
+  assert.deepEqual(client.reviewStartInputs, [{ conversationId: "thread-b", input }]);
+});
+
+test("control plane http app when review start stale context mismatches route conversation, should reject before worker call", async () => {
+  const client = new FakeWorkerClient();
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/devices/device-a/conversations/thread-a/local-actions/review-start", {
+    method: "POST",
+    body: JSON.stringify({
+      projectId: "local-project",
+      expectedConversationId: "thread-other",
+      clientRequestId: "review-1",
+      confirmationText: "Start review",
+    }),
+  });
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as { code: string }).code, "duplicate_request");
+  assert.deepEqual(client.calls, []);
+});
+
+test("control plane http app when review start project is stale, should preserve sanitized worker failure", async () => {
+  const client = new FakeWorkerClient({ staleReviewProjectIds: new Set(["project-other"]) });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/devices/device-a/conversations/thread-a/local-actions/review-start", {
+    method: "POST",
+    body: JSON.stringify({
+      projectId: "project-other",
+      expectedConversationId: "thread-a",
+      clientRequestId: "review-1",
+      confirmationText: "Start review",
+    }),
+  });
+
+  assert.equal(response.status, 404);
+  assert.equal((await response.json() as { code: string }).code, "conversation_not_found");
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["startReview:device-a"]);
+  assert.deepEqual(client.reviewStartInputs.map((entry) => entry.input.projectId), ["project-other"]);
+});
+
+test("control plane http app when review start device is unknown or upstream fails, should return sanitized errors", async () => {
+  const app = createApp(new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) }));
+  const input: StartReviewInput = {
+    projectId: "local-project",
+    expectedConversationId: "thread-a",
+    clientRequestId: "review-1",
+    confirmationText: "Start review",
+  };
+
+  const missing = await request(app, "/v1/devices/missing/conversations/thread-a/local-actions/review-start", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  const unavailable = await request(app, "/v1/devices/device-a/conversations/thread-a/local-actions/review-start", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  assert.equal(missing.status, 404);
+  assert.equal(unavailable.status, 424);
+  const body = `${await missing.text()} ${await unavailable.text()}`;
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|local-project|thread-a/);
+});
+
 test("control plane http app when queued messages are created and listed, should keep queue state in the repository", async () => {
   const fixture = TaskDatabaseFixture.createMemory();
   try {
@@ -820,12 +906,15 @@ class FakeWorkerClient implements WorkerUpstreamClient {
   readonly calls: Array<{ deviceId: string; method: string }> = [];
   readonly followUpInputs: Array<{ conversationId: string; input: FollowUpInput }> = [];
   readonly localWorkbenchProjectCalls: Array<Record<string, number | string | undefined>> = [];
+  readonly reviewStartInputs: Array<{ conversationId: string; input: StartReviewInput }> = [];
   private readonly activeTimeline: boolean;
+  private readonly staleReviewProjectIds: Set<string>;
   private readonly unavailableDeviceIds: Set<string>;
   private readonly upstreamDeviceId: string | null;
 
-  constructor(options: { activeTimeline?: boolean; unavailableDeviceIds?: Set<string>; upstreamDeviceId?: string } = {}) {
+  constructor(options: { activeTimeline?: boolean; staleReviewProjectIds?: Set<string>; unavailableDeviceIds?: Set<string>; upstreamDeviceId?: string } = {}) {
     this.activeTimeline = options.activeTimeline ?? false;
+    this.staleReviewProjectIds = options.staleReviewProjectIds ?? new Set();
     this.unavailableDeviceIds = options.unavailableDeviceIds ?? new Set();
     this.upstreamDeviceId = options.upstreamDeviceId ?? null;
   }
@@ -1071,6 +1160,19 @@ class FakeWorkerClient implements WorkerUpstreamClient {
   async followUp(device: ConfiguredWorkerDevice, conversationId: string, input: FollowUpInput) {
     this.record(device, "followUp");
     this.followUpInputs.push({ conversationId, input });
+    return createAccepted(device.id, input.clientRequestId);
+  }
+
+  async startReview(device: ConfiguredWorkerDevice, conversationId: string, input: StartReviewInput) {
+    this.record(device, "startReview");
+    this.throwIfUnavailable(device);
+    this.reviewStartInputs.push({ conversationId, input });
+    if (this.staleReviewProjectIds.has(input.projectId)) {
+      throw new ControlPlaneHttpError(404, "conversation_not_found", "Conversation was not found.", {
+        operation: "local-action/review-start",
+        retryable: false,
+      });
+    }
     return createAccepted(device.id, input.clientRequestId);
   }
 

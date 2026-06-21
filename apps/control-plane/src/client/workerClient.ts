@@ -21,6 +21,7 @@ import type {
   RenameConversationInput,
   ProjectSearchResult,
   StartConversationInput,
+  StartReviewInput,
   SteerTurnInput,
   WorkerCapabilities,
   WorkerHealth,
@@ -55,6 +56,7 @@ export interface WorkerUpstreamClient {
   listApprovals(device: ConfiguredWorkerDevice, conversationId: string): Promise<PendingApproval[]>;
   startConversation(device: ConfiguredWorkerDevice, input: StartConversationInput): Promise<CommandAccepted>;
   followUp(device: ConfiguredWorkerDevice, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
+  startReview(device: ConfiguredWorkerDevice, conversationId: string, input: StartReviewInput): Promise<CommandAccepted>;
   interrupt(device: ConfiguredWorkerDevice, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
   steer(device: ConfiguredWorkerDevice, conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
   decideApproval(
@@ -221,6 +223,13 @@ export function createWorkerUpstreamClient(options: {
     startConversation: (device, input) => request<CommandAccepted>(device, "/v1/conversations", { method: "POST", body: input, project: projectCommandAccepted }),
     followUp: (device, conversationId, input) =>
       request<CommandAccepted>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/follow-up`, {
+        method: "POST",
+        body: input,
+        notFoundCode: "conversation_not_found",
+        project: projectCommandAccepted,
+      }),
+    startReview: (device, conversationId, input) =>
+      request<CommandAccepted>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/local-actions/review-start`, {
         method: "POST",
         body: input,
         notFoundCode: "conversation_not_found",

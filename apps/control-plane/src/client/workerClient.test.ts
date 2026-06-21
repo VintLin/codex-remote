@@ -10,6 +10,7 @@ import type {
   ProjectFilePreview,
   ProjectGitSummary,
   ProjectSearchResult,
+  StartReviewInput,
 } from "@codex-remote/api-contract";
 
 import { createWorkerUpstreamClient } from "./workerClient.ts";
@@ -266,6 +267,68 @@ test("worker upstream client local workbench methods when called, should use sta
   ]);
 });
 
+test("worker upstream client when starting review, should use conversation local action route and public body", async () => {
+  const input: StartReviewInput = {
+    projectId: "project-a",
+    expectedConversationId: "thread-a",
+    clientRequestId: "review-1",
+    confirmationText: "Start review",
+  };
+  const requests: Array<{ body: string | null; method: string | undefined; url: string }> = [];
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async (request, init) => {
+      requests.push({
+        body: typeof init?.body === "string" ? init.body : null,
+        method: init?.method,
+        url: String(request),
+      });
+      return Response.json(createAccepted("review-1", "thread-a"));
+    },
+  });
+
+  const accepted = await client.startReview(device, "thread-a", input);
+
+  assert.deepEqual(requests, [
+    {
+      method: "POST",
+      url: "http://127.0.0.1:8788/v1/conversations/thread-a/local-actions/review-start",
+      body: JSON.stringify(input),
+    },
+  ]);
+  assert.deepEqual(accepted, createAccepted("review-1", "thread-a"));
+});
+
+test("worker upstream client when review-start upstream cannot find conversation, should map to sanitized conversation not found", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json(
+        {
+          code: "raw_review_failure",
+          message: "raw http://127.0.0.1:8788 example-token stack",
+          details: { rawUrl: "http://127.0.0.1:8788", token: "example-token" },
+        },
+        { status: 404 },
+      ),
+  });
+
+  await assert.rejects(
+    client.startReview(device, "thread-a", {
+      projectId: "project-a",
+      expectedConversationId: "thread-a",
+      clientRequestId: "review-1",
+      confirmationText: "Start review",
+    }),
+    (error) => {
+      assert.equal((error as { status?: number }).status, 404);
+      assert.equal((error as { code?: string }).code, "conversation_not_found");
+      assert.doesNotMatch(JSON.stringify(error), /raw_review_failure|example-token|8788|stack|rawUrl/);
+      return true;
+    },
+  );
+});
+
 test("worker upstream client when projecting local workbench summary, should keep public summary fields", async () => {
   const client = createWorkerUpstreamClient({
     timeoutMs: 1_000,
@@ -431,5 +494,15 @@ function createExtensionInventory(overrides: Partial<ExtensionInventory> = {}): 
     marketplaceEntries: [{ name: "entry-a", installStatus: "installed", description: "A marketplace entry" }],
     apps: [{ id: "github", name: "GitHub", enabled: true, description: "GitHub app" }],
     ...overrides,
+  };
+}
+
+function createAccepted(clientRequestId: string, conversationId: string) {
+  return {
+    id: `accepted-${clientRequestId}`,
+    status: "accepted" as const,
+    conversationId,
+    turnId: "turn-review",
+    acceptedAt: "2026-06-21T00:00:00.000Z",
   };
 }
