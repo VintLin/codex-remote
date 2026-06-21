@@ -30,6 +30,7 @@ export type ProjectGitSummary = components["schemas"]["ProjectGitSummary"];
 export type ProjectSearchResult = components["schemas"]["ProjectSearchResult"];
 export type McpServerSummary = components["schemas"]["McpServerSummary"];
 export type ExtensionInventory = components["schemas"]["ExtensionInventory"];
+export type StartReviewInput = components["schemas"]["StartReviewInput"];
 
 export type Device = components["schemas"]["Device"];
 export type RemoteProject = components["schemas"]["RemoteProject"];

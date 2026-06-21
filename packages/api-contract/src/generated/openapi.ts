@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startControlPlaneDeviceReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt": {
         parameters: {
             query?: never;
@@ -1026,6 +1042,12 @@ export interface components {
                 snippet?: string | null;
                 score?: number | null;
             }[];
+        };
+        StartReviewInput: {
+            projectId: string;
+            expectedConversationId: string;
+            clientRequestId: string;
+            confirmationText: string;
         };
         McpServerSummary: {
             deviceId: string;
@@ -1925,6 +1947,38 @@ export interface operations {
             404: components["responses"]["ConversationNotFoundError"];
             408: components["responses"]["RequestTimeoutError"];
             409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    startControlPlaneDeviceReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartReviewInput"];
+            };
+        };
+        responses: {
+            /** @description Fixed-target review start command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            404: components["responses"]["ConversationNotFoundError"];
             424: components["responses"]["DeviceUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };

@@ -63,6 +63,7 @@ const schemaTypeNames = [
   "ProjectSearchResult",
   "McpServerSummary",
   "ExtensionInventory",
+  "StartReviewInput",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 const stage2Paths = [
@@ -160,6 +161,16 @@ const stage12RouteExpectedSchemas = new Map<(typeof stage12Paths)[number], reado
   ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/mcp:", ["McpServerSummary"]],
   ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/extensions:", ["ExtensionInventory"]],
 ]);
+const stage13LocalActionPath =
+  "/v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start:" as const;
+const stage13LocalActionWritePaths = [stage13LocalActionPath] as const;
+const stage13LocalActionErrorResponsesByStatus = new Map([
+  ["400", "BadRequestError"],
+  ["401", "UnauthorizedError"],
+  ["404", "ConversationNotFoundError"],
+  ["424", "DeviceUnavailableError"],
+  ["500", "InternalWorkerError"],
+] as const);
 const stage12ErrorResponsesByStatus = new Map([
   ["400", "BadRequestError"],
   ["401", "UnauthorizedError"],
@@ -213,6 +224,29 @@ const stage12ExtensionInventoryForbiddenNestedFields = [
   "marketplacePath",
   "command",
   "contents",
+] as const;
+const stage13ForbiddenLeakFields = [
+  "rawOutput",
+  "stdout",
+  "stderr",
+  "fullDiff",
+  "jsonRpc",
+  "appServerUrl",
+  "stack",
+  "cause",
+  "token",
+  "secret",
+  "absolutePath",
+  "cwd",
+] as const;
+const stage13ForbiddenPublicReviewFields = [
+  "ReviewTarget",
+  "baseBranch",
+  "commit",
+  "custom",
+  "shell-command",
+  "shellCommand",
+  "command/exec",
 ] as const;
 const stage7TaskWritePathMethodPairs = [
   "/v1/tasks:post",
@@ -728,6 +762,7 @@ test("when worker write http api is maintained, openapi should define only versi
     ...stage11WorkerLifecyclePostPaths.map((path) => `${path.slice(0, -1)}:post`),
     ...stage11WorkerPatchPaths.map((path) => `${path.slice(0, -1)}:patch`),
     ...stage11ControlPlanePatchPaths.map((path) => `${path.slice(0, -1)}:patch`),
+    ...stage13LocalActionWritePaths.map((path) => `${path.slice(0, -1)}:post`),
     ...stage7TaskWritePathMethodPairs,
   ];
 
@@ -1045,6 +1080,69 @@ test("when stage 12 public api types are exported, source index should re-export
   ] as const) {
     assert.match(publicExportSource, new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`));
   }
+});
+
+test("when stage 13 local actions contract is maintained, review-start should expose only fixed-target command acceptance", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  assert.equal(versionedPathLines.includes(stage13LocalActionPath), true);
+
+  const pathBlockLines = extractPathBlock(source, stage13LocalActionPath);
+  assert.equal(pathBlockLines.length > 0, true);
+  const methods = extractMethodBlocks(pathBlockLines);
+  assert.deepEqual(
+    methods.map((methodBlock) => methodBlock.method),
+    ["post"],
+  );
+
+  const method = expectDefined(methods.find((methodBlock) => methodBlock.method === "post"), "review-start should define POST");
+  const methodSource = method.lines.join("\n");
+  assert.match(methodSource, /^ {6}operationId:\s*startControlPlaneDeviceReview$/m);
+  assert.match(methodSource, /#\/components\/schemas\/StartReviewInput/);
+  assert.match(methodSource, /#\/components\/schemas\/CommandAccepted/);
+
+  const responseRefs = extractResponseRefs(method.lines);
+  assert.deepEqual([...responseRefs.keys()].sort(), ["202", "400", "401", "404", "424", "500"]);
+  assert.deepEqual(responseRefs.get("202")?.componentResponseRefs, []);
+  assert.equal(responseRefs.get("202")?.hasDirectSchemaRef, false);
+  assert.match(methodSource, /^ {8}"202":\n(?:.*\n)*? {16}\$ref: "#\/components\/schemas\/CommandAccepted"/m);
+  for (const [status, responseName] of stage13LocalActionErrorResponsesByStatus) {
+    assert.deepEqual(responseRefs.get(status)?.componentResponseRefs, [responseName]);
+  }
+
+  const startReviewInputBlock = expectSchemaDisallowsAdditionalProperties(source, "StartReviewInput");
+  const startReviewInputSource = startReviewInputBlock.join("\n");
+  for (const fieldName of ["projectId", "expectedConversationId", "clientRequestId", "confirmationText"] as const) {
+    assert.match(startReviewInputSource, new RegExp(`^        - ${fieldName}$`, "m"));
+    assert.match(startReviewInputSource, new RegExp(`^        ${fieldName}:`, "m"));
+  }
+  expectPropertyMaxLength(startReviewInputBlock, "clientRequestId", 128);
+  expectPropertyMaxLength(startReviewInputBlock, "confirmationText", 200);
+});
+
+test("when stage 13 local action schemas are maintained, public contract should not leak shell or app-server review target fields", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const stage13SchemaBlock = expectSchemaDisallowsAdditionalProperties(source, "StartReviewInput");
+  const stage13SchemaSource = stage13SchemaBlock.join("\n");
+
+  for (const leakField of stage13ForbiddenLeakFields) {
+    assert.doesNotMatch(stage13SchemaSource, new RegExp(`\\b${escapeRegExp(leakField)}\\b`, "i"));
+  }
+
+  for (const forbiddenField of stage13ForbiddenPublicReviewFields) {
+    assert.doesNotMatch(stage13SchemaSource, new RegExp(`\\b${escapeRegExp(forbiddenField)}\\b`, "i"));
+  }
+
+  const localActionPathLines = extractVersionedPathLines(source).filter((path) => /local-actions|shell|command\/exec/i.test(path));
+  assert.deepEqual(localActionPathLines, [stage13LocalActionPath]);
+  assert.equal(extractSchemaBlock(source, "ReviewTarget").length, 0);
+});
+
+test("when stage 13 public api types are exported, source index should re-export local action aliases", () => {
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+
+  assert.match(publicExportSource, /export type StartReviewInput = components\["schemas"\]\["StartReviewInput"\];/);
 });
 
 test("when task board api is maintained, openapi should define versioned stage 7 task paths", () => {

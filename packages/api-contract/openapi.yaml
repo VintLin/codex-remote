@@ -594,6 +594,43 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start:
+    post:
+      operationId: startControlPlaneDeviceReview
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartReviewInput"
+      responses:
+        "202":
+          description: Fixed-target review start command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:
     post:
       operationId: interruptControlPlaneDeviceTurn
@@ -2641,6 +2678,25 @@ components:
                 type:
                   - number
                   - "null"
+    StartReviewInput:
+      type: object
+      additionalProperties: false
+      required:
+        - projectId
+        - expectedConversationId
+        - clientRequestId
+        - confirmationText
+      properties:
+        projectId:
+          type: string
+        expectedConversationId:
+          type: string
+        clientRequestId:
+          type: string
+          maxLength: 128
+        confirmationText:
+          type: string
+          maxLength: 200
     McpServerSummary:
       type: object
       additionalProperties: false
