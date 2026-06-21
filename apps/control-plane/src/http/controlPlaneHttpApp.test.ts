@@ -11,10 +11,17 @@ import type {
   CodexConversation,
   ConversationQueuedMessage,
   ConversationLifecycleInput,
+  ExtensionInventory,
+  LocalWorkbenchSummary,
+  McpServerSummary,
   ConversationTimeline,
   FollowUpInput,
   InterruptTurnInput,
   OpenConversationResult,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
+  ProjectSearchResult,
   RemoteProject,
   RenameConversationInput,
   StartConversationInput,
@@ -638,6 +645,61 @@ test("control plane http app when device is unknown or upstream fails, should re
   assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device/);
 });
 
+test("control plane http app when local workbench routes are requested, should call only selected device and normalize public device ids", async () => {
+  const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
+  const app = createApp(client);
+
+  const summary = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/summary")).json() as LocalWorkbenchSummary;
+  const files = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/files")).json() as ProjectDirectoryListing;
+  const preview = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/file-preview?path=src%2Fapp.ts")).json() as ProjectFilePreview;
+  const git = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/git")).json() as ProjectGitSummary;
+  const search = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/search?query=needle&path=src&limit=25")).json() as ProjectSearchResult;
+  const mcp = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/mcp")).json() as McpServerSummary;
+  const extensions = await (await request(app, "/v1/devices/device-b/projects/project-a/local-workbench/extensions")).json() as ExtensionInventory;
+
+  assert.equal(summary.deviceId, "device-b");
+  assert.equal(summary.projectId, "project-a");
+  assert.equal(files.entries[0]?.path, "src");
+  assert.equal(preview.path, "src/app.ts");
+  assert.equal(git.branch, "feature/local-workbench");
+  assert.equal(search.query, "needle");
+  assert.equal(mcp.deviceId, "device-b");
+  assert.equal(mcp.projectId, "project-a");
+  assert.equal(extensions.deviceId, "device-b");
+  assert.equal(extensions.projectId, "project-a");
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), [
+    "getLocalWorkbenchSummary:device-b",
+    "listProjectFiles:device-b",
+    "getProjectFilePreview:device-b",
+    "getProjectGitSummary:device-b",
+    "searchProjectFiles:device-b",
+    "getMcpServerSummary:device-b",
+    "getExtensionInventory:device-b",
+  ]);
+  assert.deepEqual(client.localWorkbenchProjectCalls, [
+    { method: "getLocalWorkbenchSummary", projectId: "project-a" },
+    { method: "listProjectFiles", projectId: "project-a" },
+    { method: "getProjectFilePreview", path: "src/app.ts", projectId: "project-a" },
+    { method: "getProjectGitSummary", projectId: "project-a" },
+    { limit: 25, method: "searchProjectFiles", path: "src", projectId: "project-a", query: "needle" },
+    { method: "getMcpServerSummary", projectId: "project-a" },
+    { method: "getExtensionInventory", projectId: "project-a" },
+  ]);
+});
+
+test("control plane http app when local workbench routes use an unknown device or upstream fails, should return sanitized errors", async () => {
+  const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) });
+  const app = createApp(client);
+
+  const missing = await request(app, "/v1/devices/missing/projects/project-a/local-workbench/summary");
+  const unavailable = await request(app, "/v1/devices/device-a/projects/project-a/local-workbench/git");
+
+  assert.equal(missing.status, 404);
+  assert.equal(unavailable.status, 424);
+  const body = `${await missing.text()} ${await unavailable.text()}`;
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|project-a/);
+});
+
 function nowFixed(): string {
   return "2026-06-20T00:00:00.000Z";
 }
@@ -744,6 +806,7 @@ class ThrowingTaskRepository {
 class FakeWorkerClient implements WorkerUpstreamClient {
   readonly calls: Array<{ deviceId: string; method: string }> = [];
   readonly followUpInputs: Array<{ conversationId: string; input: FollowUpInput }> = [];
+  readonly localWorkbenchProjectCalls: Array<Record<string, number | string | undefined>> = [];
   private readonly activeTimeline: boolean;
   private readonly unavailableDeviceIds: Set<string>;
   private readonly upstreamDeviceId: string | null;
@@ -831,6 +894,114 @@ class FakeWorkerClient implements WorkerUpstreamClient {
         expanded: true,
       },
     ];
+  }
+
+  async getLocalWorkbenchSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<LocalWorkbenchSummary> {
+    this.record(device, "getLocalWorkbenchSummary");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getLocalWorkbenchSummary", projectId });
+    return {
+      deviceId: this.upstreamDeviceId ?? device.id,
+      projectId,
+      projectName: `Project ${projectId}`,
+      fileCount: 3,
+      directoryCount: 1,
+      gitStatus: "dirty",
+      searchResultCount: 2,
+      mcpServerCount: 1,
+      extensionCount: 2,
+      previewAvailable: true,
+    };
+  }
+
+  async listProjectFiles(device: ConfiguredWorkerDevice, projectId: string): Promise<ProjectDirectoryListing> {
+    this.record(device, "listProjectFiles");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "listProjectFiles", projectId });
+    return {
+      entries: [{ path: "src", name: "src", kind: "directory", sizeBytes: null, modifiedAt: "2026-06-21T00:00:00.000Z", childCount: 1, truncated: false }],
+    };
+  }
+
+  async getProjectFilePreview(device: ConfiguredWorkerDevice, projectId: string, path: string): Promise<ProjectFilePreview> {
+    this.record(device, "getProjectFilePreview");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getProjectFilePreview", projectId, path });
+    return {
+      path,
+      previewKind: "text",
+      mimeType: "text/plain",
+      byteCount: 20,
+      lineCount: 1,
+      truncated: false,
+      previewText: "export const value = 1;",
+      reason: null,
+    };
+  }
+
+  async getProjectGitSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<ProjectGitSummary> {
+    this.record(device, "getProjectGitSummary");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getProjectGitSummary", projectId });
+    return {
+      branch: "feature/local-workbench",
+      status: "dirty",
+      aheadCount: 1,
+      behindCount: 0,
+      stagedCount: 1,
+      unstagedCount: 2,
+      untrackedCount: 1,
+      reviewState: "in_review",
+      changedFiles: [{ path: "src/app.ts", status: "modified", additions: 3, deletions: 1 }],
+    };
+  }
+
+  async searchProjectFiles(
+    device: ConfiguredWorkerDevice,
+    projectId: string,
+    input: { limit?: number; path?: string; query: string },
+  ): Promise<ProjectSearchResult> {
+    this.record(device, "searchProjectFiles");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "searchProjectFiles", projectId, query: input.query, path: input.path, limit: input.limit });
+    return {
+      query: input.query,
+      matches: [{ path: "src/app.ts", lineNumber: 3, columnNumber: 7, match: input.query, snippet: "const needle = true;", score: 0.9 }],
+    };
+  }
+
+  async getMcpServerSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<McpServerSummary> {
+    this.record(device, "getMcpServerSummary");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getMcpServerSummary", projectId });
+    return {
+      deviceId: this.upstreamDeviceId ?? device.id,
+      projectId,
+      servers: [{
+        name: "github",
+        status: "connected",
+        description: "GitHub MCP",
+        tools: ["issues.list"],
+        resources: ["repo:openai/codex-remote"],
+        resourceTemplates: ["repo:{owner}/{name}"],
+        authStatus: "ready",
+      }],
+    };
+  }
+
+  async getExtensionInventory(device: ConfiguredWorkerDevice, projectId: string): Promise<ExtensionInventory> {
+    this.record(device, "getExtensionInventory");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getExtensionInventory", projectId });
+    return {
+      deviceId: this.upstreamDeviceId ?? device.id,
+      projectId,
+      skills: [{ name: "skill-a", enabled: true, description: "A skill", status: "installed" }],
+      hooks: [{ name: "hook-a", enabled: true, description: "A hook", event: "pre-commit" }],
+      plugins: [{ id: "plugin-a", name: "Plugin A", enabled: true, description: "A plugin", skillCount: 1, appCount: 1, mcpServerCount: 1 }],
+      marketplaceEntries: [{ name: "entry-a", installStatus: "installed", description: "A marketplace entry" }],
+      apps: [{ id: "app-a", name: "App A", enabled: true, description: "An app" }],
+    };
   }
 
   async readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline> {

@@ -9,10 +9,17 @@ import type {
   ErrorEnvelope,
   FollowUpInput,
   InterruptTurnInput,
+  ExtensionInventory,
+  LocalWorkbenchSummary,
+  McpServerSummary,
   OpenConversationResult,
   PendingApproval,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
   RemoteProject,
   RenameConversationInput,
+  ProjectSearchResult,
   StartConversationInput,
   SteerTurnInput,
   WorkerCapabilities,
@@ -28,6 +35,17 @@ export interface WorkerUpstreamClient {
   getCapabilities(device: ConfiguredWorkerDevice): Promise<WorkerCapabilities>;
   getProbeSummary(device: ConfiguredWorkerDevice): Promise<WorkerProbeSummary>;
   listProjects(device: ConfiguredWorkerDevice): Promise<RemoteProject[]>;
+  getLocalWorkbenchSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<LocalWorkbenchSummary>;
+  listProjectFiles(device: ConfiguredWorkerDevice, projectId: string, path?: string): Promise<ProjectDirectoryListing>;
+  getProjectFilePreview(device: ConfiguredWorkerDevice, projectId: string, path: string): Promise<ProjectFilePreview>;
+  getProjectGitSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<ProjectGitSummary>;
+  searchProjectFiles(
+    device: ConfiguredWorkerDevice,
+    projectId: string,
+    input: { limit?: number; path?: string; query: string },
+  ): Promise<ProjectSearchResult>;
+  getMcpServerSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<McpServerSummary>;
+  getExtensionInventory(device: ConfiguredWorkerDevice, projectId: string): Promise<ExtensionInventory>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
   openConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
@@ -109,6 +127,56 @@ export function createWorkerUpstreamClient(options: {
     getCapabilities: (device) => request<WorkerCapabilities>(device, "/v1/worker/capabilities", { method: "GET", project: projectWorkerCapabilities }),
     getProbeSummary: (device) => request<WorkerProbeSummary>(device, "/v1/worker/probe", { method: "GET", project: projectWorkerProbeSummary }),
     listProjects: (device) => request<RemoteProject[]>(device, "/v1/projects", { method: "GET", project: projectProjectList }),
+    getLocalWorkbenchSummary: (device, projectId) =>
+      request<LocalWorkbenchSummary>(device, `/v1/projects/${encodeURIComponent(projectId)}/local-workbench/summary`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectLocalWorkbenchSummary,
+      }),
+    listProjectFiles: (device, projectId, path) =>
+      request<ProjectDirectoryListing>(device, withQuery(`/v1/projects/${encodeURIComponent(projectId)}/local-workbench/files`, path === undefined ? {} : { path }), {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectDirectoryListing,
+      }),
+    getProjectFilePreview: (device, projectId, path) =>
+      request<ProjectFilePreview>(device, withQuery(`/v1/projects/${encodeURIComponent(projectId)}/local-workbench/file-preview`, { path }), {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectFilePreview,
+      }),
+    getProjectGitSummary: (device, projectId) =>
+      request<ProjectGitSummary>(device, `/v1/projects/${encodeURIComponent(projectId)}/local-workbench/git`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectGitSummary,
+      }),
+    searchProjectFiles: (device, projectId, input) =>
+      request<ProjectSearchResult>(
+        device,
+        withQuery(`/v1/projects/${encodeURIComponent(projectId)}/local-workbench/search`, {
+          query: input.query,
+          ...(input.path === undefined ? {} : { path: input.path }),
+          ...(input.limit === undefined ? {} : { limit: String(input.limit) }),
+        }),
+        {
+          method: "GET",
+          notFoundCode: "project_not_found",
+          project: projectSearchResult,
+        },
+      ),
+    getMcpServerSummary: (device, projectId) =>
+      request<McpServerSummary>(device, `/v1/projects/${encodeURIComponent(projectId)}/local-workbench/mcp`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectMcpServerSummary,
+      }),
+    getExtensionInventory: (device, projectId) =>
+      request<ExtensionInventory>(device, `/v1/projects/${encodeURIComponent(projectId)}/local-workbench/extensions`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectExtensionInventory,
+      }),
     listConversations: (device) => request<CodexConversation[]>(device, "/v1/conversations", { method: "GET", project: projectConversationList }),
     readTimeline: (device, conversationId) =>
       request<ConversationTimeline>(device, `/v1/conversations/${encodeURIComponent(conversationId)}/timeline`, {
@@ -341,6 +409,215 @@ function projectConversationList(value: unknown): CodexConversation[] {
 
 function projectProjectList(value: unknown): RemoteProject[] {
   return requireArray(value).map(projectRemoteProject);
+}
+
+function projectLocalWorkbenchSummary(value: unknown): LocalWorkbenchSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, [
+    "deviceId",
+    "projectId",
+    "projectName",
+    "fileCount",
+    "directoryCount",
+    "gitStatus",
+    "searchResultCount",
+    "mcpServerCount",
+    "extensionCount",
+    "previewAvailable",
+  ]);
+  return {
+    deviceId: readString(body, "deviceId"),
+    projectId: readString(body, "projectId"),
+    projectName: readString(body, "projectName"),
+    fileCount: readNumber(body, "fileCount"),
+    directoryCount: readNumber(body, "directoryCount"),
+    gitStatus: readEnum(body, "gitStatus", ["clean", "dirty", "unavailable", "unknown"]),
+    searchResultCount: readNumber(body, "searchResultCount"),
+    mcpServerCount: readNumber(body, "mcpServerCount"),
+    extensionCount: readNumber(body, "extensionCount"),
+    ...(typeof body.previewAvailable === "boolean" ? { previewAvailable: readBoolean(body, "previewAvailable") } : {}),
+  };
+}
+
+function projectDirectoryListing(value: unknown): ProjectDirectoryListing {
+  const body = requireRecord(value);
+  assertExactFields(body, ["entries"]);
+  return {
+    entries: requireArray(body.entries).map(projectDirectoryEntry),
+  };
+}
+
+function projectDirectoryEntry(value: unknown): ProjectDirectoryListing["entries"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["path", "name", "kind", "sizeBytes", "modifiedAt", "childCount", "truncated"]);
+  return {
+    path: readString(body, "path"),
+    name: readString(body, "name"),
+    kind: readEnum(body, "kind", ["directory", "file"]),
+    ...(body.sizeBytes === undefined ? {} : { sizeBytes: readNullableNumber(body, "sizeBytes") }),
+    ...(body.modifiedAt === undefined ? {} : { modifiedAt: readNullableString(body, "modifiedAt") }),
+    ...(body.childCount === undefined ? {} : { childCount: readNullableNumber(body, "childCount") }),
+    ...(typeof body.truncated === "boolean" ? { truncated: readBoolean(body, "truncated") } : {}),
+  };
+}
+
+function projectFilePreview(value: unknown): ProjectFilePreview {
+  const body = requireRecord(value);
+  assertExactFields(body, ["path", "previewKind", "mimeType", "byteCount", "lineCount", "truncated", "previewText", "reason"]);
+  return {
+    path: readString(body, "path"),
+    previewKind: readEnum(body, "previewKind", ["text", "unavailable"]),
+    ...(body.mimeType === undefined ? {} : { mimeType: readNullableString(body, "mimeType") }),
+    ...(body.byteCount === undefined ? {} : { byteCount: readNullableNumber(body, "byteCount") }),
+    ...(body.lineCount === undefined ? {} : { lineCount: readNullableNumber(body, "lineCount") }),
+    truncated: readBoolean(body, "truncated"),
+    ...(body.previewText === undefined ? {} : { previewText: readNullableString(body, "previewText") }),
+    ...(body.reason === undefined ? {} : { reason: readNullableString(body, "reason") }),
+  };
+}
+
+function projectGitSummary(value: unknown): ProjectGitSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, ["branch", "status", "aheadCount", "behindCount", "stagedCount", "unstagedCount", "untrackedCount", "reviewState", "changedFiles"]);
+  return {
+    branch: readString(body, "branch"),
+    status: readEnum(body, "status", ["clean", "dirty", "detached", "unavailable", "unknown"]),
+    aheadCount: readNumber(body, "aheadCount"),
+    behindCount: readNumber(body, "behindCount"),
+    stagedCount: readNumber(body, "stagedCount"),
+    unstagedCount: readNumber(body, "unstagedCount"),
+    untrackedCount: readNumber(body, "untrackedCount"),
+    ...(typeof body.reviewState === "string" ? { reviewState: readEnum(body, "reviewState", ["not_requested", "in_review", "changes_requested", "approved", "unknown"]) } : {}),
+    changedFiles: requireArray(body.changedFiles).map(projectChangedFile),
+  };
+}
+
+function projectChangedFile(value: unknown): ProjectGitSummary["changedFiles"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["path", "status", "additions", "deletions"]);
+  return {
+    path: readString(body, "path"),
+    status: readEnum(body, "status", ["added", "modified", "deleted", "renamed", "copied", "untracked", "ignored", "unknown"]),
+    ...(body.additions === undefined ? {} : { additions: readNullableNumber(body, "additions") }),
+    ...(body.deletions === undefined ? {} : { deletions: readNullableNumber(body, "deletions") }),
+  };
+}
+
+function projectSearchResult(value: unknown): ProjectSearchResult {
+  const body = requireRecord(value);
+  assertExactFields(body, ["query", "matches"]);
+  return {
+    query: readString(body, "query"),
+    matches: requireArray(body.matches).map(projectSearchMatch),
+  };
+}
+
+function projectSearchMatch(value: unknown): ProjectSearchResult["matches"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["path", "lineNumber", "columnNumber", "match", "snippet", "score"]);
+  return {
+    path: readString(body, "path"),
+    lineNumber: readNumber(body, "lineNumber"),
+    ...(body.columnNumber === undefined ? {} : { columnNumber: readNullableNumber(body, "columnNumber") }),
+    match: readString(body, "match"),
+    ...(body.snippet === undefined ? {} : { snippet: readNullableString(body, "snippet") }),
+    ...(body.score === undefined ? {} : { score: readNullableNumber(body, "score") }),
+  };
+}
+
+function projectMcpServerSummary(value: unknown): McpServerSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, ["deviceId", "projectId", "servers"]);
+  return {
+    deviceId: readString(body, "deviceId"),
+    projectId: readString(body, "projectId"),
+    servers: requireArray(body.servers).map(projectMcpServer),
+  };
+}
+
+function projectMcpServer(value: unknown): McpServerSummary["servers"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["name", "status", "description", "tools", "resources", "resourceTemplates", "authStatus"]);
+  return {
+    name: readString(body, "name"),
+    status: readEnum(body, "status", ["connected", "disconnected", "initializing", "error", "unknown"]),
+    ...(body.description === undefined ? {} : { description: readNullableString(body, "description") }),
+    tools: readStringArray(body, "tools"),
+    resources: readStringArray(body, "resources"),
+    resourceTemplates: readStringArray(body, "resourceTemplates"),
+    ...(typeof body.authStatus === "string" ? { authStatus: readEnum(body, "authStatus", ["ready", "needs_auth", "error", "unknown"]) } : {}),
+  };
+}
+
+function projectExtensionInventory(value: unknown): ExtensionInventory {
+  const body = requireRecord(value);
+  assertExactFields(body, ["deviceId", "projectId", "skills", "hooks", "plugins", "marketplaceEntries", "apps"]);
+  return {
+    deviceId: readString(body, "deviceId"),
+    projectId: readString(body, "projectId"),
+    skills: requireArray(body.skills).map(projectSkillSummary),
+    hooks: requireArray(body.hooks).map(projectHookSummary),
+    plugins: requireArray(body.plugins).map(projectPluginSummary),
+    marketplaceEntries: requireArray(body.marketplaceEntries).map(projectMarketplaceEntry),
+    apps: requireArray(body.apps).map(projectAppSummary),
+  };
+}
+
+function projectSkillSummary(value: unknown): ExtensionInventory["skills"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["name", "enabled", "description", "status"]);
+  return {
+    name: readString(body, "name"),
+    enabled: readBoolean(body, "enabled"),
+    ...(body.description === undefined ? {} : { description: readNullableString(body, "description") }),
+    ...(typeof body.status === "string" ? { status: readEnum(body, "status", ["installed", "available", "unknown"]) } : {}),
+  };
+}
+
+function projectHookSummary(value: unknown): ExtensionInventory["hooks"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["name", "enabled", "description", "event"]);
+  return {
+    name: readString(body, "name"),
+    enabled: readBoolean(body, "enabled"),
+    ...(body.description === undefined ? { description: null } : { description: readNullableString(body, "description") }),
+    ...(body.event === undefined ? { event: null } : { event: readNullableString(body, "event") }),
+  };
+}
+
+function projectPluginSummary(value: unknown): ExtensionInventory["plugins"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "name", "enabled", "description", "skillCount", "appCount", "mcpServerCount"]);
+  return {
+    id: readString(body, "id"),
+    name: readString(body, "name"),
+    enabled: readBoolean(body, "enabled"),
+    ...(body.description === undefined ? { description: null } : { description: readNullableString(body, "description") }),
+    ...(body.skillCount === undefined ? { skillCount: null } : { skillCount: readNullableNumber(body, "skillCount") }),
+    ...(body.appCount === undefined ? { appCount: null } : { appCount: readNullableNumber(body, "appCount") }),
+    ...(body.mcpServerCount === undefined ? { mcpServerCount: null } : { mcpServerCount: readNullableNumber(body, "mcpServerCount") }),
+  };
+}
+
+function projectMarketplaceEntry(value: unknown): ExtensionInventory["marketplaceEntries"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["name", "installStatus", "description"]);
+  return {
+    name: readString(body, "name"),
+    installStatus: readEnum(body, "installStatus", ["installed", "not_installed", "unknown"]),
+    ...(body.description === undefined ? { description: null } : { description: readNullableString(body, "description") }),
+  };
+}
+
+function projectAppSummary(value: unknown): ExtensionInventory["apps"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "name", "enabled", "description"]);
+  return {
+    id: readString(body, "id"),
+    name: readString(body, "name"),
+    enabled: readBoolean(body, "enabled"),
+    ...(body.description === undefined ? { description: null } : { description: readNullableString(body, "description") }),
+  };
 }
 
 function projectRemoteProject(value: unknown): RemoteProject {
@@ -617,6 +894,7 @@ function isSafeUpstreamCode(code: string): boolean {
     "unauthorized",
     "origin_forbidden",
     "project_forbidden",
+    "project_not_found",
     "conversation_not_found",
     "turn_not_found",
     "approval_not_found",
@@ -627,4 +905,13 @@ function isSafeUpstreamCode(code: string): boolean {
     "worker_config_invalid",
     "worker_internal_error",
   ].includes(code);
+}
+
+function withQuery(path: string, query: Record<string, string>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    search.set(key, value);
+  }
+  const serialized = search.toString();
+  return serialized.length > 0 ? `${path}?${serialized}` : path;
 }

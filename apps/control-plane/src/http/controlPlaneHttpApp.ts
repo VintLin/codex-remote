@@ -9,13 +9,20 @@ import type {
   ConversationLifecycleInput,
   ConversationTimeline,
   CreateTaskInput,
+  ExtensionInventory,
   FollowUpInput,
   InterruptTurnInput,
+  LocalWorkbenchSummary,
   LinkTaskConversationInput,
+  McpServerSummary,
   OpenConversationResult,
   QueueConversationMessageInput,
   RenameConversationInput,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
   StartConversationInput,
+  ProjectSearchResult,
   RemoteProject,
   SendQueuedConversationMessageInput,
   SteerTurnInput,
@@ -177,6 +184,65 @@ export function createControlPlaneHttpApp(params: {
   app.get("/v1/devices/:deviceId/projects", async (c) => {
     const device = requireDevice(registry, c.req.param("deviceId"));
     return c.json(await runForDevice(device, "project/list", () => readDeviceProjects(params.workerClient, device)));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/summary", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    const summary = await runForDevice(device, "local-workbench/summary", () => params.workerClient.getLocalWorkbenchSummary(device, projectId));
+    return c.json(normalizeLocalWorkbenchSummary(device, projectId, summary));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/files", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    return c.json(
+      await runForDevice(device, "local-workbench/files", () => params.workerClient.listProjectFiles(device, projectId, c.req.query("path"))),
+    );
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/file-preview", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    return c.json(
+      await runForDevice(device, "local-workbench/file-preview", () =>
+        params.workerClient.getProjectFilePreview(device, projectId, getRequiredQuery(c, "path")),
+      ),
+    );
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/git", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    return c.json(await runForDevice(device, "local-workbench/git", () => params.workerClient.getProjectGitSummary(device, projectId)));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/search", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    return c.json(
+      await runForDevice(device, "local-workbench/search", () =>
+        params.workerClient.searchProjectFiles(device, projectId, {
+          query: getRequiredQuery(c, "query"),
+          ...(c.req.query("path") === undefined ? {} : { path: c.req.query("path") }),
+          ...(c.req.query("limit") === undefined ? {} : { limit: parsePositiveIntegerQuery(c.req.query("limit"), "limit") }),
+        }),
+      ),
+    );
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/mcp", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    const summary = await runForDevice(device, "local-workbench/mcp", () => params.workerClient.getMcpServerSummary(device, projectId));
+    return c.json(normalizeMcpServerSummary(device, projectId, summary));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/extensions", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    const inventory = await runForDevice(device, "local-workbench/extensions", () => params.workerClient.getExtensionInventory(device, projectId));
+    return c.json(normalizeExtensionInventory(device, projectId, inventory));
   });
 
   app.post("/v1/devices/:deviceId/conversations", async (c) => {
@@ -454,6 +520,30 @@ function normalizeProject(device: ConfiguredWorkerDevice, project: RemoteProject
   return { ...project, deviceId: device.id };
 }
 
+function normalizeLocalWorkbenchSummary(
+  device: ConfiguredWorkerDevice,
+  projectId: string,
+  summary: LocalWorkbenchSummary,
+): LocalWorkbenchSummary {
+  return { ...summary, deviceId: device.id, projectId };
+}
+
+function normalizeMcpServerSummary(
+  device: ConfiguredWorkerDevice,
+  projectId: string,
+  summary: McpServerSummary,
+): McpServerSummary {
+  return { ...summary, deviceId: device.id, projectId };
+}
+
+function normalizeExtensionInventory(
+  device: ConfiguredWorkerDevice,
+  projectId: string,
+  inventory: ExtensionInventory,
+): ExtensionInventory {
+  return { ...inventory, deviceId: device.id, projectId };
+}
+
 function normalizeConversationTimeline(device: ConfiguredWorkerDevice, timeline: ConversationTimeline): ConversationTimeline {
   return {
     ...timeline,
@@ -467,6 +557,30 @@ function normalizeOpenConversationResult(device: ConfiguredWorkerDevice, result:
     conversation: normalizeConversation(device, result.conversation),
     timeline: normalizeConversationTimeline(device, result.timeline),
   };
+}
+
+function getRequiredQuery(c: Context<ControlPlaneHonoEnv>, field: string): string {
+  const value = c.req.query(field);
+  if (typeof value !== "string" || value.length === 0) {
+    throw new ControlPlaneHttpError(400, "invalid_request", "Request body was invalid.", {
+      field,
+      operation: "request/validate",
+      retryable: false,
+    });
+  }
+  return value;
+}
+
+function parsePositiveIntegerQuery(value: string, field: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ControlPlaneHttpError(400, "invalid_request", "Request body was invalid.", {
+      field,
+      operation: "request/validate",
+      retryable: false,
+    });
+  }
+  return parsed;
 }
 
 async function readStartInputBody(c: Context<ControlPlaneHonoEnv>): Promise<StartConversationInput> {
