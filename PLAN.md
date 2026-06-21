@@ -58,7 +58,8 @@ flowchart LR
 | 10. Isolated Approval Fixture | 隔离验证 approval decision decline/cancel | 已实现 fixture；blocked 于 app-server 未产生 safe pending approval |
 | 11. Conversation Workbench Parity | Codex App-like browser workbench | 已完成；approval decision 留既有安全 real-gap |
 | 12. Local Work Tools Read-only | 文件/Git/MCP/插件等本地工作工具只读能力 | 已完成；MCP 在当前 real stack 可降级为 408 |
-| 13. Controlled Local Actions | 显式用户本地动作、受控 shell/Git/review/extension 操作 | 下一阶段 |
+| 13. Controlled Local Actions | 显式用户本地动作、受控 shell/Git/review/extension 操作 | 已完成首批 confirmed review-start 切片 |
+| 14. Runtime And Settings Parity | 模型/profile、账号/运行时/config 只读投影与设置面 | 下一阶段 |
 
 ```mermaid
 flowchart TB
@@ -75,9 +76,10 @@ flowchart TB
   P10["10 Approval Fixture"]
   P11["11 Workbench Parity"]
   P12["12 Local Work Tools Read-only"]
-  P13["13 Controlled Local Actions - next"]
+  P13["13 Controlled Local Actions"]
+  P14["14 Runtime And Settings Parity - next"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12 --> P13
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12 --> P13 --> P14
 ```
 
 ## 当前状态
@@ -89,6 +91,8 @@ flowchart TB
 - Stage 11 closure verification 通过：`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:start`、`pnpm real:status`、`pnpm real:check`、`pnpm web:e2e:smoke`。`real:check` 结果为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是 approval decision。
 - Stage 12 已完成本地只读工具面：project-relative files/preview、Git summary、fuzzy search、MCP status、skills/hooks/plugins/apps inventory，Web 通过 Control Plane-shaped API 消费，Worker 继续作为唯一 filesystem/Git/app-server 边界。
 - Stage 12 closure verification 通过：`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`。`real:check` 仍为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是既有 approval fixture gap；Stage 12 direct API smoke 返回 fileEntries=28、searchMatches=5、extensionItems=305，MCP 在当前环境允许 408 degraded。
+- Stage 13 已完成首批 controlled local action：Web -> Control Plane -> Worker -> Codex app-server 的 confirmed `review/start` for uncommitted changes。`thread/shellCommand`、`command/exec`、Git mutation、filesystem write、plugin/MCP/account/config mutation 仍未暴露。
+- Stage 13 closure verification 通过：focused package tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`、浏览器 Local Tools disabled/confirmation/accepted/fallback no-leak smoke。`real:check` 仍为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是既有 approval fixture gap。
 
 ## Completed Stage 11
 
@@ -135,26 +139,43 @@ Stage 12 完成范围：
 - Web optional MCP load 设置短超时，MCP 当前环境不可用时不会阻塞 Local Tools 主视图。
 - Command evidence/output、shell 执行、filesystem 写、review start、MCP tool call、插件安装、config/account 写操作仍保持不支持。
 
-## Active Stage 13
+## Completed Stage 13
 
-Active docs:
+Archived docs:
 
-- `docs/superpowers/specs/2026-06-22-controlled-local-actions-design.md`
-- `docs/superpowers/plans/2026-06-22-controlled-local-actions.md`
+- `docs/archives/specs/2026-06-22-controlled-local-actions-design.md`
+- `docs/archives/plans/2026-06-22-controlled-local-actions.md`
 
-Stage 13 当前方向：
+Stage 13 完成范围：
 
-- Controlled Local Actions：allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows with local confirmation。
-- 架构审核后首批实现切片收窄为 explicit confirmation 后的 fixed-target `review/start` for uncommitted changes。`thread/shellCommand` 因 full-access unsandboxed 且保留 shell syntax，延后到单独 allowlisted action policy。
-- 先定义公共 contract 与安全确认模型，再实现任何本地写/执行能力。
-- 继续禁止 raw command output、full diff、raw JSON-RPC、provider secrets 或 app-server URL 暴露到 Web/Control Plane。
+- 新增 public contract `POST /v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start`，请求包含 `projectId`、`expectedConversationId`、`clientRequestId`、`confirmationText`。
+- Worker 验证 conversation/project/allowed-root/confirmation 后，固定调用 app-server `review/start` with `target: { type: "uncommittedChanges" }` and inline delivery。
+- Control Plane 只做 device-scoped routing；Web 只调用 Control Plane-shaped API，并在 Local Tools -> Git/Review 显示确认式 action。
+- fake Worker smoke server 和真实浏览器验证覆盖 accepted、disabled、stale-context/failure no-leak。
+- `thread/shellCommand` 因 full-access unsandboxed 且保留 shell syntax，延后到单独 allowlisted action policy。
+
+Stage 13 non-goals：
+
+- raw shell/PTY/command output/history、`command/exec`、`thread/shellCommand`。
+- filesystem write/create/remove/copy/watch。
+- Git stage/unstage/revert hunk/file。
+- arbitrary review target (`baseBranch`、`commit`、`custom`)。
+- skill/plugin/MCP/account/config/model mutation。
+- raw command output、full diff、raw JSON-RPC、provider secrets、app-server URL、private path、stack/cause/prompt 暴露。
+
+## Active Stage 14
+
+Stage 14 下一步方向：
+
+- Runtime And Settings Parity：model/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、richer skills/plugins/MCP/apps management。
+- Stage 14 开始前先创建/更新 spec 与 plan，并按惯例执行架构 subagent 审核。
 
 ## Stage 11+ Draft Roadmap
 
 1. Stage 11：Conversation Workbench Parity。Codex App-like browser workbench：open/resume、archive/unarchive、rename、loaded/live badge、snapshot-first timeline 内容展示、Worker-projected live/request events、approval/request pending/resolved cards、composer 内 start/follow-up/interrupt/steer/queue、Settings -> 已归档对话、assistant message action row、protocol-derived permission menu placeholder。
 2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、Git/review 摘要、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps inventory。已完成；Command history/output 留到后续受控 shell/terminal 阶段。
-3. Stage 13：Controlled Local Actions。显式用户 shell command、allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows with local confirmation。下一阶段。
-4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps richer management。
+3. Stage 13：Controlled Local Actions。已完成 confirmed uncommitted-changes review start；显式 shell command、allowlisted project actions、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows 后续再拆。
+4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps richer management。下一阶段。
 5. Stage 15+：Advanced Platform Watchlist。realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations。
 
 ## 当前技术栈
@@ -191,10 +212,11 @@ Stage 13 当前方向：
 - Stage 2-10 spec/plan：`docs/archives/specs/` 与 `docs/archives/plans/`
 - Stage 11 spec/plan：`docs/archives/specs/2026-06-21-conversation-workbench-parity-design.md` 与 `docs/archives/plans/2026-06-21-conversation-workbench-parity.md`
 - Stage 12 spec/plan：`docs/archives/specs/2026-06-21-local-workbench-readonly-design.md` 与 `docs/archives/plans/2026-06-21-local-workbench-readonly.md`
+- Stage 13 spec/plan：`docs/archives/specs/2026-06-22-controlled-local-actions-design.md` 与 `docs/archives/plans/2026-06-22-controlled-local-actions.md`
 - Stage 11 pre-consensus spec/plan：`docs/archives/specs/2026-06-21-conversation-workbench-parity-design-pre-consensus.md` 与 `docs/archives/plans/2026-06-21-conversation-workbench-parity-pre-consensus.md`
 - Root `PLAN.md` 历史证据摘要：`docs/archives/references/2026-06-21-plan-history.md`
 - 调研回答：`docs/references/questions/`
 
 ## 下一步
 
-下一步执行 Stage 13 architecture review：审核 `docs/superpowers/specs/2026-06-22-controlled-local-actions-design.md` 和 `docs/superpowers/plans/2026-06-22-controlled-local-actions.md` 的范围、安全模型、边界、验证和是否应继续收窄首批切片。
+下一步执行 Stage 14 spec/plan：围绕 runtime/settings parity 明确 model/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps 管理范围，并在计划后执行架构 subagent 审核。

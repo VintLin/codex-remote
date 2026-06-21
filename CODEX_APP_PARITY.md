@@ -62,7 +62,7 @@ Rules:
 | Config and experiments | Read/write config, requirements, experimental features | Not exposed | Need config surface derived from app-server protocol and public API |
 | Filesystem | Read, write, create, remove, copy, metadata, directory, watch | Stage 12 exposes project-relative directory, metadata, and bounded text preview | Writes, copy/remove, watch, and editor surface remain future |
 | Shell and commands | Execute, write stdin, resize, terminate, show process output | Not exposed | Need terminal-like command surface through Worker |
-| Git and review | Diff to remote, review start, diff updates | Stage 12 exposes parsed Git file summary | Review start and diff updates remain controlled-action/live-stream work |
+| Git and review | Diff to remote, review start, diff updates | Stage 12 exposes parsed Git file summary; Stage 13 exposes confirmed uncommitted-changes review start | Arbitrary review targets, Git mutations, and diff updates remain future work |
 | Search | Fuzzy file search sessions and results | Stage 12 exposes bounded project-relative fuzzy search matches | Session lifecycle/live updates remain future |
 | Skills and hooks | List skills, extra roots, config, hooks, change notifications | Stage 12 exposes read-only skills/hooks inventory | Config writes, extra roots, and change notifications remain future |
 | Plugins and marketplace | List/read/install/uninstall/share/update marketplace packages | Stage 12 exposes read-only plugin metadata | Install/uninstall/share/marketplace mutation remains future |
@@ -79,8 +79,8 @@ Future stages should be split by product capability area, not by raw app-server 
 
 1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Stage 11 closure gates passed; approval decision remains the known real-gap from the isolated approval fixture.
 2. Local work tools read-only: filesystem preview/metadata, Git summary, fuzzy search, MCP status/tools/resources summary, plugin read, skills/hooks/apps inventory. Stage 12 closure gates passed; command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
-3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation. This is the next stage.
-4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.
+3. Controlled local actions: confirmed uncommitted-changes review start is implemented in Stage 13; explicit shell command, allowlisted project actions, stage/unstage/revert hunk/file, enable/disable skill, and OAuth or connector login remain future controlled-action slices.
+4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management. This is the next stage.
 5. Advanced realtime and platform watchlist: realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations.
 6. Remote-specific hardening: devices, project binding, task association, self-hosted evidence, future pairing/reverse connection.
 

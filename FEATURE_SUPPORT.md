@@ -46,7 +46,7 @@ Status labels:
 | Plugin/app inventory | Supported | Yes | `plugin/list`, `plugin/read`, `app/list` | Stage 12 exposes whitelist-only read metadata; install/uninstall/share/marketplace mutation remains unsupported. |
 | MCP service read-only status | Partial | Partial | `mcpServerStatus/list` | Stage 12 exposes server/tool/resource summary when available; current real stack can degrade with a sanitized 408 and no tool calls are exposed. |
 | Account authentication | Not supported | No | `account/*`, `getAuthStatus` | Not exposed; auth stays on Worker device. |
-| Review | Not supported | No | `review/start` | Stage 12 reads Git evidence only; starting review is deferred to controlled-action stages. |
+| Review | Supported | Yes | `review/start` | Stage 13 exposes fixed-target uncommitted-changes review start with explicit confirmation; no arbitrary review target, raw diff, or command output is exposed. |
 | Git diff summary | Supported | Yes | `gitDiffToRemote` | Stage 12 exposes file-level project-relative counts/status only and discards raw diff hunk/header/body text. |
 | Fuzzy search | Supported | Yes | `fuzzyFileSearch` | Stage 12 exposes bounded project-relative search matches through Web -> Control Plane -> Worker. |
 | Realtime voice | Not supported | No | realtime notifications only | Generated notifications include realtime audio/transcript events; no client request/product path exists here. |
@@ -106,7 +106,7 @@ Status labels:
 | `turn/start` | Supported | API path exists; start/follow-up composer UX passed real smoke. |
 | `turn/steer` | Supported | API path exists; UI presents steer as running-send "引导当前执行". |
 | `turn/interrupt` | Supported | API path exists; UI exposes interrupt in the running composer. |
-| `review/start` | Not supported | Not exposed. |
+| `review/start` | Supported | Stage 13 exposes fixed-target uncommitted-changes review start through Web -> Control Plane -> Worker with explicit confirmation. |
 | `model/list` | Not supported | Not exposed. |
 | `modelProvider/capabilities/read` | Not supported | Not exposed. |
 | `experimentalFeature/list` | Not supported | Not exposed. |
