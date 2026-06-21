@@ -22,6 +22,15 @@ import {
   runProbe,
 } from "./readOnlyHandlers.ts";
 import {
+  getExtensionInventory,
+  getLocalWorkbenchSummary,
+  getMcpServerSummary,
+  getProjectFilePreview,
+  getProjectGitSummary,
+  listProjectFiles,
+  searchProjectFiles,
+} from "./localWorkbenchHandlers.ts";
+import {
   followUpConversation,
   startConversation,
 } from "./writeHandlers.ts";
@@ -86,6 +95,35 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
   app.get("/v1/worker/capabilities", (c) => c.json(getCapabilities(context)));
   app.get("/v1/worker/probe", async (c) => c.json(await runProbe(context)));
   app.get("/v1/projects", (c) => c.json(listProjects(context)));
+  app.get("/v1/projects/:projectId/local-workbench/summary", async (c) =>
+    c.json(await getLocalWorkbenchSummary(context, c.req.param("projectId"))),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/files", async (c) =>
+    c.json(await listProjectFiles(context, c.req.param("projectId"), c.req.query("path"))),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/file-preview", async (c) =>
+    c.json(await getProjectFilePreview(context, c.req.param("projectId"), getRequiredQuery(c, "path"))),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/git", async (c) =>
+    c.json(await getProjectGitSummary(context, c.req.param("projectId"))),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/search", async (c) =>
+    c.json(
+      await searchProjectFiles(
+        context,
+        c.req.param("projectId"),
+        getRequiredQuery(c, "query"),
+        c.req.query("path"),
+        parseOptionalLimit(c.req.query("limit")),
+      ),
+    ),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/mcp", async (c) =>
+    c.json(await getMcpServerSummary(context, c.req.param("projectId"))),
+  );
+  app.get("/v1/projects/:projectId/local-workbench/extensions", async (c) =>
+    c.json(await getExtensionInventory(context, c.req.param("projectId"))),
+  );
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
   app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));
   app.patch("/v1/conversations/:conversationId", async (c) =>
@@ -273,6 +311,28 @@ function throwInvalidBody(): never {
     operation: "http_body",
     retryable: false,
   });
+}
+
+function getRequiredQuery(c: Context<WorkerHonoEnv>, field: string): string {
+  const value = c.req.query(field);
+  if (!value) {
+    throwInvalidBody();
+  }
+
+  return value;
+}
+
+function parseOptionalLimit(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    throwInvalidBody();
+  }
+
+  return parsed;
 }
 
 function setCorsHeaders(c: Context<WorkerHonoEnv>, origin: string): void {
