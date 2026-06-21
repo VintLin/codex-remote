@@ -37,6 +37,13 @@ test("write flow: when selected device or project changes, should reset start st
   assert.ok(shellSource.includes("}, [selectedDeviceId, selectedProject?.id]);"));
 });
 
+test("local tools selection when selected device has no conversations should not jump to another device conversation", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.ok(shellSource.includes("conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ?? null;"));
+  assert.doesNotMatch(shellSource, /conversations\.find\(\(conversationItem\) => conversationItem\.deviceId === selectedDeviceId\) \?\?\s+conversations\[0\]/);
+});
+
 test("codex remote app when selection changes, should refresh device-scoped approvals by conversation key", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
 
@@ -145,7 +152,7 @@ test("conversation workbench UI when enforcing Stage 11 boundaries, should avoid
   assert.ok(!shellSource.includes("NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ??\n  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN"));
   assert.match(sidebarModelSource, /visibleConversations = params\.conversations\.filter/);
   assert.match(sidebarModelSource, /conversation\.archived !== true/);
-  assert.match(sidebarSource, /AppView = "conversation" \| "devices" \| "settings" \| "tasks"/);
+  assert.match(sidebarSource, /AppView = "conversation" \| "devices" \| "localTools" \| "settings" \| "tasks"/);
   assert.match(sidebarSource, /onSelectView\("settings"\)/);
   assert.match(mainPanelsSource, /SettingsPage/);
   assert.match(mainPanelsSource, /已归档对话/);

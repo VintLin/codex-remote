@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient } from "../../data/workerApi/client";
-import type { BoardTask, ConversationQueuedMessage, PendingApproval, TaskConversationLink } from "@codex-remote/api-contract";
+import type { BoardTask, ConversationQueuedMessage, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -31,6 +31,7 @@ import {
   ConversationMain,
   DeviceDetailPane,
   DevicesPage,
+  LocalWorkbenchPage,
   SearchDialog,
   SettingsPage,
   TaskBoardPage,
@@ -72,13 +73,13 @@ export function CodexRemoteApp() {
   const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, approvalCards, queuedMessages, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
+  const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, assistantThreads, searchRecents, source, taskSource } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
+  const selectedConversation = findConversationByKey(conversations, selectedConversationKey);
   const conversation =
-    findConversationByKey(conversations, selectedConversationKey) ??
-    conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
-    conversations[0] ??
-    null;
+    selectedConversation?.deviceId === selectedDeviceId
+      ? selectedConversation
+      : conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ?? null;
   const assistantThread = conversation
     ? assistantThreads.find((thread) => thread.id === conversation.id && thread.deviceId === conversation.deviceId) ?? null
     : null;
@@ -107,9 +108,10 @@ export function CodexRemoteApp() {
       baseUrl: controlPlaneBaseUrl,
       token: controlPlaneToken,
       selectedConversationKey: conversationKey,
+      selectedDeviceId,
     });
     setWorkbenchData(nextWorkbenchData);
-  }, []);
+  }, [selectedDeviceId]);
 
   const refreshApprovals = useCallback(async (conversationKey: string | null) => {
     const approvalConversation = findConversationByKey(conversations, conversationKey);
@@ -311,6 +313,47 @@ export function CodexRemoteApp() {
     }
   }, [conversation, refreshWorkbenchData, selectedConversationKey, workerClient]);
 
+  const searchLocalFiles = useCallback(async (query: string): Promise<ProjectSearchResult | null> => {
+    if (!localWorkbench.deviceId || !localWorkbench.projectId || source.reason !== "loaded" || !controlPlaneToken) {
+      return null;
+    }
+
+    try {
+      const result = await workerClient.searchLocalWorkbenchFiles(localWorkbench.deviceId, localWorkbench.projectId, {
+        query,
+        limit: 20,
+      });
+      setWorkbenchData((current) => ({
+        ...current,
+        localWorkbench: {
+          ...current.localWorkbench,
+          search: {
+            data: result,
+            status: "loaded",
+          },
+        },
+      }));
+      return result;
+    } catch {
+      setWorkbenchData((current) => ({
+        ...current,
+        localWorkbench: {
+          ...current.localWorkbench,
+          status: current.localWorkbench.status === "loaded" ? "degraded" : current.localWorkbench.status,
+          search: {
+            data: current.localWorkbench.search.data,
+            error: {
+              code: "request_failure",
+              message: "Worker request failed.",
+            },
+            status: "failed",
+          },
+        },
+      }));
+      return null;
+    }
+  }, [localWorkbench.deviceId, localWorkbench.projectId, source.reason, workerClient]);
+
   const openConversation = useCallback(async (conversationKey: string) => {
     const targetConversation = findConversationByKey(conversations, conversationKey);
     if (!targetConversation || source.reason !== "loaded" || !controlPlaneToken) {
@@ -417,6 +460,7 @@ export function CodexRemoteApp() {
         baseUrl: controlPlaneBaseUrl,
         token: controlPlaneToken,
         selectedConversationKey,
+        selectedDeviceId,
       });
       if (!shouldIgnore) {
         setWorkbenchData(nextWorkbenchData);
@@ -426,7 +470,7 @@ export function CodexRemoteApp() {
     return () => {
       shouldIgnore = true;
     };
-  }, [selectedConversationKey]);
+  }, [selectedConversationKey, selectedDeviceId]);
 
   useEffect(() => {
     void refreshApprovals(conversation ? createConversationKey(conversation) : null);
@@ -446,11 +490,11 @@ export function CodexRemoteApp() {
       return;
     }
 
+    const selectedConversation = findConversationByKey(conversations, selectedConversationKey);
     const fallbackConversation =
-      findConversationByKey(conversations, selectedConversationKey) ??
-      conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ??
-      conversations[0] ??
-      null;
+      selectedConversation?.deviceId === selectedDeviceId
+        ? selectedConversation
+        : conversations.find((conversationItem) => conversationItem.deviceId === selectedDeviceId) ?? null;
 
     if (fallbackConversation && createConversationKey(fallbackConversation) !== selectedConversationKey) {
       setSelectedConversationKey(createConversationKey(fallbackConversation));
@@ -460,9 +504,6 @@ export function CodexRemoteApp() {
       setSelectedConversationKey(null);
     }
 
-    if (fallbackConversation && fallbackConversation.deviceId !== selectedDeviceId) {
-      setSelectedDeviceId(fallbackConversation.deviceId);
-    }
   }, [conversations, devices, selectedConversationKey, selectedDeviceId]);
 
   useEffect(() => {
@@ -632,6 +673,34 @@ export function CodexRemoteApp() {
             taskLoadState={taskSource.status}
             taskStatus={taskStatus}
             tasks={tasks}
+          />
+        ),
+      };
+    }
+
+    if (activeView === "localTools") {
+      return {
+        detail: (
+          <ConversationDetailPane
+            conversationTitle="Local Tools"
+            isCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            onBack={() => setMobilePane("main")}
+            onCollapse={() => setIsDetailCollapsed(true)}
+            target={selectedDetailTarget}
+          />
+        ),
+        main: (
+          <LocalWorkbenchPage
+            isDetailCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            isSidebarCollapsed={isSidebarCollapsed}
+            localWorkbench={localWorkbench}
+            onBack={() => setMobilePane("sidebar")}
+            onExpandDetail={() => setIsDetailCollapsed(false)}
+            onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onSearchLocalFiles={searchLocalFiles}
+            source={source}
           />
         ),
       };

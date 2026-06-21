@@ -14,7 +14,7 @@ import { getStatusClassName } from "../../domain/status/statusPresentation";
 import { ActionMenu, type SidebarActionGroup } from "./action-menu";
 import { iconForDevice } from "../shared/icons";
 
-export type AppView = "conversation" | "devices" | "settings" | "tasks";
+export type AppView = "conversation" | "devices" | "localTools" | "settings" | "tasks";
 export type SidebarPressedItem = { kind: "project" | "conversation"; id: string } | null;
 
 interface SidebarProps {
@@ -153,6 +153,12 @@ export function Sidebar(props: SidebarProps) {
             }
           />
           <NavButton icon="search" label="搜索" onClick={props.onOpenSearch} />
+          <NavButton
+            active={props.activeView === "localTools"}
+            icon="folder"
+            label="Local Tools"
+            onClick={() => props.onSelectView("localTools")}
+          />
           <NavButton
             active={props.activeView === "tasks"}
             icon="reload"

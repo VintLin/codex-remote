@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
@@ -12,10 +13,11 @@ import type {
   Device,
   DeviceConnectionStatus,
   PendingApproval,
+  ProjectSearchResult,
   TaskConversationLink,
   TaskStatus,
 } from "@codex-remote/api-contract";
-import type { SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
+import type { LocalWorkbenchData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -91,6 +93,18 @@ interface TaskBoardPageProps {
   taskLoadState: WorkbenchData["taskSource"]["status"];
   taskStatus: "failed" | "idle" | "submitting";
   tasks: BoardTask[];
+}
+
+interface LocalWorkbenchPageProps {
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  localWorkbench: LocalWorkbenchData;
+  onBack?: () => void;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
+  onSearchLocalFiles: (query: string) => Promise<ProjectSearchResult | null>;
+  source: WorkbenchData["source"];
 }
 
 interface SettingsPageProps {
@@ -677,6 +691,196 @@ export function TaskBoardPage({
         </section>
       </div>
     </main>
+  );
+}
+
+export function LocalWorkbenchPage({
+  isDetailCollapsed,
+  isMobile = false,
+  isSidebarCollapsed,
+  localWorkbench,
+  onBack,
+  onExpandDetail,
+  onExpandSidebar,
+  onSearchLocalFiles,
+  source,
+}: LocalWorkbenchPageProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchStatus, setSearchStatus] = useState<"failed" | "idle" | "submitting">("idle");
+  const datasourceStatus = localWorkbench.status === "degraded" ? "degraded" : source.reason;
+
+  return (
+    <main className="main-pane local-workbench-page">
+      <header className="topbar">
+        <div className="topbar-leading">
+          {isMobile && onBack ? <HeaderBackButton label="返回导航" onClick={onBack} /> : null}
+          {!isMobile && isSidebarCollapsed ? (
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+          ) : null}
+          <div className="workspace-title">
+            <h1>Local Tools</h1>
+          </div>
+        </div>
+        <div className="toolbar">
+          <span className="datasource-status">{datasourceStatus}</span>
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+          ) : null}
+        </div>
+      </header>
+      <div className="content-scroll local-workbench-content">
+        {localWorkbench.status === "degraded" ? (
+          <section aria-label="Local tools degraded" className="conversation-source-banner">
+            <strong>部分本地工具暂不可用</strong>
+            <span>其余只读数据已继续加载。</span>
+          </section>
+        ) : null}
+        {localWorkbench.status === "empty" || localWorkbench.status === "unavailable" ? (
+          <section aria-label="Local tools empty" className="empty-state">
+            <h2>暂无本地工具数据</h2>
+            <p>选择已连接设备上的项目后显示只读 Files、Git/Review、Search、MCP 和 Extensions。</p>
+          </section>
+        ) : (
+          <>
+            <section aria-label="Local tools summary" className="local-workbench-summary">
+              <MetricPill label="Files" value={localWorkbench.summary ? `${localWorkbench.summary.directoryCount}/${localWorkbench.summary.fileCount}` : "0/0"} />
+              <MetricPill label="Git/Review" value={localWorkbench.summary?.gitStatus ?? "unknown"} />
+              <MetricPill label="Search" value={String(localWorkbench.search.data?.matches.length ?? localWorkbench.summary?.searchResultCount ?? 0)} />
+              <MetricPill label="MCP" value={String(localWorkbench.summary?.mcpServerCount ?? localWorkbench.mcp.data?.servers.length ?? 0)} />
+              <MetricPill label="Extensions" value={String(localWorkbench.summary?.extensionCount ?? 0)} />
+            </section>
+            <section aria-label="Local tools sections" className="local-workbench-grid">
+              <LocalWorkbenchCard title="Files" status={localWorkbench.files.status}>
+                <div className="local-workbench-list">
+                  {localWorkbench.files.data?.entries.length ? localWorkbench.files.data.entries.map((entry) => (
+                    <div className="local-workbench-row" key={entry.path}>
+                      <Icon name={entry.kind === "directory" ? "folder" : "information-o"} />
+                      <span>{entry.path}</span>
+                      <code>{entry.kind}</code>
+                    </div>
+                  )) : <p className="empty-state">暂无文件条目</p>}
+                </div>
+                {localWorkbench.preview.data ? (
+                  <pre className="local-workbench-preview">
+                    <code>{localWorkbench.preview.data.previewKind === "text" ? localWorkbench.preview.data.previewText : localWorkbench.preview.data.reason}</code>
+                  </pre>
+                ) : null}
+              </LocalWorkbenchCard>
+
+              <LocalWorkbenchCard title="Git/Review" status={localWorkbench.git.status}>
+                {localWorkbench.git.data ? (
+                  <div className="local-workbench-list">
+                    <div className="local-workbench-row">
+                      <Icon name="layout-list" />
+                      <span>{localWorkbench.git.data.branch}</span>
+                      <code>{localWorkbench.git.data.status}</code>
+                    </div>
+                    {localWorkbench.git.data.changedFiles.map((file) => (
+                      <div className="local-workbench-row" key={`${file.status}:${file.path}`}>
+                        <span>{file.path}</span>
+                        <code>{file.status}</code>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="empty-state">暂无 Git 摘要</p>}
+              </LocalWorkbenchCard>
+
+              <LocalWorkbenchCard title="Search" status={localWorkbench.search.status}>
+                <form
+                  className="local-workbench-search"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const query = searchQuery.trim();
+                    if (!query || searchStatus === "submitting") {
+                      return;
+                    }
+                    setSearchStatus("submitting");
+                    void onSearchLocalFiles(query).then((result) => {
+                      setSearchStatus(result ? "idle" : "failed");
+                    });
+                  }}
+                >
+                  <input
+                    aria-label="搜索本地项目文件"
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="搜索本地项目文件"
+                    value={searchQuery}
+                  />
+                  <button disabled={!searchQuery.trim() || searchStatus === "submitting"} type="submit">
+                    Search
+                  </button>
+                </form>
+                <div className="local-workbench-list">
+                  {localWorkbench.search.data?.matches.map((match) => (
+                    <div className="local-workbench-row" key={`${match.path}:${match.lineNumber}:${match.columnNumber ?? 0}`}>
+                      <span>{match.path}</span>
+                      <code>{match.lineNumber}</code>
+                    </div>
+                  ))}
+                </div>
+              </LocalWorkbenchCard>
+
+              <LocalWorkbenchCard title="MCP" status={localWorkbench.mcp.status}>
+                <div className="local-workbench-list">
+                  {localWorkbench.mcp.data?.servers.map((server) => (
+                    <div className="local-workbench-row" key={server.name}>
+                      <Icon name="reload" />
+                      <span>{server.name}</span>
+                      <code>{server.status}</code>
+                    </div>
+                  ))}
+                </div>
+              </LocalWorkbenchCard>
+
+              <LocalWorkbenchCard title="Extensions" status={localWorkbench.extensions.status}>
+                <ExtensionGroup label="Skills" values={localWorkbench.extensions.data?.skills.map((skill) => skill.name) ?? []} />
+                <ExtensionGroup label="Hooks" values={localWorkbench.extensions.data?.hooks.map((hook) => hook.name) ?? []} />
+                <ExtensionGroup label="Plugins" values={localWorkbench.extensions.data?.plugins.map((plugin) => plugin.name) ?? []} />
+                <ExtensionGroup label="Apps" values={localWorkbench.extensions.data?.apps.map((app) => app.name) ?? []} />
+              </LocalWorkbenchCard>
+            </section>
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="local-workbench-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function LocalWorkbenchCard({
+  children,
+  status,
+  title,
+}: {
+  children: ReactNode;
+  status: "failed" | "loaded" | "unavailable";
+  title: string;
+}) {
+  return (
+    <article className="local-workbench-card" data-status={status}>
+      <header>
+        <h2>{title}</h2>
+        <code>{status}</code>
+      </header>
+      {children}
+    </article>
+  );
+}
+
+function ExtensionGroup({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="local-workbench-extension-group">
+      <strong>{label}</strong>
+      <span>{values.length ? values.join(", ") : "None"}</span>
+    </div>
   );
 }
 

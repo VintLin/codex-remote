@@ -7,13 +7,20 @@ import type {
   CreateTaskInput,
   Device,
   ErrorEnvelope,
+  ExtensionInventory,
   FollowUpInput,
   ApprovalDecisionInput,
   ConversationLifecycleInput,
   InterruptTurnInput,
   LinkTaskConversationInput,
+  LocalWorkbenchSummary,
+  McpServerSummary,
   OpenConversationResult,
   PendingApproval,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
+  ProjectSearchResult,
   QueueConversationMessageInput,
   RemoteProject,
   RenameConversationInput,
@@ -56,6 +63,17 @@ export interface WorkerApiClientLike {
   steerTurn(deviceId: string, conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
   listApprovals(deviceId: string, conversationId: string): Promise<PendingApproval[]>;
   decideApproval(deviceId: string, conversationId: string, approvalRequestId: string, input: ApprovalDecisionInput): Promise<CommandAccepted>;
+  getLocalWorkbenchSummary(deviceId: string, projectId: string): Promise<LocalWorkbenchSummary>;
+  listLocalWorkbenchFiles(deviceId: string, projectId: string, path?: string): Promise<ProjectDirectoryListing>;
+  getLocalWorkbenchFilePreview(deviceId: string, projectId: string, path: string): Promise<ProjectFilePreview>;
+  getLocalWorkbenchGitSummary(deviceId: string, projectId: string): Promise<ProjectGitSummary>;
+  searchLocalWorkbenchFiles(
+    deviceId: string,
+    projectId: string,
+    options: { limit?: number; path?: string; query: string },
+  ): Promise<ProjectSearchResult>;
+  getLocalWorkbenchMcpSummary(deviceId: string, projectId: string): Promise<McpServerSummary>;
+  getLocalWorkbenchExtensionInventory(deviceId: string, projectId: string): Promise<ExtensionInventory>;
 }
 
 type RequestOptions = {
@@ -298,6 +316,46 @@ export class WorkerApiClient implements WorkerApiClientLike {
     );
   }
 
+  public async getLocalWorkbenchSummary(deviceId: string, projectId: string): Promise<LocalWorkbenchSummary> {
+    return this.request<LocalWorkbenchSummary>(createLocalWorkbenchPath(deviceId, projectId, "summary"));
+  }
+
+  public async listLocalWorkbenchFiles(deviceId: string, projectId: string, path?: string): Promise<ProjectDirectoryListing> {
+    return this.request<ProjectDirectoryListing>(
+      withQuery(createLocalWorkbenchPath(deviceId, projectId, "files"), path === undefined ? {} : { path }),
+    );
+  }
+
+  public async getLocalWorkbenchFilePreview(deviceId: string, projectId: string, path: string): Promise<ProjectFilePreview> {
+    return this.request<ProjectFilePreview>(withQuery(createLocalWorkbenchPath(deviceId, projectId, "file-preview"), { path }));
+  }
+
+  public async getLocalWorkbenchGitSummary(deviceId: string, projectId: string): Promise<ProjectGitSummary> {
+    return this.request<ProjectGitSummary>(createLocalWorkbenchPath(deviceId, projectId, "git"));
+  }
+
+  public async searchLocalWorkbenchFiles(
+    deviceId: string,
+    projectId: string,
+    options: { limit?: number; path?: string; query: string },
+  ): Promise<ProjectSearchResult> {
+    return this.request<ProjectSearchResult>(
+      withQuery(createLocalWorkbenchPath(deviceId, projectId, "search"), {
+        query: options.query,
+        ...(options.path === undefined ? {} : { path: options.path }),
+        ...(options.limit === undefined ? {} : { limit: String(options.limit) }),
+      }),
+    );
+  }
+
+  public async getLocalWorkbenchMcpSummary(deviceId: string, projectId: string): Promise<McpServerSummary> {
+    return this.request<McpServerSummary>(createLocalWorkbenchPath(deviceId, projectId, "mcp"));
+  }
+
+  public async getLocalWorkbenchExtensionInventory(deviceId: string, projectId: string): Promise<ExtensionInventory> {
+    return this.request<ExtensionInventory>(createLocalWorkbenchPath(deviceId, projectId, "extensions"));
+  }
+
   private async request<TResponse>(path: string, options: RequestOptions = {}): Promise<TResponse> {
     const url = new URL(path, this.config.baseUrl);
     const headers = new Headers();
@@ -364,6 +422,21 @@ export class WorkerApiClient implements WorkerApiClientLike {
       return null;
     }
   }
+}
+
+function createLocalWorkbenchPath(deviceId: string, projectId: string, section: string): string {
+  return `/v1/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId)}/local-workbench/${section}`;
+}
+
+function withQuery(path: string, query: Record<string, string | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
 }
 
 function sanitizeErrorDetails(details: unknown): {

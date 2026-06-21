@@ -5,7 +5,14 @@ import type {
   BoardTask,
   CommandAccepted,
   ConversationQueuedMessage,
+  ExtensionInventory,
+  LocalWorkbenchSummary,
+  McpServerSummary,
   OpenConversationResult,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
+  ProjectSearchResult,
   RemoteProject,
   TaskConversationLink,
   WorkerHealth,
@@ -363,3 +370,137 @@ test("WorkerApiClient lifecycle methods when called, should use device-scoped li
   ]);
   assert.equal(requests[3]?.init.body, JSON.stringify({ title: "Renamed", clientRequestId: "rename-1" }));
 });
+
+test("WorkerApiClient local workbench methods when called, should use seven device-scoped GET routes", async () => {
+  const responses: unknown[] = [
+    createLocalWorkbenchSummary(),
+    createProjectDirectoryListing(),
+    createProjectFilePreview(),
+    createProjectGitSummary(),
+    createProjectSearchResult(),
+    createMcpServerSummary(),
+    createExtensionInventory(),
+  ];
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(responses[requests.length - 1]), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  assert.deepEqual(await client.getLocalWorkbenchSummary("device-a", "project-a"), createLocalWorkbenchSummary());
+  assert.deepEqual(await client.listLocalWorkbenchFiles("device-a", "project-a", "src"), createProjectDirectoryListing());
+  assert.deepEqual(await client.getLocalWorkbenchFilePreview("device-a", "project-a", "src/app.ts"), createProjectFilePreview());
+  assert.deepEqual(await client.getLocalWorkbenchGitSummary("device-a", "project-a"), createProjectGitSummary());
+  assert.deepEqual(
+    await client.searchLocalWorkbenchFiles("device-a", "project-a", { query: "needle", path: "src", limit: 25 }),
+    createProjectSearchResult(),
+  );
+  assert.deepEqual(await client.getLocalWorkbenchMcpSummary("device-a", "project-a"), createMcpServerSummary());
+  assert.deepEqual(await client.getLocalWorkbenchExtensionInventory("device-a", "project-a"), createExtensionInventory());
+
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/summary",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/files?path=src",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/file-preview?path=src%2Fapp.ts",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/git",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/search?query=needle&path=src&limit=25",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/mcp",
+    "GET http://127.0.0.1:8787/v1/devices/device-a/projects/project-a/local-workbench/extensions",
+  ]);
+  assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+}
+);
+
+function createLocalWorkbenchSummary(): LocalWorkbenchSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    projectName: "Project A",
+    fileCount: 2,
+    directoryCount: 1,
+    gitStatus: "dirty",
+    searchResultCount: 1,
+    mcpServerCount: 1,
+    extensionCount: 2,
+    previewAvailable: true,
+  };
+}
+
+function createProjectDirectoryListing(): ProjectDirectoryListing {
+  return {
+    entries: [
+      { path: "src", name: "src", kind: "directory", childCount: 1 },
+      { path: "README.md", name: "README.md", kind: "file", sizeBytes: 120 },
+    ],
+  };
+}
+
+function createProjectFilePreview(): ProjectFilePreview {
+  return {
+    path: "src/app.ts",
+    previewKind: "text",
+    mimeType: "text/typescript",
+    byteCount: 80,
+    lineCount: 4,
+    truncated: false,
+    previewText: "export const app = true;",
+  };
+}
+
+function createProjectGitSummary(): ProjectGitSummary {
+  return {
+    branch: "stage-12",
+    status: "dirty",
+    aheadCount: 1,
+    behindCount: 0,
+    stagedCount: 1,
+    unstagedCount: 1,
+    untrackedCount: 0,
+    reviewState: "not_requested",
+    changedFiles: [{ path: "src/app.ts", status: "modified", additions: 2, deletions: 1 }],
+  };
+}
+
+function createProjectSearchResult(): ProjectSearchResult {
+  return {
+    query: "needle",
+    matches: [{ path: "src/app.ts", lineNumber: 1, columnNumber: 8, match: "needle", snippet: "const needle = true;" }],
+  };
+}
+
+function createMcpServerSummary(): McpServerSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    servers: [
+      {
+        name: "context7",
+        status: "connected",
+        tools: ["resolve-library-id"],
+        resources: ["docs"],
+        resourceTemplates: ["library-docs"],
+        authStatus: "ready",
+      },
+    ],
+  };
+}
+
+function createExtensionInventory(): ExtensionInventory {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    skills: [{ name: "test-driven-development", enabled: true, status: "installed" }],
+    hooks: [{ name: "preflight", enabled: false, event: "before-run" }],
+    plugins: [{ id: "github", name: "GitHub", enabled: true, skillCount: 2, appCount: 1, mcpServerCount: 1 }],
+    marketplaceEntries: [{ name: "Data Analytics", installStatus: "not_installed" }],
+    apps: [{ id: "gmail", name: "Gmail", enabled: false }],
+  };
+}

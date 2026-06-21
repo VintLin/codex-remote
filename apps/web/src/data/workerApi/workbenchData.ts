@@ -6,6 +6,13 @@ import type {
   ConversationTimelineTurn,
   BoardTask,
   Device,
+  ExtensionInventory,
+  LocalWorkbenchSummary,
+  McpServerSummary,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
+  ProjectSearchResult,
   RemoteProject,
   CodexConversation,
   ErrorEnvelope,
@@ -37,6 +44,26 @@ export interface SearchRecent {
 }
 
 type SourceErrorEnvelope = Pick<ErrorEnvelope, "code" | "message" | "details" | "requestId">;
+type LocalWorkbenchSectionStatus = "failed" | "loaded" | "unavailable";
+
+interface LocalWorkbenchSection<TData> {
+  data: TData | null;
+  error?: SourceErrorEnvelope;
+  status: LocalWorkbenchSectionStatus;
+}
+
+export interface LocalWorkbenchData {
+  deviceId: string | null;
+  projectId: string | null;
+  status: "degraded" | "empty" | "loaded" | "unavailable";
+  summary: LocalWorkbenchSummary | null;
+  files: LocalWorkbenchSection<ProjectDirectoryListing>;
+  preview: LocalWorkbenchSection<ProjectFilePreview>;
+  git: LocalWorkbenchSection<ProjectGitSummary>;
+  search: LocalWorkbenchSection<ProjectSearchResult>;
+  mcp: LocalWorkbenchSection<McpServerSummary>;
+  extensions: LocalWorkbenchSection<ExtensionInventory>;
+}
 
 export interface WorkbenchData {
   source: {
@@ -58,6 +85,7 @@ export interface WorkbenchData {
   approvalCards: ConversationApprovalCard[];
   queuedMessages: ConversationQueuedMessage[];
   tasks: BoardTask[];
+  localWorkbench: LocalWorkbenchData;
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
 }
@@ -67,6 +95,7 @@ export interface LoadWorkbenchDataOptions {
   token: string;
   fetchImpl?: typeof fetch;
   selectedConversationKey?: string | null;
+  selectedDeviceId?: string | null;
 }
 
 export type LoadReason = WorkbenchData["source"]["reason"];
@@ -87,8 +116,43 @@ export function createFallbackWorkbenchData(
     approvalCards: [],
     queuedMessages: [],
     tasks: [...mockTasks],
+    localWorkbench: createUnavailableLocalWorkbenchData(),
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
+  };
+}
+
+function createUnavailableLocalWorkbenchData(): LocalWorkbenchData {
+  return {
+    deviceId: null,
+    projectId: null,
+    status: "unavailable",
+    summary: null,
+    files: createLocalWorkbenchSection<ProjectDirectoryListing>("unavailable", null),
+    preview: createLocalWorkbenchSection<ProjectFilePreview>("unavailable", null),
+    git: createLocalWorkbenchSection<ProjectGitSummary>("unavailable", null),
+    search: createLocalWorkbenchSection<ProjectSearchResult>("unavailable", null),
+    mcp: createLocalWorkbenchSection<McpServerSummary>("unavailable", null),
+    extensions: createLocalWorkbenchSection<ExtensionInventory>("unavailable", null),
+  };
+}
+
+function createEmptyLocalWorkbenchData(): LocalWorkbenchData {
+  return {
+    ...createUnavailableLocalWorkbenchData(),
+    status: "empty",
+  };
+}
+
+function createLocalWorkbenchSection<TData>(
+  status: LocalWorkbenchSectionStatus,
+  data: TData | null,
+  error?: SourceErrorEnvelope,
+): LocalWorkbenchSection<TData> {
+  return {
+    data,
+    status,
+    ...(error ? { error } : {}),
   };
 }
 
@@ -346,6 +410,17 @@ function toSourceErrorEnvelope(error: {
   return sourceError;
 }
 
+function createLocalWorkbenchErrorEnvelope(error: unknown): SourceErrorEnvelope {
+  if (error instanceof WorkerApiRequestError) {
+    return toSourceErrorEnvelope(error.envelope);
+  }
+
+  return {
+    code: "request_failure",
+    message: "Worker request failed.",
+  };
+}
+
 function createSearchRecents(
   conversations: readonly CodexConversation[],
   selectedConversationKey?: string | null,
@@ -424,6 +499,8 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       timelineError && timelineConversationKey ? timelineConversationKey : null,
     );
     const approvalCards = projectApprovalCards(timeline);
+    const selectedProject = findLocalWorkbenchProject(projects, selectedConversation, options.selectedDeviceId ?? devices[0]?.id ?? null);
+    const localWorkbench = await loadLocalWorkbenchData(client, selectedProject);
 
     if (timelineError) {
       return {
@@ -435,6 +512,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         approvalCards: [],
         queuedMessages: [],
         tasks,
+        localWorkbench,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -450,6 +528,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         approvalCards,
         queuedMessages,
         tasks: [],
+        localWorkbench,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -464,6 +543,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       approvalCards,
       queuedMessages,
       tasks,
+      localWorkbench,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
     };
@@ -471,4 +551,101 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     const source = createSourceFromError(error);
     return createFallbackWorkbenchData(source.reason, options.selectedConversationKey, source.error);
   }
+}
+
+function findLocalWorkbenchProject(
+  projects: readonly RemoteProject[],
+  selectedConversation: CodexConversation | undefined,
+  selectedDeviceId: string | null,
+): RemoteProject | null {
+  if (selectedConversation?.projectId && (!selectedDeviceId || selectedConversation.deviceId === selectedDeviceId)) {
+    const selectedProject = projects.find(
+      (project) => project.deviceId === selectedConversation.deviceId && project.id === selectedConversation.projectId,
+    );
+    if (selectedProject) {
+      return selectedProject;
+    }
+  }
+
+  if (selectedDeviceId) {
+    const selectedDeviceProject = projects.find((project) => project.deviceId === selectedDeviceId);
+    if (selectedDeviceProject) {
+      return selectedDeviceProject;
+    }
+  }
+
+  if (selectedConversation) {
+    const deviceProject = projects.find((project) => project.deviceId === selectedConversation.deviceId);
+    if (deviceProject) {
+      return deviceProject;
+    }
+  }
+
+  return projects[0] ?? null;
+}
+
+async function loadLocalWorkbenchData(client: WorkerApiClient, project: RemoteProject | null): Promise<LocalWorkbenchData> {
+  if (!project) {
+    return createEmptyLocalWorkbenchData();
+  }
+
+  const [summaryResult, filesResult, gitResult, mcpResult, extensionsResult] = await Promise.allSettled([
+    client.getLocalWorkbenchSummary(project.deviceId, project.id),
+    client.listLocalWorkbenchFiles(project.deviceId, project.id),
+    client.getLocalWorkbenchGitSummary(project.deviceId, project.id),
+    client.getLocalWorkbenchMcpSummary(project.deviceId, project.id),
+    client.getLocalWorkbenchExtensionInventory(project.deviceId, project.id),
+  ]);
+  const filePreviewPath = getPreviewPath(filesResult);
+  const previewResult = filePreviewPath
+    ? await settle(() => client.getLocalWorkbenchFilePreview(project.deviceId, project.id, filePreviewPath))
+    : null;
+  const files = toLocalWorkbenchSection(filesResult);
+  const preview = previewResult
+    ? toLocalWorkbenchSection(previewResult)
+    : createLocalWorkbenchSection<ProjectFilePreview>("unavailable", null);
+  const git = toLocalWorkbenchSection(gitResult);
+  const search = createLocalWorkbenchSection<ProjectSearchResult>("unavailable", null);
+  const mcp = toLocalWorkbenchSection(mcpResult);
+  const extensions = toLocalWorkbenchSection(extensionsResult);
+  const sections = [files, preview, git, search, mcp, extensions];
+  const failed = summaryResult.status === "rejected" || sections.some((section) => section.status === "failed");
+  const loaded = sections.some((section) => section.status === "loaded");
+
+  return {
+    deviceId: project.deviceId,
+    projectId: project.id,
+    status: failed && loaded ? "degraded" : failed ? "degraded" : "loaded",
+    summary: summaryResult.status === "fulfilled" ? summaryResult.value : null,
+    files,
+    preview,
+    git,
+    search,
+    mcp,
+    extensions,
+  };
+}
+
+async function settle<TData>(run: () => Promise<TData>): Promise<PromiseSettledResult<TData>> {
+  try {
+    return { status: "fulfilled", value: await run() };
+  } catch (reason: unknown) {
+    return { status: "rejected", reason };
+  }
+}
+
+function toLocalWorkbenchSection<TData>(result: PromiseSettledResult<TData>): LocalWorkbenchSection<TData> {
+  if (result.status === "fulfilled") {
+    return createLocalWorkbenchSection("loaded", result.value);
+  }
+
+  return createLocalWorkbenchSection<TData>("failed", null, createLocalWorkbenchErrorEnvelope(result.reason));
+}
+
+function getPreviewPath(result: PromiseSettledResult<ProjectDirectoryListing>): string | null {
+  if (result.status !== "fulfilled") {
+    return null;
+  }
+
+  return result.value.entries.find((entry) => entry.kind === "file")?.path ?? null;
 }

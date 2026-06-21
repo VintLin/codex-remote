@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ErrorEnvelope } from "@codex-remote/api-contract";
+import type {
+  ErrorEnvelope,
+  ExtensionInventory,
+  LocalWorkbenchSummary,
+  McpServerSummary,
+  ProjectDirectoryListing,
+  ProjectFilePreview,
+  ProjectGitSummary,
+} from "@codex-remote/api-contract";
 import type {
   AssistantTimelineNode,
   AssistantTimelineTurn,
@@ -158,6 +166,12 @@ test("workbench datasource when endpoint responses are valid should create snaps
         ],
       },
     ]),
+    "/v1/devices/w1/projects/p-live/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary()),
+    "/v1/devices/w1/projects/p-live/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+    "/v1/devices/w1/projects/p-live/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+    "/v1/devices/w1/projects/p-live/local-workbench/git": jsonResponse(createProjectGitSummary()),
+    "/v1/devices/w1/projects/p-live/local-workbench/mcp": jsonResponse(createMcpServerSummary()),
+    "/v1/devices/w1/projects/p-live/local-workbench/extensions": jsonResponse(createExtensionInventory()),
   };
 
   const data = await loadWorkbenchData({
@@ -177,6 +191,15 @@ test("workbench datasource when endpoint responses are valid should create snaps
   assert.equal(data.tasks[0]?.linkedConversations[0]?.deviceId, "w1");
   assert.equal(data.queuedMessages[0]?.message, "Run later");
   assert.equal(data.assistantThreads.length, 2);
+  assert.equal(data.localWorkbench.status, "loaded");
+  assert.equal(data.localWorkbench.summary?.projectId, "p-live");
+  assert.equal(data.localWorkbench.files.data?.entries[0]?.path, "src");
+  assert.equal(data.localWorkbench.preview.data?.path, "README.md");
+  assert.equal(data.localWorkbench.git.data?.changedFiles[0]?.path, "src/app.ts");
+  assert.equal(data.localWorkbench.search.status, "unavailable");
+  assert.equal(data.localWorkbench.search.data, null);
+  assert.equal(data.localWorkbench.mcp.data?.servers[0]?.name, "context7");
+  assert.equal(data.localWorkbench.extensions.data?.skills[0]?.name, "test-driven-development");
 });
 
 test("workbench datasource when token is missing should return fallback and skip fetch", async () => {
@@ -199,6 +222,9 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.deepEqual(data.tasks, fallback.tasks);
   assert.deepEqual(data.searchRecents, fallback.searchRecents);
   assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
+  assert.equal(data.localWorkbench.status, "unavailable");
+  assert.equal(data.localWorkbench.summary, null);
+  assert.equal(data.localWorkbench.files.status, "unavailable");
   assert.equal(data.assistantThreads.length, mockConversations.length);
   const hasRichNodes = data.assistantThreads.some((thread: AssistantThreadSnapshot) =>
     thread.timeline.turns.some((turn: AssistantTimelineTurn) => turn.nodes.length > 0),
@@ -245,6 +271,8 @@ test("workbench datasource when remote conversations are empty should keep remot
   assert.equal(data.tasks.length, 0);
   assert.equal(data.assistantThreads.length, 0);
   assert.equal(data.searchRecents.length, 0);
+  assert.equal(data.localWorkbench.status, "empty");
+  assert.equal(data.localWorkbench.summary, null);
   assert.notDeepEqual(data.conversations, mockConversations);
 });
 
@@ -268,6 +296,12 @@ test("workbench datasource when conversations are empty and projects exist shoul
       "/v1/conversations": jsonResponse([]),
       "/v1/projects": jsonResponse([project("local-project", "local", "w-projects")]),
       "/v1/tasks": jsonResponse([]),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "w-projects", projectId: "local-project" })),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "w-projects", projectId: "local-project" })),
+      "/v1/devices/w-projects/projects/local-project/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "w-projects", projectId: "local-project" })),
     }),
   });
 
@@ -275,7 +309,216 @@ test("workbench datasource when conversations are empty and projects exist shoul
   assert.equal(data.projects.length, 1);
   assert.equal(data.projects[0]?.id, "local-project");
   assert.equal(data.conversations.length, 0);
+  assert.equal(data.localWorkbench.status, "loaded");
+  assert.equal(data.localWorkbench.summary?.projectId, "local-project");
 });
+
+test("workbench datasource when selected device has no conversations should load that device local workbench project", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    selectedDeviceId: "device-b",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "device-a",
+          icon: "laptop",
+          name: "Device A",
+          status: "Connected",
+          ip: "local-a",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "project-a",
+          model: "Codex",
+        },
+        {
+          id: "device-b",
+          icon: "laptop",
+          name: "Device B",
+          status: "Connected",
+          ip: "local-b",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "project-b",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([
+        project("project-a", "Project A", "device-a"),
+        project("project-b", "Project B", "device-b"),
+      ]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/device-b/projects/project-b/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "device-b", projectId: "project-b" })),
+      "/v1/devices/device-b/projects/project-b/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/device-b/projects/project-b/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/device-b/projects/project-b/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/device-b/projects/project-b/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "device-b", projectId: "project-b" })),
+      "/v1/devices/device-b/projects/project-b/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "device-b", projectId: "project-b" })),
+    }),
+  });
+
+  assert.equal(data.localWorkbench.deviceId, "device-b");
+  assert.equal(data.localWorkbench.projectId, "project-b");
+  assert.equal(data.localWorkbench.status, "loaded");
+});
+
+test("workbench datasource when one local workbench section fails should keep other sections loaded and mark degraded", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-degraded",
+          icon: "laptop",
+          name: "Degraded worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "local",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("p-degraded", "local", "w-degraded")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "w-degraded", projectId: "p-degraded" })),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/git": jsonResponse(
+        { code: "device_unavailable", message: "git unavailable" },
+        424,
+      ),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "w-degraded", projectId: "p-degraded" })),
+      "/v1/devices/w-degraded/projects/p-degraded/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "w-degraded", projectId: "p-degraded" })),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.localWorkbench.status, "degraded");
+  assert.equal(data.localWorkbench.git.status, "failed");
+  assert.equal(data.localWorkbench.git.error?.code, "device_unavailable");
+  assert.equal(data.localWorkbench.files.status, "loaded");
+  assert.equal(data.localWorkbench.extensions.status, "loaded");
+});
+
+test("workbench datasource when local workbench summary fails should mark degraded", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-summary-fail",
+          icon: "laptop",
+          name: "Summary failure worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "local",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("p-summary-fail", "local", "w-summary-fail")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/summary": jsonResponse(
+        { code: "device_unavailable", message: "summary unavailable" },
+        424,
+      ),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "w-summary-fail", projectId: "p-summary-fail" })),
+      "/v1/devices/w-summary-fail/projects/p-summary-fail/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "w-summary-fail", projectId: "p-summary-fail" })),
+    }),
+  });
+
+  assert.equal(data.localWorkbench.status, "degraded");
+  assert.equal(data.localWorkbench.summary, null);
+  assert.equal(data.localWorkbench.files.status, "loaded");
+});
+
+function createLocalWorkbenchSummary(overrides: Partial<LocalWorkbenchSummary> = {}): LocalWorkbenchSummary {
+  return {
+    deviceId: "w1",
+    projectId: "p-live",
+    projectName: "project-live",
+    fileCount: 2,
+    directoryCount: 1,
+    gitStatus: "dirty",
+    searchResultCount: 1,
+    mcpServerCount: 1,
+    extensionCount: 2,
+    previewAvailable: true,
+    ...overrides,
+  };
+}
+
+function createProjectDirectoryListing(): ProjectDirectoryListing {
+  return {
+    entries: [
+      { path: "src", name: "src", kind: "directory", childCount: 1 },
+      { path: "README.md", name: "README.md", kind: "file", sizeBytes: 120 },
+    ],
+  };
+}
+
+function createProjectFilePreview(): ProjectFilePreview {
+  return {
+    path: "README.md",
+    previewKind: "text",
+    mimeType: "text/markdown",
+    byteCount: 80,
+    lineCount: 4,
+    truncated: false,
+    previewText: "# Project",
+  };
+}
+
+function createProjectGitSummary(): ProjectGitSummary {
+  return {
+    branch: "stage-12",
+    status: "dirty",
+    aheadCount: 1,
+    behindCount: 0,
+    stagedCount: 1,
+    unstagedCount: 1,
+    untrackedCount: 0,
+    reviewState: "not_requested",
+    changedFiles: [{ path: "src/app.ts", status: "modified", additions: 2, deletions: 1 }],
+  };
+}
+
+function createMcpServerSummary(overrides: Partial<McpServerSummary> = {}): McpServerSummary {
+  return {
+    deviceId: "w1",
+    projectId: "p-live",
+    servers: [
+      {
+        name: "context7",
+        status: "connected",
+        tools: ["resolve-library-id"],
+        resources: ["docs"],
+        resourceTemplates: ["library-docs"],
+        authStatus: "ready",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function createExtensionInventory(overrides: Partial<ExtensionInventory> = {}): ExtensionInventory {
+  return {
+    deviceId: "w1",
+    projectId: "p-live",
+    skills: [{ name: "test-driven-development", enabled: true, status: "installed" }],
+    hooks: [{ name: "preflight", enabled: false, event: "before-run" }],
+    plugins: [{ id: "github", name: "GitHub", enabled: true, skillCount: 2, appCount: 1, mcpServerCount: 1 }],
+    marketplaceEntries: [{ name: "Data Analytics", installStatus: "not_installed" }],
+    apps: [{ id: "gmail", name: "Gmail", enabled: false }],
+    ...overrides,
+  };
+}
 
 test("workbench datasource when task list fails should keep conversation source loaded and expose task failure", async () => {
   const data = await loadWorkbenchData({
