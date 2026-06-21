@@ -11,8 +11,8 @@ Source of truth:
 
 Status labels:
 
-- `Supported`: exposed through Web -> Control Plane -> Worker and covered by current real/local evidence.
-- `Partial`: some boundary or code exists, but the full product path or real evidence is missing.
+- `Supported`: exposed through Web -> Control Plane -> Worker, shown through the intended UI surface, and covered by current real/local evidence.
+- `Partial`: some boundary or code exists, but the full product path, intended UI presentation, Chrome evidence, or real evidence is missing.
 - `Not supported`: app-server may expose it, but Codex Remote does not expose it as product capability.
 - `Codex Remote only`: project feature, not an app-server protocol feature.
 
@@ -20,18 +20,18 @@ Status labels:
 
 | Feature | Product status | Real evidence | App-server capability | Notes |
 | --- | --- | --- | --- | --- |
-| Interrupt | Supported | Yes | `turn/interrupt` | Real-check records interrupt as `real-pass`. |
-| Steer | Supported | Yes | `turn/steer` | Requires public active-turn proof. |
-| Follow-up | Supported | Yes | `turn/start` | Existing conversation follow-up is supported. |
+| Interrupt | Partial | API yes; UI parity no | `turn/interrupt` | Real-check records interrupt as `real-pass`, but the app-like UI must move interrupt into the running composer. |
+| Steer | Partial | API yes; UI parity no | `turn/steer` | Requires public active-turn proof. Product UI is running-send "引导当前执行", not a separate debug strip and not fork/派生. |
+| Follow-up | Partial | API yes; UI parity partial | `turn/start` | Existing conversation follow-up is supported, but start/follow-up must be unified in the composer. |
 | Approval capture | Partial | Partial | `item/*/requestApproval`, legacy approval requests | Worker registry captures supported pending approvals, but safe real fixture did not produce a pending approval. |
 | Approval decision | Partial | No | server request response path | Public route exists, but no safe real pending approval was available to decline/cancel. |
 | Approval auto cleanup | Partial | No | `serverRequest/resolved` | Process-local cleanup exists; no durable/product-ready approval lifecycle. |
-| Start conversation | Supported | Yes | `thread/start`, `turn/start` | Real-check records start as `real-pass`. |
-| Open/resume conversation | Supported | Yes | `thread/resume` | Stage 11 real lifecycle API evidence passed; Web opens selected conversations before refreshing the snapshot. |
-| Archive/unarchive conversation | Supported | Yes | `thread/archive`, `thread/unarchive` | Stage 11 real lifecycle API evidence passed; archived rows remain discoverable with `archived: true`. |
+| Start conversation | Partial | API yes; UI parity no | `thread/start`, `turn/start` | Real-check records start as `real-pass`, but the Start strip is a debug-looking UI and must become the composer start state. |
+| Open/resume conversation | Partial | API yes; UI parity no | `thread/resume` | Stage 11 lifecycle API evidence passed, but selected conversations must display content without requiring a separate Start action. |
+| Archive/unarchive conversation | Partial | API yes; UI parity no | `thread/archive`, `thread/unarchive` | Stage 11 lifecycle API evidence passed. Product UI must remove archived rows from the normal sidebar and restore them from Settings -> 已归档对话. |
 | Rename conversation | Supported | Yes | `thread/name/set` | Stage 11 real lifecycle API evidence passed; public `title` remains the single display title. |
-| Loaded/live badges | Supported | Yes | `thread/loaded/list`, `thread/read` | Web displays Loaded/Live/Archived state from public contract fields. |
-| Timeline read | Supported | Yes | `thread/read` | Metadata-only projection; not full event replay. |
+| Loaded/live badges | Supported | Yes | `thread/loaded/list`, `thread/read` | Web displays Loaded/Live state from public contract fields. Archived state belongs in archive-specific surfaces, not the normal sidebar badge. |
+| Timeline read | Partial | API yes; UI parity no | `thread/read` | Stage 11 must display safe app-like conversation content, not metadata-only rows. |
 | Snapshot workbench events | Partial | Partial | Worker projection | Stage 11 projects lifecycle and approval card events from snapshots/Worker registry; not a durable live replay stream. |
 | Conversation list pagination | Supported internally | Yes | `thread/list` | Worker drains app-server cursors; Web does not expose pagination controls. |
 | Conversation directory isolation | Supported | Yes | `thread/list`, `thread/read` | Worker uses cwd and realpath checks; local paths stay Worker-private. |
@@ -56,17 +56,17 @@ Status labels:
 | Method | Product status | Notes |
 | --- | --- | --- |
 | `initialize` | Partial | Worker uses app-server session initialization internally. |
-| `thread/start` | Supported | Used for start conversation. |
-| `thread/resume` | Supported | Used by Stage 11 open/resume route. |
+| `thread/start` | Partial | API path exists; app-like composer start UI still needs repair. |
+| `thread/resume` | Partial | API path exists; app-like open/display behavior still needs repair. |
 | `thread/fork` | Not supported | No fork UI/API. |
-| `thread/archive` | Supported | Used by Stage 11 archive route and Web action. |
+| `thread/archive` | Partial | API path exists; archived rows must be removed from the normal sidebar and moved to Settings. |
 | `thread/unsubscribe` | Partial | Worker session lifecycle uses connection management internally, not product UI. |
 | `thread/name/set` | Supported | Used by Stage 11 rename route and Web action. |
 | `thread/goal/set` | Not supported | No goal UI/API. |
 | `thread/goal/get` | Not supported | No goal UI/API. |
 | `thread/goal/clear` | Not supported | No goal UI/API. |
 | `thread/metadata/update` | Not supported | No metadata edit UI/API. |
-| `thread/unarchive` | Supported | Used by Stage 11 restore route and Web action. |
+| `thread/unarchive` | Partial | API path exists; restore must be exposed from Settings -> 已归档对话. |
 | `thread/compact/start` | Not supported | No compact UI/API. |
 | `thread/shellCommand` | Not supported | High-risk shell path; not exposed. |
 | `thread/approveGuardianDeniedAction` | Not supported | No guardian approval UI/API. |
@@ -103,9 +103,9 @@ Status labels:
 | `skills/config/write` | Not supported | Not exposed. |
 | `plugin/install` | Not supported | Not exposed. |
 | `plugin/uninstall` | Not supported | Not exposed. |
-| `turn/start` | Supported | Used for start conversation and follow-up. |
-| `turn/steer` | Supported | Used for steer. |
-| `turn/interrupt` | Supported | Used for interrupt. |
+| `turn/start` | Partial | API path exists; start/follow-up composer UX still needs repair. |
+| `turn/steer` | Partial | API path exists; UI must present steer as running-send "引导当前执行". |
+| `turn/interrupt` | Partial | API path exists; UI must move interrupt into the running composer. |
 | `review/start` | Not supported | Not exposed. |
 | `model/list` | Not supported | Not exposed. |
 | `modelProvider/capabilities/read` | Not supported | Not exposed. |
@@ -234,7 +234,7 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 
 Codex Remote should not try to expose all app-server methods at once. Q29-Q33 research confirms that the next plan should prioritize product capability surfaces, not protocol coverage percentage:
 
-1. Stage 11 conversation lifecycle is implemented but still requires @chrome verification before archival: open/resume, archive/unarchive, rename, loaded/live badge, snapshot-first workbench events, and approval pending/resolved cards.
+1. Stage 11 conversation workbench parity is reopened after UI review. API evidence for lifecycle/control methods is useful, but Stage 11 now requires UI repair for composer-centered start/follow-up/interrupt/steer/queue, app-like timeline content, Settings -> 已归档对话, request cards in the timeline, protocol-derived permission placeholders, and assistant message action rows before Chrome verification and archival.
 2. Stage 12 should expose local work tools read-only first after Stage 11 browser verification closes: file preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
 3. Controlled write actions come after read-only surfaces: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
 4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell.

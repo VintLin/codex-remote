@@ -17,6 +17,7 @@ import type { ApprovalRegistryRecord } from "./approvalRegistry.ts";
 export interface ConversationProjectionContext {
   deviceId: string;
   allowedProjectRoot: string;
+  projectId: string;
   projectName: string;
   archived?: boolean;
   loadedThreadIds?: ReadonlySet<string>;
@@ -34,6 +35,7 @@ export function projectThreadToConversation(
     id: thread.id,
     title: getConversationTitle(thread, context),
     deviceId: context.deviceId,
+    projectId: context.projectId,
     projectName: getProjectName(context),
     status: mapConversationStatus(thread),
     updatedAt: unixSecondsToIso(thread.updatedAt),
@@ -51,7 +53,7 @@ export function projectThreadToTimeline(
   context: Required<Pick<ConversationProjectionContext, "deviceId" | "readStartedAt" | "readCompletedAt">> &
     Pick<
       ConversationProjectionContext,
-      "allowedProjectRoot" | "archived" | "loadedThreadIds" | "approvals" | "lifecycleEventKind"
+      "allowedProjectRoot" | "projectId" | "archived" | "loadedThreadIds" | "approvals" | "lifecycleEventKind"
     >,
 ): ConversationTimeline {
   const turns = thread.turns.map(projectTurnToTimelineTurn);
@@ -59,6 +61,7 @@ export function projectThreadToTimeline(
   return {
     deviceId: context.deviceId,
     conversationId: thread.id,
+    projectId: context.projectId,
     readStartedAt: context.readStartedAt,
     readCompletedAt: context.readCompletedAt,
     snapshotRevision: `${thread.id}:${context.readCompletedAt}`,
@@ -79,7 +82,186 @@ export function projectTurnToTimelineTurn(turn: v2.Turn): ConversationTimelineTu
     startedAt: turn.startedAt,
     completedAt: turn.completedAt,
     durationMs: turn.durationMs ?? deriveDurationMs(turn.startedAt, turn.completedAt),
+    itemsView: mapTurnItemsView(turn.itemsView),
+    nodes: projectTurnItemsToTimelineNodes(turn),
   };
+}
+
+function projectTurnItemsToTimelineNodes(turn: v2.Turn): ConversationTimelineTurn["nodes"] {
+  const nodes = turn.items.flatMap((item) => projectThreadItemToTimelineNodes(turn.id, item));
+  if (nodes.length > 0) {
+    return nodes;
+  }
+
+  return [
+    {
+      id: `${turn.id}:status`,
+      type: "context",
+      text: `turn ${mapTurnStatus(turn.status)}`,
+    },
+  ];
+}
+
+function projectThreadItemToTimelineNodes(
+  turnId: string,
+  item: v2.ThreadItem,
+): ConversationTimelineTurn["nodes"] {
+  switch (item.type) {
+    case "userMessage":
+      return item.content.flatMap((content, index) => {
+        if (content.type !== "text") {
+          const nodes: ConversationTimelineTurn["nodes"] = [{
+            id: `${item.id}:${index}`,
+            type: "context",
+            text: "User added non-text context",
+          }];
+          return nodes;
+        }
+
+        const nodes: ConversationTimelineTurn["nodes"] = [{
+          id: `${item.id}:${index}`,
+          type: "text",
+          role: "user",
+          text: content.text,
+        }];
+        return nodes;
+      });
+    case "agentMessage":
+      return [{
+        id: item.id,
+        type: "text",
+        role: "assistant",
+        text: item.text,
+      }];
+    case "plan":
+      return [{
+        id: item.id,
+        type: "text",
+        role: "assistant",
+        text: item.text,
+      }];
+    case "contextCompaction":
+      return [{
+        id: item.id,
+        type: "context",
+        text: "上下文已压缩",
+      }];
+    case "commandExecution":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "command",
+        status: mapToolStatus(item.status),
+        label: "Command execution",
+      }];
+    case "fileChange":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "file_change",
+        status: mapToolStatus(item.status),
+        label: `File changes · ${item.changes.length}`,
+      }];
+    case "mcpToolCall":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "mcp",
+        status: mapToolStatus(item.status),
+        label: item.tool,
+      }];
+    case "dynamicToolCall":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "other",
+        status: mapToolStatus(item.status),
+        label: item.tool,
+      }];
+    case "webSearch":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "web_search",
+        status: "completed",
+        label: "Web search",
+      }];
+    case "imageView":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "image",
+        status: "completed",
+        label: "Image viewed",
+      }];
+    case "imageGeneration":
+      return [{
+        id: item.id,
+        type: "tool",
+        kind: "image",
+        status: mapToolStatus(item.status),
+        label: "Image generation",
+      }];
+    case "reasoning":
+      return [{
+        id: item.id,
+        type: "context",
+        text: "Reasoning",
+      }];
+    case "hookPrompt":
+      return [{
+        id: item.id,
+        type: "context",
+        text: "Hook prompt",
+      }];
+    case "collabAgentToolCall":
+      return [{
+        id: `${turnId}:${item.id}`,
+        type: "context",
+        text: "Agent task",
+      }];
+    case "enteredReviewMode":
+      return [{
+        id: item.id,
+        type: "context",
+        text: "Entered review mode",
+      }];
+    case "exitedReviewMode":
+      return [{
+        id: item.id,
+        type: "context",
+        text: "Exited review mode",
+      }];
+  }
+}
+
+function mapToolStatus(status: string): "completed" | "failed" | "running" | "unknown" {
+  switch (status) {
+    case "completed":
+    case "success":
+    case "succeeded":
+      return "completed";
+    case "failed":
+    case "error":
+      return "failed";
+    case "running":
+    case "inProgress":
+    case "in_progress":
+    case "pending":
+      return "running";
+    default:
+      return "unknown";
+  }
+}
+
+function mapTurnItemsView(itemsView: v2.Turn["itemsView"]): ConversationTimelineTurn["itemsView"] {
+  if (itemsView === "full") {
+    return "full";
+  }
+  if (itemsView === "summary" || itemsView === "notLoaded") {
+    return "partial";
+  }
+  return "unknown";
 }
 
 function getConversationTitle(thread: v2.Thread, context: ConversationProjectionContext): string {

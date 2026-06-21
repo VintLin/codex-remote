@@ -2,218 +2,170 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement Stage 11 conversation workbench parity for open/resume, archive/unarchive, rename, loaded/live badges, snapshot-first timeline events, and approval-card pending/resolved state.
+**Goal:** Rebuild Stage 11 around the agreed Codex App-like workbench shape: composer-centered start/follow-up/interrupt/steer/queue, app-like timeline content, archived conversations in Settings, protocol-derived permission UI, and assistant message action rows.
 
-**Architecture:** `packages/api-contract/openapi.yaml` defines the public API first. `apps/worker` maps generated `packages/codex-protocol` lifecycle and loaded-list methods into public shapes; `apps/control-plane` only routes and normalizes device identity; `apps/web` consumes the public Control Plane-shaped API.
+**Architecture:** `packages/api-contract/openapi.yaml` remains the public API source. `apps/worker` is the only Codex app-server/local adapter. `apps/control-plane` owns routing and product state such as queued messages. `apps/web` consumes only Control Plane-shaped APIs and presents the Codex App-like workbench.
 
-**Tech Stack:** TypeScript, pnpm, Turborepo, Hono, Next.js, OpenAPI 3.1, openapi-typescript, Node built-in test runner.
+**Tech Stack:** TypeScript, pnpm, Turborepo, Hono, Next.js, OpenAPI 3.1, openapi-typescript, Node built-in test runner, Playwright/Chrome verification.
 
 ## Global Constraints
 
 - API fields start in `packages/api-contract/openapi.yaml`; generated types update only through `pnpm --filter @codex-remote/api-contract generate`.
 - Codex app-server protocol shapes come only from `packages/codex-protocol`.
-- DB schema is not changed in Stage 11.
-- `apps/worker` is the only app-server/local boundary.
+- DB schema changes are allowed only if the current Stage 11 queue/settings state requires durable Control Plane product state.
+- `apps/worker` is the only app-server/local filesystem/Git/shell boundary.
 - `apps/control-plane` does not call app-server directly.
 - `apps/web` imports only public API contract types, never `packages/codex-protocol`.
 - Do not expose token, provider secret, raw app-server URL, raw JSON-RPC, raw prompt, command output, full diff, stack/cause, or private path.
 - Do not implement rollback, raw `inject_items`, arbitrary shell/filesystem write, plugin install, account login/logout, realtime voice, Windows setup, feedback upload, or external agent import.
-- Do not expose `item/tool/requestUserInput` or `mcpServer/elicitation/request`; Stage 11 approval cards are derived only from the existing approval registry.
-- Keep changes scoped to Stage 11 files and tests.
+- Preserve confirmed UI placeholders; do not remove known future controls just because they are not implemented yet.
+- Unsupported placeholders must be disabled or visibly non-destructive, with implementation TODO comments when code is touched.
+- Required input: `docs/references/2026-06-21-app-server-protocol-inventory.md`.
 
 ---
 
-### Task 1: Public Contract And Worker Lifecycle
+## Task 0: Reconcile Existing WIP Against The Active Spec
+
+**Files:**
+- Inspect: `apps/web/src/components/conversation/codex-assistant-thread.tsx`
+- Inspect: `apps/web/src/data/workerApi/workbenchData.ts`
+- Inspect: `apps/worker/src/http/projections.ts`
+- Inspect: `apps/worker/src/http/readOnlyHandlers.ts`
+- Inspect: `packages/api-contract/openapi.yaml`
+- Inspect: `docs/references/2026-06-21-feature-support-ui-audit.md`
+- Inspect: `docs/references/2026-06-21-app-server-protocol-inventory.md`
+
+**Interfaces:**
+- Consumes the active spec and current dirty worktree.
+- Produces a short implementation note in the plan status section before code continues.
+
+- [x] Identify which existing dirty changes are reusable, unsafe, or obsolete.
+- [x] Compare every dirty app-server-derived field against the protocol inventory.
+- [x] Keep reusable protocol/API work only when it matches the active spec.
+- [ ] Remove or replace unsafe draft behavior made by the agent, especially metadata-only/timeline and debug-strip UI paths, without reverting unrelated user changes.
+- [x] Record the reconciliation result in `PLAN.md` before claiming implementation progress.
+
+Task 0 result:
+
+- `packages/api-contract/openapi.yaml`: keep the `ConversationTimelineNode` direction, but do not accept the draft as complete. Add `Turn.itemsView` / partial snapshot state, generated types, and contract tests before implementation proceeds.
+- `apps/worker/src/http/projections.ts`: keep the idea of projecting `ThreadItem` into public nodes, but rewrite projection around explicit safe helpers and tests. Raw command, cwd, output, diff, MCP arguments/results, collab prompt, image path, raw reasoning, stack/cause, token, JSON-RPC, and app-server URL must not leave Worker.
+- `apps/web/src/data/workerApi/workbenchData.ts`: replace guessed tool mapping. Web must render public node kind/status and must not map unknown/command/image tools into file-change UI.
+- `apps/web/src/components/conversation/codex-assistant-thread.tsx`: keep permission and interrupt UI surfaces, but permission labels remain placeholders and must not change request behavior until a public permission model exists.
+- `apps/worker/src/http/readOnlyHandlers.ts`: `local-project` can remain as current one-project boundary, with multi-project discovery deferred.
+
+## Task 1: Public Contract For App-Like Workbench State
 
 **Files:**
 - Modify: `packages/api-contract/openapi.yaml`
 - Generate: `packages/api-contract/src/generated/openapi.ts`
-- Modify: `packages/api-contract/src/index.ts`
-- Modify: `apps/worker/src/probe/appServerReadOnlyProbeClient.ts`
+- Test: `packages/api-contract/src/*.test.ts`
+
+**Interfaces:**
+- Produces public types for safe timeline nodes, request cards, archived conversation listing, queued composer messages, and message action capabilities.
+
+- [ ] Add failing contract tests for app-like timeline content nodes with redaction-safe fields.
+- [ ] Add failing contract tests for partial timeline state derived from `Turn.itemsView`.
+- [ ] Add failing contract tests for archived-conversation listing separate from normal conversation list semantics.
+- [ ] Add failing contract tests for queued message state: queued, sending, sent, failed, canceled.
+- [ ] Add failing contract tests for message action capability flags: copy, feedback placeholder, fork placeholder, hooks placeholder, timestamp.
+- [ ] Update OpenAPI from those tests, then regenerate generated types.
+- [ ] Run `pnpm --filter @codex-remote/api-contract test`.
+
+## Task 2: Worker Projection And Lifecycle Boundaries
+
+**Files:**
 - Modify: `apps/worker/src/http/projections.ts`
 - Modify: `apps/worker/src/http/readOnlyHandlers.ts`
 - Modify: `apps/worker/src/http/controlHandlers.ts`
 - Modify: `apps/worker/src/http/workerHttpApp.ts`
-- Test: `packages/api-contract/src/*.test.ts`
 - Test: `apps/worker/src/http/*.test.ts`
 
 **Interfaces:**
-- Consumes generated `v2.ThreadResumeParams`, `v2.ThreadArchiveParams`, `v2.ThreadUnarchiveParams`, `v2.ThreadSetNameParams`, `v2.ThreadLoadedListParams`, and `v2.ThreadLoadedListResponse`.
-- Produces public `OpenConversationResult`, `ConversationLifecycleInput`, `RenameConversationInput`, `ConversationWorkbenchEvent`, and `ConversationApprovalCard`.
+- Consumes generated app-server protocol through `packages/codex-protocol`.
+- Produces safe public conversation/timeline/lifecycle responses.
 
-- [ ] **Step 1: Write failing contract and Worker tests**
+- [ ] Add failing Worker tests proving user/assistant timeline content is projected safely.
+- [ ] Add failing Worker tests proving tool/request summaries never include raw command output, full diff, private paths, raw JSON-RPC, stack/cause, token, provider secret, or app-server URL.
+- [ ] Add failing Worker tests proving conversations include the allowed project association when they belong to the allowed project.
+- [ ] Add failing Worker tests proving archived conversations can be fetched for Settings while normal list filtering can exclude them.
+- [ ] Implement only the projection and lifecycle behavior needed by those tests.
+- [ ] Run `pnpm --filter @codex-remote/worker test`.
 
-Add tests proving:
-
-- `CodexConversation` accepts `archived`, `loaded`, and `live`; `title` remains the only public display title.
-- `ConversationTimeline` accepts `events`, `loaded`, `live`, `archived`.
-- `ConversationWorkbenchEvent` requires `eventId`, monotonic `seq`, `deviceId`, `conversationId`, `kind`, `createdAt`, and `source`, and supports optional `gap`.
-- Worker list includes loaded/live flags from loaded-list and active status.
-- Worker conversation list includes archived rows by default with `archived: true`, so restore is discoverable.
-- Worker open calls resume and returns sanitized conversation/timeline result.
-- Worker archive/unarchive/rename validate ownership before app-server write.
-- Worker rejects overlong or blank rename title.
-- Worker approval cards never include raw command output, raw prompt, raw paths, or JSON-RPC frames.
-
-Run:
-
-```bash
-pnpm --filter @codex-remote/api-contract test
-pnpm --filter @codex-remote/worker test
-```
-
-Expected: tests fail because schemas/routes/methods do not exist yet.
-
-- [ ] **Step 2: Update OpenAPI and generate types**
-
-Add the minimal schemas and routes named in the spec. Reuse existing `CommandAccepted`, `ErrorEnvelope`, and conversation/timeline schemas where possible. Then run:
-
-```bash
-pnpm --filter @codex-remote/api-contract generate
-pnpm --filter @codex-remote/api-contract test
-```
-
-Expected: contract generation succeeds; contract tests pass or move to Worker failures.
-
-- [ ] **Step 3: Implement Worker app-server lifecycle methods**
-
-Add methods to `AppServerWorkerClient`:
-
-```ts
-async resumeThread(params: v2.ThreadResumeParams): Promise<v2.ThreadResumeResponse> {
-  return (await this.rpc.request("thread/resume", params)) as v2.ThreadResumeResponse;
-}
-
-async archiveThread(params: v2.ThreadArchiveParams): Promise<v2.ThreadArchiveResponse> {
-  return (await this.rpc.request("thread/archive", params)) as v2.ThreadArchiveResponse;
-}
-
-async unarchiveThread(params: v2.ThreadUnarchiveParams): Promise<v2.ThreadUnarchiveResponse> {
-  return (await this.rpc.request("thread/unarchive", params)) as v2.ThreadUnarchiveResponse;
-}
-
-async setThreadName(params: v2.ThreadSetNameParams): Promise<v2.ThreadSetNameResponse> {
-  return (await this.rpc.request("thread/name/set", params)) as v2.ThreadSetNameResponse;
-}
-
-async listLoadedThreads(params: v2.ThreadLoadedListParams): Promise<v2.ThreadLoadedListResponse> {
-  return (await this.rpc.request("thread/loaded/list", params)) as v2.ThreadLoadedListResponse;
-}
-```
-
-- [ ] **Step 4: Implement Worker projections and routes**
-
-Add lifecycle handlers in `controlHandlers.ts` and route parsing in `workerHttpApp.ts`.
-
-Implementation rules:
-
-- Validate ownership with `readAllowedConversationThread` before lifecycle writes.
-- Use `thread/read` after write where a response lacks full thread data.
-- Use `thread/loaded/list` as a best-effort flag source; if it fails, return `loaded: false`, `live: false` without leaking details.
-- `archive` returns the same lifecycle result shape as `open` and `unarchive`; list responses continue to include the archived row with `archived: true`.
-- `rename` limits title length to 120 and strips surrounding whitespace.
-
-Run:
-
-```bash
-pnpm --filter @codex-remote/worker test
-```
-
-Expected: Worker tests pass.
-
-### Task 2: Control Plane Routing And Web Workbench UI
+## Task 3: Control Plane Product State
 
 **Files:**
 - Modify: `apps/control-plane/src/client/workerClient.ts`
 - Modify: `apps/control-plane/src/http/controlPlaneHttpApp.ts`
-- Test: `apps/control-plane/src/client/workerClient.test.ts`
-- Test: `apps/control-plane/src/http/controlPlaneHttpApp.test.ts`
-- Modify: `apps/web/src/data/workerApi/client.ts`
-- Modify: `apps/web/src/data/workerApi/workbenchData.ts`
-- Modify: `apps/web/src/components/shell/codex-remote-app.tsx`
-- Modify: `apps/web/src/components/detail/main-panels.tsx`
-- Modify: `apps/web/src/components/sidebar/sidebar.tsx`
-- Modify: `apps/web/src/components/sidebar/action-menu.tsx`
-- Modify: `apps/web/src/app/globals.css`
-- Test: `apps/web/src/data/workerApi/client.test.ts`
-- Test: `apps/web/src/data/workerApi/workbenchData.test.ts`
-- Test: `apps/web/src/components/shell/codexRemoteAppWriteFlow.test.ts`
+- Modify: `packages/db/*` only if durable queue/settings state is required by the chosen implementation.
+- Test: `apps/control-plane/src/**/*.test.ts`
 
 **Interfaces:**
-- Consumes Task 1 public API types and Worker routes.
-- Produces visible Web open/rename/archive/restore and loaded/live/request-card state.
+- Consumes Worker public API.
+- Produces Control Plane-shaped APIs for normal conversation list, archived conversations, lifecycle actions, and queued running-turn messages.
 
-- [ ] **Step 1: Write failing Control Plane and Web tests**
+- [ ] Add failing tests for normal conversation list excluding archived conversations.
+- [ ] Add failing tests for Settings archived conversation list and restore.
+- [ ] Add failing tests for queue-after-current behavior when a conversation has an active turn.
+- [ ] Add failing tests for queue cancellation/failure state with sanitized errors.
+- [ ] Implement routing/state with the least durable store that satisfies multi-device/self-hosted requirements for this stage.
+- [ ] Run `pnpm --filter @codex-remote/control-plane test`.
 
-Add tests proving:
+## Task 4: Web Workbench UI Repair
 
-- Control Plane routes lifecycle calls to the configured Worker and normalizes returned `deviceId`.
-- Web client calls the device-scoped lifecycle endpoints with expected JSON.
-- Selecting a conversation triggers `openConversation` before refresh.
-- Sidebar/header display loaded/live/archived badges.
-- Rename/archive/restore actions show accepted/failed state and refresh.
-- Approval cards show pending/resolved state and keep failure copy sanitized.
-- Web domain tests cover duplicate event suppression, late event ordering, `snapshot_reset`, and snapshot-before-live reconciliation.
+**Files:**
+- Modify: `apps/web/src/components/conversation/codex-assistant-thread.tsx`
+- Modify: `apps/web/src/components/detail/main-panels.tsx`
+- Modify: `apps/web/src/components/shell/codex-remote-app.tsx`
+- Modify: `apps/web/src/components/sidebar/sidebar.tsx`
+- Modify: `apps/web/src/components/sidebar/action-menu.tsx`
+- Modify: `apps/web/src/data/workerApi/client.ts`
+- Modify: `apps/web/src/data/workerApi/workbenchData.ts`
+- Modify: `apps/web/src/app/globals.css`
+- Test: `apps/web/src/**/*.test.ts`
+- Test: `apps/web/e2e/*.spec.ts`
 
-Run:
+**Interfaces:**
+- Consumes public Control Plane-shaped APIs only.
+- Produces the app-like browser workbench.
 
-```bash
-pnpm --filter @codex-remote/control-plane test
-pnpm --filter @codex-remote/web test
-```
+- [ ] Add failing tests proving selecting a conversation opens and displays its content without pressing a separate Start button.
+- [ ] Add failing tests proving start/follow-up share the composer.
+- [ ] Add failing tests proving running composer exposes interrupt plus steer-now/queue-later choice.
+- [ ] Add failing tests proving archived rows disappear from the normal sidebar and appear under Settings -> 已归档对话.
+- [ ] Add failing tests proving request cards render in the timeline/workbench flow.
+- [ ] Add failing tests proving assistant messages show copy, thumbs up, thumbs down, fork, hooks, and timestamp action row; only copy/timestamp are enabled unless public routes exist.
+- [ ] Add failing tests proving permission menu UI remains present but does not send unconfirmed approval/sandbox behavior.
+- [ ] Implement UI repair from the tests, preserving confirmed placeholders.
+- [ ] Run `pnpm --filter @codex-remote/web test`.
 
-Expected: tests fail because routes/client/UI methods do not exist yet.
+## Task 5: Protocol-Derived Permission Menu Spec Detail
 
-- [ ] **Step 2: Implement Control Plane pass-through**
+**Files:**
+- Modify: `docs/superpowers/specs/2026-06-21-conversation-workbench-parity-design.md`
+- Modify: `FEATURE_SUPPORT.md`
+- Modify: Web tests only if behavior is enabled in this stage.
 
-Add `WorkerUpstreamClient` methods:
+**Interfaces:**
+- Consumes generated protocol fields: `approvalPolicy`, `approvalsReviewer`, `sandboxPolicy`, `permissionProfile/list`, and `item/permissions/requestApproval`.
+- Produces exact product labels and enabled/disabled behavior.
 
-- `openConversation`
-- `archiveConversation`
-- `unarchiveConversation`
-- `renameConversation`
+- [ ] Document which current UI labels map to which protocol fields.
+- [ ] Keep labels as placeholders if mapping is not verified.
+- [ ] Do not send new permission fields from Web until tests prove the full Web -> Control Plane -> Worker -> app-server path.
 
-Add Hono routes under `/v1/devices/:deviceId/conversations/:conversationId/...` and map `PATCH` support into CORS methods.
-
-- [ ] **Step 3: Implement Web API client and controllers**
-
-Add methods to `WorkerApiClientLike` and `WorkerApiClient`. Keep lifecycle submit logic in existing shell controller style or inline only if used once.
-
-Ponytail rule: if a submit path is used only once and has no branchy logic, keep it inline in `CodexRemoteApp`; extract only if tests need it.
-
-- [ ] **Step 4: Implement Web UI state**
-
-Add compact controls:
-
-- Conversation row trailing badges for loaded/live/archived.
-- Header status badges.
-- Rename prompt or compact inline input with native browser primitives; no modal framework.
-- Archive/Restore buttons in existing action menu/header actions.
-- Approval cards inside `ConversationControlStrip`, reusing pending approvals and resolved lifecycle state.
-
-Run:
-
-```bash
-pnpm --filter @codex-remote/control-plane test
-pnpm --filter @codex-remote/web test
-```
-
-Expected: tests pass.
-
-### Task 3: Verification, Real Chrome Check, And Stage Docs
+## Task 6: Verification And Stage Closure
 
 **Files:**
 - Modify: `PLAN.md`
 - Modify: `FEATURE_SUPPORT.md`
-- Modify: `CODEX_APP_PARITY.md` only if support status wording changes
-- Modify: `docs/superpowers/specs/2026-06-21-conversation-workbench-parity-design.md`
-- Modify: `docs/superpowers/plans/2026-06-21-conversation-workbench-parity.md`
+- Modify: `CODEX_APP_PARITY.md`
+- Modify: `docs/references/2026-06-21-feature-support-ui-audit.md` if findings change.
 
 **Interfaces:**
-- Consumes implementation evidence from Tasks 1-2.
-- Produces Stage 11 status, verification evidence, and known risks.
+- Consumes implementation evidence.
+- Produces route/status updates and verification record.
 
-- [ ] **Step 1: Run focused checks**
+- [ ] Run focused checks:
 
 ```bash
 pnpm --filter @codex-remote/api-contract test
@@ -222,7 +174,7 @@ pnpm --filter @codex-remote/control-plane test
 pnpm --filter @codex-remote/web test
 ```
 
-- [ ] **Step 2: Run full checks**
+- [ ] Run full checks:
 
 ```bash
 pnpm product:check
@@ -232,7 +184,7 @@ pnpm test
 pnpm build
 ```
 
-- [ ] **Step 3: Run real stack and Chrome verification**
+- [ ] Run real stack checks:
 
 ```bash
 pnpm real:start
@@ -241,41 +193,30 @@ pnpm real:check
 pnpm web:e2e:smoke
 ```
 
-Then use Chrome to verify:
-
-- open/resume normal path;
-- archive/unarchive normal path;
-- rename normal path;
-- loaded/live badge;
-- snapshot-first timeline before request/live state;
-- approval cards pending/resolved where safe evidence exists;
-- failure/degraded route with sanitized copy;
-- no visible or network-exposed sensitive strings.
-
-- [ ] **Step 4: Update docs and commit**
-
-Update `PLAN.md` and support docs with:
-
-- completed Stage 11 items;
-- focused/full verification commands and results;
-- Chrome verification results;
-- fixed issues;
-- remaining risks or real gaps.
-
-Commit:
-
-```bash
-git add packages apps docs PLAN.md FEATURE_SUPPORT.md CODEX_APP_PARITY.md
-git commit -m "feat: add conversation workbench parity"
-```
+- [ ] Use Chrome to verify every Stage 11 feature, boundary state, degraded state, and no-sensitive-leak condition from the spec.
+- [ ] Update `PLAN.md`, `FEATURE_SUPPORT.md`, and `CODEX_APP_PARITY.md` with real results.
+- [ ] Archive the completed spec/plan only after all automated and Chrome verification gates pass.
 
 ## Current Stage Status
 
-- Spec and plan written.
-- Plan review completed as approve-with-fixes; findings addressed by narrowing request cards to approval cards, defining event identity/order/gap/source fields, keeping archived rows discoverable, and using `title` as the only public display title.
-- Task 1 implementation reviewed; fixes applied for public title rename, resolved approval events, typed lifecycle RPC methods, and read-after-write lifecycle projection.
-- Task 2 implementation reviewed; fixes applied for snapshot timeline approval cards, nested event `deviceId` normalization, and approval-card reconciliation by approval identity.
-- Focused verification passed: api-contract 27/27, worker 185/185, control-plane 41/41, web 106/106, `pnpm typecheck` 11/11.
-- Full verification passed: `pnpm product:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
-- Real stack verification passed with caveats: `pnpm real:start`, `pnpm real:status`, `pnpm web:e2e:smoke`, and Stage 11 lifecycle API checks passed; `pnpm real:check` records `total=19 realPass=17 fixedPass=0 realGap=2`.
-- Chrome verification is blocked by the Chrome control tool, not by product code: Node-backed Chrome control fails with missing sandbox metadata after retry. Stage 11 remains open until @chrome browser verification is completed.
+- Active spec and plan have been rewritten from the 2026-06-21 consensus.
+- Previous pre-consensus Stage 11 spec/plan are archived and must not be used as completion evidence.
+- Stage 11A app-server output calibration has completed the docs-only reconciliation pass.
+- Stage 11A contract/projection cleanup has started:
+  - `ConversationTimelineTurn` now carries `itemsView` and public `nodes`.
+  - Public tool node `kind` includes neutral/non-file variants so Web no longer maps unknown tools into file-change UI.
+  - Worker projection now exposes safe user/assistant text and neutral tool/request summaries while redacting raw command, cwd, output, diff, MCP arguments/results, collab prompt, image path, raw reasoning, tokens, JSON-RPC, and app-server URLs.
+  - Control Plane parser now validates/pass-through timeline nodes instead of dropping them.
+- Current dirty code changes still need UI repair for composer controls, archived Settings, message action row, and permission placeholders.
+- Stage 11 completion is blocked on UI repair, focused/full verification, real-stack checks, and Chrome verification.
+
+Focused verification for Stage 11A contract/projection cleanup:
+
+- `pnpm --filter @codex-remote/api-contract test`
+- `pnpm --filter @codex-remote/api-contract typecheck`
+- `pnpm --filter @codex-remote/worker typecheck`
+- `pnpm --filter @codex-remote/worker test -- --test-name-pattern projections`
+- `pnpm --filter @codex-remote/control-plane typecheck`
+- `pnpm --filter @codex-remote/control-plane test -- --test-name-pattern "worker client|conversation timeline|lifecycle"`
+- `pnpm --filter @codex-remote/web typecheck`
+- `pnpm --filter @codex-remote/web test -- --test-name-pattern "workbenchData|fake Worker smoke server|assistantTimeline|CodexAssistant"`

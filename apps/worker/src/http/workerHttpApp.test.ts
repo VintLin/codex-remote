@@ -91,6 +91,14 @@ test("worker http app when timeline is requested, should return ConversationTime
       startedAt: 10,
       completedAt: 15,
       durationMs: 5000,
+      itemsView: "full",
+      nodes: [
+        {
+          id: "turn-123:status",
+          text: "turn completed",
+          type: "context",
+        },
+      ],
     },
   ]);
 });

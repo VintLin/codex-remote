@@ -19,6 +19,8 @@ import { readAllowedConversationThread } from "./readOnlyHandlers.ts";
 import { projectThreadToConversation, projectThreadToTimeline } from "./projections.ts";
 import type { WorkerWriteAppServerClient, WorkerWriteHandlerContext } from "./writeHandlers.ts";
 
+const localProjectId = "local-project";
+
 export interface WorkerControlAppServerClient extends WorkerWriteAppServerClient {
   interruptTurn(params: v2.TurnInterruptParams): Promise<unknown>;
   steerTurn(params: v2.TurnSteerParams): Promise<unknown>;
@@ -393,6 +395,7 @@ async function createLifecycleResult(
   const projectionContext = {
     allowedProjectRoot: context.config.allowedProjectRoot,
     deviceId: context.config.deviceId,
+    projectId: localProjectId,
     projectName: basename(context.config.allowedProjectRoot),
     archived: params.archived,
     loadedThreadIds,

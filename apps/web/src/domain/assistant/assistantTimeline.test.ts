@@ -39,12 +39,12 @@ test("when rendering the assistant thread, should keep assistant-ui runtime and 
   assert.doesNotMatch(source, /isSendDisabled:\s*true/);
 });
 
-test("when rendering the composer, should omit unimplemented future access controls", () => {
+test("when rendering the composer, should preserve confirmed future access placeholders", () => {
   const source = readWebSource("components/conversation/codex-assistant-thread.tsx");
 
-  assert.doesNotMatch(source, /const accessModeOptions = \[/);
-  assert.doesNotMatch(source, /label: "请求批准"/);
-  assert.doesNotMatch(source, /label: "替我审批"/);
-  assert.doesNotMatch(source, /label: "完全访问"/);
-  assert.doesNotMatch(source, /role="menuitemradio"/);
+  assert.match(source, /const accessModeOptions = \[/);
+  assert.match(source, /label: "请求批准"/);
+  assert.match(source, /label: "替我审批"/);
+  assert.match(source, /label: "完全访问"/);
+  assert.match(source, /role="menuitemradio"/);
 });

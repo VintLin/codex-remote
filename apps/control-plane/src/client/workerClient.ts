@@ -444,13 +444,45 @@ function projectApprovalCard(value: unknown): NonNullable<ConversationWorkbenchE
 
 function projectTimelineTurn(value: unknown): ConversationTimelineTurn {
   const body = requireRecord(value);
-  assertExactFields(body, ["id", "status", "startedAt", "completedAt", "durationMs"]);
+  assertExactFields(body, ["id", "status", "startedAt", "completedAt", "durationMs", "itemsView", "nodes"]);
   return {
     id: readString(body, "id"),
     status: readEnum(body, "status", ["in_progress", "completed", "interrupted", "failed", "unknown"]),
     startedAt: readNullableNumber(body, "startedAt"),
     completedAt: readNullableNumber(body, "completedAt"),
     durationMs: readNullableNumber(body, "durationMs"),
+    itemsView: readEnum(body, "itemsView", ["full", "partial", "unknown"]),
+    nodes: requireArray(body.nodes).map(projectTimelineNode),
+  };
+}
+
+function projectTimelineNode(value: unknown): ConversationTimelineTurn["nodes"][number] {
+  const body = requireRecord(value);
+  const type = readEnum(body, "type", ["text", "context", "tool"]);
+  if (type === "text") {
+    assertExactFields(body, ["id", "type", "role", "text"]);
+    return {
+      id: readString(body, "id"),
+      type,
+      role: readEnum(body, "role", ["assistant", "user", "unknown"]),
+      text: readString(body, "text"),
+    };
+  }
+  if (type === "tool") {
+    assertExactFields(body, ["id", "type", "kind", "status", "label"]);
+    return {
+      id: readString(body, "id"),
+      type,
+      kind: readEnum(body, "kind", ["command", "file_change", "mcp", "web_search", "image", "neutral", "other"]),
+      status: readEnum(body, "status", ["completed", "failed", "running", "unknown"]),
+      label: readString(body, "label"),
+    };
+  }
+  assertExactFields(body, ["id", "type", "text"]);
+  return {
+    id: readString(body, "id"),
+    type,
+    text: readString(body, "text"),
   };
 }
 

@@ -13,6 +13,7 @@ This document defines the product capability target before new stages are split.
 - Current support state: `FEATURE_SUPPORT.md`
 - Main stage roadmap: `PLAN.md`
 - Research references: `docs/references/questions/q29-q33-codex-app-parity-research-answers/`
+- Protocol inventory: `docs/references/2026-06-21-app-server-protocol-inventory.md`
 
 ## Direction
 
@@ -53,9 +54,9 @@ Rules:
 
 | Capability area | Codex App-like target | Current Codex Remote state | Gap |
 | --- | --- | --- | --- |
-| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Start/list/read plus Stage 11 open/resume, archive/unarchive, rename, and loaded/live badges are implemented; @chrome verification is still blocked | Need fork/goals/compact later and browser verification before Stage 11 archival |
-| Turn control | Start, follow-up, steer, interrupt | Supported with real evidence for start, follow-up, steer, interrupt | Need tighter realtime state display around active turns |
-| Timeline | Live agent output, reasoning, plan, item state, tool state, diffs, warnings, completion | Snapshot/timeline read is supported; durable live stream is not | Need Worker-projected event stream and Web reconciliation |
+| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Start/list/read and parts of the lifecycle API exist, but the 2026-06-21 UI parity review reopened Stage 11 | Need app-like sidebar/settings/archive flow, running composer controls, message actions, and Chrome verification before Stage 11 archival |
+| Turn control | Start, follow-up, steer, interrupt | Protocol/API paths exist, but current UI placement is wrong for app-like parity | Need composer-centered start/follow-up/interrupt plus steer-now versus queue-later running-send mode |
+| Timeline | Live agent output, reasoning, plan, item state, tool state, diffs, warnings, completion | Snapshot/timeline read is supported; current UI is not yet proven as app-like content display | Need safe content projection, Worker-projected event stream, and Web reconciliation |
 | Approval and input | Capture app-server requests, show user decisions, send responses, show resolved state | Approval capture is partial; decision remains real-gap; user input/MCP elicitation/tool calls are not exposed | Need request/response lifecycle parity |
 | Models and runtime | Model list, provider capabilities, reroute and verification status | Not exposed | Need model/runtime surface |
 | Config and experiments | Read/write config, requirements, experimental features | Not exposed | Need config surface derived from app-server protocol and public API |
@@ -76,7 +77,7 @@ Rules:
 
 Future stages should be split by product capability area, not by raw app-server method.
 
-1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline, projected live events, request cards, approval pending/resolved state. Current implementation needs @chrome verification before archival.
+1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Current implementation was reopened after UI parity review and must be corrected before archival.
 2. Local work tools read-only: filesystem preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
 3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.
@@ -113,7 +114,7 @@ Minimum UI states for every supported capability:
 - Action accepted
 - Action failed with sanitized error
 
-Unsupported capabilities should be absent or explicitly disabled; they must not appear as clickable no-op controls.
+Unsupported capabilities should be absent or explicitly disabled. Confirmed future affordances may remain visible as placeholders, but they must not appear as clickable no-op controls.
 
 ## Deprecated Direction
 
@@ -123,8 +124,8 @@ The next stage is no longer assumed to be only permission or approval production
 
 - Notifications are runtime stream inputs, not durable history. Worker must project them into Web-facing events with `seq`, `eventId`, redaction, replay/gap handling, and snapshot reconciliation.
 - The first timeline stream should include turn lifecycle, assistant deltas, command summaries, diff updates, approval/request state, MCP tool-call state, warnings, and terminal turn state. Reasoning, standalone process APIs, fuzzy-search sessions, and realtime voice stay out of the first stream.
-- Conversation lifecycle UI uses user intent names: open/continue, branch, archive, restore, rename, goal, compact, rollback preview. It must not expose raw `thread/*` method names as buttons.
-- Near-term lifecycle scope is open/resume, archive/unarchive, rename, and loaded/live badge. Fork/goal/compact are next; rollback and `inject_items` are deferred.
+- Conversation lifecycle UI uses user intent names: open/continue, fork/派生, archive, restore, rename, goal, compact, rollback preview. It must not expose raw `thread/*` method names as buttons.
+- Near-term lifecycle scope is open/resume, archive/unarchive, rename, loaded/live badge, composer running controls, archived conversations in Settings, and assistant message action placeholders. Fork/goal/compact are next as enabled behaviors; rollback and `inject_items` are deferred.
 - Local tools enter as read-only evidence first. Arbitrary filesystem write, arbitrary shell, plugin install, MCP config edit, and destructive external app actions require later controlled-action stages.
 - Account capability starts as sanitized device auth status from `account/read`. Login/logout, externally supplied tokens, usage/rate detail, and feedback upload are not near-term Web actions.
 - Realtime voice is experimental/watch. Official Codex App evidence supports dictation-like input more clearly than durable realtime voice control.

@@ -69,7 +69,7 @@ export interface AssistantContextCompactionNode extends AssistantTimelineNodeBas
   text: string;
 }
 
-export type ToolCallKind = "fileChange" | "mcpToolCall" | "webSearch";
+export type ToolCallKind = "command" | "fileChange" | "image" | "mcpToolCall" | "neutral" | "other" | "webSearch";
 
 export type ToolCallStatus = "completed" | "failed" | "running" | "unknown";
 

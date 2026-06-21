@@ -15,6 +15,7 @@ export type TurnStatus = components["schemas"]["TurnStatus"];
 export type TimelineItemsView = components["schemas"]["TimelineItemsView"];
 export type TimelineSortDirection = components["schemas"]["TimelineSortDirection"];
 export type ConversationTimelineTurn = components["schemas"]["ConversationTimelineTurn"];
+export type ConversationTimelineNode = components["schemas"]["ConversationTimelineNode"];
 export type ConversationTimeline = components["schemas"]["ConversationTimeline"];
 export type ConversationTimelinePage = components["schemas"]["ConversationTimelinePage"];
 export type ConversationEvent = components["schemas"]["ConversationEvent"];

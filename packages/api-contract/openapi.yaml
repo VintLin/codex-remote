@@ -1564,6 +1564,8 @@ components:
         - startedAt
         - completedAt
         - durationMs
+        - itemsView
+        - nodes
       properties:
         id:
           type: string
@@ -1581,6 +1583,98 @@ components:
           type:
             - number
             - "null"
+        itemsView:
+          type: string
+          enum:
+            - full
+            - partial
+            - unknown
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationTimelineNode"
+    ConversationTimelineNode:
+      oneOf:
+        - $ref: "#/components/schemas/ConversationTimelineTextNode"
+        - $ref: "#/components/schemas/ConversationTimelineContextNode"
+        - $ref: "#/components/schemas/ConversationTimelineToolNode"
+    ConversationTimelineTextNode:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - role
+        - text
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - text
+        role:
+          type: string
+          enum:
+            - assistant
+            - user
+            - unknown
+        text:
+          type: string
+          maxLength: 20000
+    ConversationTimelineContextNode:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - text
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - context
+        text:
+          type: string
+          maxLength: 2000
+    ConversationTimelineToolNode:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - type
+        - kind
+        - status
+        - label
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - tool
+        kind:
+          type: string
+          enum:
+            - command
+            - file_change
+            - mcp
+            - web_search
+            - image
+            - neutral
+            - other
+        status:
+          type: string
+          enum:
+            - completed
+            - failed
+            - running
+            - unknown
+        label:
+          type: string
+          maxLength: 200
     ConversationTimeline:
       type: object
       additionalProperties: false

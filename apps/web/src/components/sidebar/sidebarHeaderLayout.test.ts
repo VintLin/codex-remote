@@ -145,9 +145,9 @@ test("task board when source is not loaded, should render explicit example data 
   assert.match(readWebSource("components/shell/codex-remote-app.tsx"), /source=\{source\}/);
 });
 
-test("conversation composer when future controls are not implemented, should omit nonfunctional controls", () => {
-  assert.doesNotMatch(conversationThreadComponent, /aria-label="添加附件"/);
+test("conversation composer when future controls are placeholders, should keep them visibly disabled", () => {
+  assert.match(conversationThreadComponent, /aria-label="添加附件"[^>]*disabled/);
   assert.doesNotMatch(conversationThreadComponent, /aria-label="语音输入"/);
   assert.doesNotMatch(conversationThreadComponent, /className="codex-assistant-model"/);
-  assert.doesNotMatch(conversationThreadComponent, /className="codex-assistant-access"/);
+  assert.match(conversationThreadComponent, /className="codex-assistant-access"/);
 });

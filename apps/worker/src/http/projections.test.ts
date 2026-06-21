@@ -12,6 +12,7 @@ import {
 const defaultContext = {
   allowedProjectRoot: "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
   deviceId: "device-local",
+  projectId: "local-project",
   projectName: "050_codex_remote",
   readCompletedAt: "2026-06-19T10:00:02.000Z",
   readStartedAt: "2026-06-19T10:00:00.000Z",
@@ -32,6 +33,7 @@ test("worker http projections when projecting conversations, should use safe tit
       id: "thread-123",
       title: "Named conversation",
       deviceId: "device-local",
+      projectId: "local-project",
       projectName: "050_codex_remote",
       status: "running",
       updatedAt: new Date(1_718_791_234 * 1000).toISOString(),
@@ -107,10 +109,11 @@ test("worker http projections when projecting conversations, should use safe tit
   });
 });
 
-test("worker http projections when projecting timeline, should keep metadata only and derive deterministic snapshot revision", () => {
+test("worker http projections when projecting timeline, should expose safe nodes and derive deterministic snapshot revision", () => {
   const leakMarkers = {
     assistant: "LEAK_ASSISTANT_TEXT",
-    command: "LEAK_COMMAND_OUTPUT",
+    command: "echo LEAK_COMMAND",
+    commandOutput: "LEAK_COMMAND_OUTPUT",
     diff: "LEAK_FULL_DIFF",
     path: "/outside/root/LEAK_PATH",
     payload: "LEAK_RAW_ITEM_PAYLOAD",
@@ -130,12 +133,33 @@ test("worker http projections when projecting timeline, should keep metadata onl
           id: "turn-completed",
           items: [
             {
-              id: "item-1",
-              payload: leakMarkers.payload,
-              text: leakMarkers.assistant,
-              toolArgs: leakMarkers.toolArgs,
+              id: "user-1",
+              clientId: null,
+              type: "userMessage",
+              content: [{ type: "text", text: "User visible text", text_elements: [] }],
             },
-          ] as unknown as v2.Turn["items"],
+            {
+              id: "assistant-1",
+              type: "agentMessage",
+              text: leakMarkers.assistant,
+              phase: null,
+              memoryCitation: null,
+            },
+            {
+              id: "command-1",
+              type: "commandExecution",
+              command: leakMarkers.command,
+              cwd: leakMarkers.path,
+              processId: null,
+              source: "agent",
+              status: "completed",
+              commandActions: [],
+              aggregatedOutput: leakMarkers.commandOutput,
+              exitCode: 0,
+              durationMs: 12,
+            },
+          ] satisfies v2.Turn["items"],
+          itemsView: "full",
           startedAt: 20,
           status: "completed",
         }),
@@ -145,11 +169,37 @@ test("worker http projections when projecting timeline, should keep metadata onl
           id: "turn-in-progress",
           items: [
             {
-              commandOutput: leakMarkers.command,
-              diff: leakMarkers.diff,
-              prompt: leakMarkers.prompt,
+              id: "file-1",
+              type: "fileChange",
+              changes: [{ path: leakMarkers.path, kind: { type: "update", move_path: leakMarkers.path }, diff: leakMarkers.diff }],
+              status: "inProgress",
             },
-          ] as unknown as v2.Turn["items"],
+            {
+              id: "mcp-1",
+              type: "mcpToolCall",
+              server: "safe-server",
+              tool: "safe-tool",
+              status: "completed",
+              arguments: { leak: leakMarkers.toolArgs },
+              pluginId: null,
+              result: null,
+              error: null,
+              durationMs: null,
+            },
+            {
+              id: "agent-1",
+              type: "collabAgentToolCall",
+              tool: "spawnAgent",
+              status: "inProgress",
+              senderThreadId: "thread-123",
+              receiverThreadIds: [],
+              prompt: leakMarkers.prompt,
+              model: null,
+              reasoningEffort: null,
+              agentsStates: {},
+            },
+          ] satisfies v2.Turn["items"],
+          itemsView: "summary",
           startedAt: 80,
           status: "inProgress",
         }),
@@ -161,6 +211,7 @@ test("worker http projections when projecting timeline, should keep metadata onl
   assert.deepEqual(timeline, {
     deviceId: "device-local",
     conversationId: "thread-123",
+    projectId: "local-project",
     readStartedAt: "2026-06-19T10:00:00.000Z",
     readCompletedAt: "2026-06-19T10:00:02.000Z",
     snapshotRevision: "thread-123:2026-06-19T10:00:02.000Z",
@@ -176,6 +227,28 @@ test("worker http projections when projecting timeline, should keep metadata onl
         startedAt: 20,
         completedAt: 60,
         durationMs: 40_000,
+        itemsView: "full",
+        nodes: [
+          {
+            id: "user-1:0",
+            type: "text",
+            role: "user",
+            text: "User visible text",
+          },
+          {
+            id: "assistant-1",
+            type: "text",
+            role: "assistant",
+            text: leakMarkers.assistant,
+          },
+          {
+            id: "command-1",
+            type: "tool",
+            kind: "command",
+            status: "completed",
+            label: "Command execution",
+          },
+        ],
       },
       {
         id: "turn-in-progress",
@@ -183,6 +256,28 @@ test("worker http projections when projecting timeline, should keep metadata onl
         startedAt: 80,
         completedAt: null,
         durationMs: null,
+        itemsView: "partial",
+        nodes: [
+          {
+            id: "file-1",
+            type: "tool",
+            kind: "file_change",
+            status: "running",
+            label: "File changes · 1",
+          },
+          {
+            id: "mcp-1",
+            type: "tool",
+            kind: "mcp",
+            status: "completed",
+            label: "safe-tool",
+          },
+          {
+            id: "turn-in-progress:agent-1",
+            type: "context",
+            text: "Agent task",
+          },
+        ],
       },
     ],
     events: [],
@@ -191,7 +286,9 @@ test("worker http projections when projecting timeline, should keep metadata onl
   const serialized = JSON.stringify(timeline);
 
   assert.doesNotMatch(serialized, /LEAK_PROMPT_TEXT/);
-  assert.doesNotMatch(serialized, /LEAK_ASSISTANT_TEXT/);
+  assert.match(serialized, /LEAK_ASSISTANT_TEXT/);
+  assert.match(serialized, /User visible text/);
+  assert.doesNotMatch(serialized, /echo LEAK_COMMAND/);
   assert.doesNotMatch(serialized, /LEAK_COMMAND_OUTPUT/);
   assert.doesNotMatch(serialized, /LEAK_FULL_DIFF/);
   assert.doesNotMatch(serialized, /LEAK_TOOL_ARGS/);
@@ -332,6 +429,14 @@ test("worker http projections when statuses are unknown, should map thread and t
     startedAt: 10,
     completedAt: 15,
     durationMs: 5_000,
+    itemsView: "full",
+    nodes: [
+      {
+        id: "turn-123:status",
+        type: "context",
+        text: "turn unknown",
+      },
+    ],
   });
 });
 

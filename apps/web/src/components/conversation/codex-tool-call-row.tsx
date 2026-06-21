@@ -84,8 +84,20 @@ function getToolIconName(call: AssistantToolCallNode): IconName {
     return "search";
   }
 
+  if (call.kind === "command") {
+    return "square-terminal";
+  }
+
+  if (call.kind === "image") {
+    return "globe";
+  }
+
   if (call.kind === "mcpToolCall") {
     return "reload";
+  }
+
+  if (call.kind === "neutral" || call.kind === "other") {
+    return "information-o";
   }
 
   return "folder";

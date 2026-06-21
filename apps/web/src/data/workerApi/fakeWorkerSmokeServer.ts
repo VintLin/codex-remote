@@ -233,6 +233,8 @@ function createSeedData(input: FakeWorkerSeedInput): FakeWorkerSeedData {
             startedAt: 1,
             completedAt: null,
             durationMs: null,
+            itemsView: "full",
+            nodes: [],
           },
         ],
       },
@@ -252,6 +254,8 @@ function createSeedData(input: FakeWorkerSeedInput): FakeWorkerSeedData {
             startedAt: 3,
             completedAt: 4,
             durationMs: 1_000,
+            itemsView: "full",
+            nodes: [],
           },
         ],
       },
@@ -364,6 +368,8 @@ async function handleWriteRequest(params: {
     startedAt: sequence,
     completedAt: null,
     durationMs: null,
+    itemsView: "full",
+    nodes: [],
   };
   timeline.turns.push(turn);
   timeline.latestTurnStatus = "unknown";
@@ -527,6 +533,8 @@ function createStartedTimeline(
         startedAt: 1,
         completedAt: null,
         durationMs: null,
+        itemsView: "full",
+        nodes: [],
       },
     ],
   };

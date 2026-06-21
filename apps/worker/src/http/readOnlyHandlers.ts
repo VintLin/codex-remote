@@ -61,6 +61,7 @@ type ListedThread = {
 const sourceKinds = ["cli", "vscode", "appServer"] as const;
 const listLimit = 25;
 const maxPages = 100;
+const localProjectId = "local-project";
 
 export async function getHealth(context: WorkerReadOnlyHandlerContext): Promise<WorkerHealth> {
   const checkedAt = context.now();
@@ -151,7 +152,7 @@ export async function listConversations(context: WorkerReadOnlyHandlerContext): 
 export function listProjects(context: WorkerReadOnlyHandlerContext): RemoteProject[] {
   return [
     {
-      id: "local-project",
+      id: localProjectId,
       name: basename(context.config.allowedProjectRoot),
       deviceId: context.config.deviceId,
       path: "",
@@ -179,6 +180,7 @@ export async function readConversationTimeline(
     return projectThreadToTimeline(thread, {
       allowedProjectRoot: context.config.allowedProjectRoot,
       deviceId: context.config.deviceId,
+      projectId: localProjectId,
       archived: false,
       loadedThreadIds: await listLoadedThreadIds(client),
       approvals: [
@@ -391,6 +393,7 @@ function createProjectionContext(
   return {
     allowedProjectRoot: context.config.allowedProjectRoot,
     deviceId: context.config.deviceId,
+    projectId: localProjectId,
     projectName: basename(context.config.allowedProjectRoot),
     ...overrides,
   };

@@ -10,7 +10,11 @@ import type {
   ErrorEnvelope,
 } from "@codex-remote/api-contract";
 
-import type { AssistantTimelineTurn, AssistantThreadSnapshot } from "../../domain/assistant/assistantTimeline.ts";
+import type {
+  AssistantTimelineNode,
+  AssistantTimelineTurn,
+  AssistantThreadSnapshot,
+} from "../../domain/assistant/assistantTimeline.ts";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
 
 import {
@@ -120,7 +124,7 @@ function createMetadataOnlyAssistantTurn(turn: ConversationTimelineTurn): Assist
     startedAt: turn.startedAt,
     completedAt: turn.completedAt,
     durationMs: turn.durationMs,
-    nodes: [
+    nodes: turn.nodes.length > 0 ? turn.nodes.map((node) => projectTimelineNode(turn.id, node)) : [
       {
         type: "contextCompaction",
         id: `${turn.id}-metadata`,
@@ -130,6 +134,70 @@ function createMetadataOnlyAssistantTurn(turn: ConversationTimelineTurn): Assist
       },
     ],
   };
+}
+
+function projectTimelineNode(
+  turnId: string,
+  node: ConversationTimelineTurn["nodes"][number],
+): AssistantTimelineNode {
+  if (node.type === "text") {
+    return {
+      id: node.id,
+      turnId,
+      sourceItemIds: [node.id],
+      type: "text",
+      role: node.role,
+      text: node.text,
+      links: [],
+    };
+  }
+
+  if (node.type === "tool") {
+    return {
+      id: node.id,
+      turnId,
+      sourceItemIds: [node.id],
+      type: "toolCall",
+      kind: projectToolKind(node.kind),
+      status: node.status,
+      defaultCollapsed: true,
+      label: node.label,
+      detailPlacement: "inline",
+      detailTarget: {
+        type: "tool",
+        title: node.label,
+        detail: node.label,
+        presentation: "inline",
+      },
+    };
+  }
+
+  return {
+    id: node.id,
+    turnId,
+    sourceItemIds: [node.id],
+    type: "contextCompaction",
+    text: node.text,
+  };
+}
+
+function projectToolKind(kind: Extract<ConversationTimelineTurn["nodes"][number], { type: "tool" }>["kind"]) {
+  switch (kind) {
+    case "command":
+      return "command";
+    case "file_change":
+      return "fileChange";
+    case "image":
+      return "image";
+    case "mcp":
+      return "mcpToolCall";
+    case "web_search":
+      return "webSearch";
+    case "neutral":
+      return "neutral";
+    default:
+      return "other";
+  }
 }
 
 function createAssistantThreadsFromConversations(

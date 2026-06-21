@@ -671,6 +671,23 @@ test("when stage 11 conversation lifecycle contract is maintained, openapi shoul
     assert.match(timelineBlock.join("\n"), new RegExp(`^        ${fieldName}:`, "m"));
   }
 
+  const timelineTurnBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationTimelineTurn");
+  assert.match(timelineTurnBlock.join("\n"), /^        itemsView:/m);
+  assert.match(timelineTurnBlock.join("\n"), /^        nodes:/m);
+
+  expectSchemaDisallowsAdditionalProperties(source, "ConversationTimelineTextNode");
+  expectSchemaDisallowsAdditionalProperties(source, "ConversationTimelineContextNode");
+  const timelineToolNodeBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationTimelineToolNode");
+  expectPropertyEnum(timelineToolNodeBlock, "kind", [
+    "command",
+    "file_change",
+    "mcp",
+    "web_search",
+    "image",
+    "neutral",
+    "other",
+  ]);
+
   const eventBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationWorkbenchEvent");
   for (const fieldName of ["eventId", "seq", "deviceId", "conversationId", "kind", "createdAt", "source"]) {
     assert.match(eventBlock.join("\n"), new RegExp(`^        ${fieldName}:`, "m"));

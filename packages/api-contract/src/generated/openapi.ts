@@ -675,6 +675,34 @@ export interface components {
             startedAt: number | null;
             completedAt: number | null;
             durationMs: number | null;
+            /** @enum {string} */
+            itemsView: "full" | "partial" | "unknown";
+            nodes: components["schemas"]["ConversationTimelineNode"][];
+        };
+        ConversationTimelineNode: components["schemas"]["ConversationTimelineTextNode"] | components["schemas"]["ConversationTimelineContextNode"] | components["schemas"]["ConversationTimelineToolNode"];
+        ConversationTimelineTextNode: {
+            id: string;
+            /** @enum {string} */
+            type: "text";
+            /** @enum {string} */
+            role: "assistant" | "user" | "unknown";
+            text: string;
+        };
+        ConversationTimelineContextNode: {
+            id: string;
+            /** @enum {string} */
+            type: "context";
+            text: string;
+        };
+        ConversationTimelineToolNode: {
+            id: string;
+            /** @enum {string} */
+            type: "tool";
+            /** @enum {string} */
+            kind: "command" | "file_change" | "mcp" | "web_search" | "image" | "neutral" | "other";
+            /** @enum {string} */
+            status: "completed" | "failed" | "running" | "unknown";
+            label: string;
         };
         ConversationTimeline: {
             deviceId: string;
