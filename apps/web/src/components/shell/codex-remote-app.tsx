@@ -72,6 +72,7 @@ export function CodexRemoteApp() {
   const [taskStatus, setTaskStatus] = useState<"failed" | "idle" | "submitting">("idle");
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
+  const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const { devices, projects, conversations, approvalCards, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
@@ -273,24 +274,25 @@ export function CodexRemoteApp() {
     }
   }, [conversations, refreshWorkbenchData, source.reason, workerClient]);
 
-  const renameConversation = useCallback(async (targetConversation: { deviceId: string; id: string; title: string }) => {
+  const renameConversation = useCallback(async (targetConversation: { deviceId: string; id: string; title: string }, title: string) => {
     if (source.reason !== "loaded" || !controlPlaneToken) {
       setControlStatus("failed");
       return;
     }
-    const title = window.prompt("重命名对话", targetConversation.title)?.trim();
-    if (!title) {
+    const nextTitle = title.trim();
+    if (!nextTitle) {
       return;
     }
 
     setControlStatus("submitting");
     try {
       await workerClient.renameConversation(targetConversation.deviceId, targetConversation.id, {
-        title,
+        title: nextTitle,
         clientRequestId: crypto.randomUUID(),
       });
       await refreshWorkbenchData(createConversationKey(targetConversation));
       setControlStatus("accepted");
+      setRenamingConversationKey(null);
     } catch {
       setControlStatus("failed");
     }
@@ -332,12 +334,14 @@ export function CodexRemoteApp() {
     }
   }, [refreshWorkbenchData, source.reason, workerClient]);
 
-  const renameConversationByKey = useCallback(async (conversationKey: string) => {
+  const beginRenameConversationByKey = useCallback((conversationKey: string) => {
     const targetConversation = findConversationByKey(conversations, conversationKey);
     if (targetConversation) {
-      await renameConversation(targetConversation);
+      setSelectedConversationKey(conversationKey);
+      setActiveView("conversation");
+      setRenamingConversationKey(conversationKey);
     }
-  }, [conversations, renameConversation]);
+  }, [conversations]);
 
   const archiveConversationByKey = useCallback(async (conversationKey: string) => {
     const targetConversation = findConversationByKey(conversations, conversationKey);
@@ -616,6 +620,12 @@ export function CodexRemoteApp() {
             }}
             onSelectAdjacentConversation={selectConversation}
             onArchiveConversation={archiveConversation}
+            onBeginRenameConversation={() => {
+              if (conversation) {
+                setRenamingConversationKey(createConversationKey(conversation));
+              }
+            }}
+            onCancelRenameConversation={() => setRenamingConversationKey(null)}
             onRenameConversation={renameConversation}
             onRestoreConversation={unarchiveConversation}
             onSubmitApprovalDecision={submitApprovalControl}
@@ -626,6 +636,7 @@ export function CodexRemoteApp() {
             pendingApprovals={[]}
             approvalCards={approvalCards}
             previousConversationKey={conversationNavigator.previousConversationKey}
+            renaming={conversation ? renamingConversationKey === createConversationKey(conversation) : false}
             source={source}
             startStatus={startStatus}
           />
@@ -668,6 +679,8 @@ export function CodexRemoteApp() {
           }}
           onSelectAdjacentConversation={selectConversation}
           onArchiveConversation={archiveConversation}
+          onBeginRenameConversation={() => setRenamingConversationKey(createConversationKey(conversation))}
+          onCancelRenameConversation={() => setRenamingConversationKey(null)}
           onRenameConversation={renameConversation}
           onRestoreConversation={unarchiveConversation}
           onSubmitApprovalDecision={submitApprovalControl}
@@ -678,6 +691,7 @@ export function CodexRemoteApp() {
           pendingApprovals={pendingApprovals}
           approvalCards={approvalCards}
           previousConversationKey={conversationNavigator.previousConversationKey}
+          renaming={renamingConversationKey === createConversationKey(conversation)}
           source={source}
           startStatus={startStatus}
         />
@@ -696,7 +710,7 @@ export function CodexRemoteApp() {
       onCollapseSidebar={() => setIsSidebarCollapsed(true)}
       onOpenSearch={() => setIsSearchOpen(true)}
       onArchiveConversation={archiveConversationByKey}
-      onRenameConversation={renameConversationByKey}
+      onRenameConversation={beginRenameConversationByKey}
       onRestoreConversation={restoreConversationByKey}
       onSelectAdjacentConversation={selectConversation}
       onSelectConversation={selectConversation}

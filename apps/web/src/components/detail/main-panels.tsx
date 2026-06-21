@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge as UiBadge, Icon, RightDetailPane, StatusDot } from "@codex-remote/ui";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
@@ -41,12 +41,15 @@ interface ConversationMainProps {
   onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
   onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
   onArchiveConversation: (conversation: CodexConversation) => Promise<void>;
-  onRenameConversation: (conversation: CodexConversation) => Promise<void>;
+  onBeginRenameConversation: () => void;
+  onCancelRenameConversation: () => void;
+  onRenameConversation: (conversation: CodexConversation, title: string) => Promise<void>;
   onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   previousConversationKey: string | null;
   nextConversationKey: string | null;
+  renaming: boolean;
   pendingApprovals: PendingApproval[];
   approvalCards: ConversationApprovalCard[];
   source: WorkbenchData["source"];
@@ -115,9 +118,12 @@ export function ConversationMain({
   onSubmitStart,
   onSubmitSteer,
   onArchiveConversation,
+  onBeginRenameConversation,
+  onCancelRenameConversation,
   onRenameConversation,
   onRestoreConversation,
   previousConversationKey,
+  renaming,
   pendingApprovals,
   approvalCards,
   source,
@@ -125,6 +131,7 @@ export function ConversationMain({
   activeTurnId,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? "对话" : conversation.title;
+  const [renameDraft, setRenameDraft] = useState(conversationTitle);
   const isExampleData = source.reason !== "loaded";
   const datasourceStatus: string[] = [source.reason];
   if (source.error?.code) {
@@ -133,6 +140,10 @@ export function ConversationMain({
   if (source.error?.message) {
     datasourceStatus.push(source.error.message);
   }
+
+  useEffect(() => {
+    setRenameDraft(conversationTitle);
+  }, [conversationTitle, renaming]);
 
   return (
     <main className="main-pane">
@@ -173,7 +184,32 @@ export function ConversationMain({
             </div>
           ) : null}
           <div className="workspace-title conversation-title">
-            <h1>{conversationTitle}</h1>
+            {renaming && conversation ? (
+              <form
+                aria-label="重命名对话"
+                className="conversation-rename-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void onRenameConversation(conversation, renameDraft);
+                }}
+              >
+                <input
+                  aria-label="Conversation title"
+                  autoFocus
+                  maxLength={120}
+                  onChange={(event) => setRenameDraft(event.target.value)}
+                  value={renameDraft}
+                />
+                <button disabled={controlStatus === "submitting" || renameDraft.trim() === ""} type="submit">
+                  保存
+                </button>
+                <button onClick={onCancelRenameConversation} type="button">
+                  取消
+                </button>
+              </form>
+            ) : (
+              <h1>{conversationTitle}</h1>
+            )}
             <ConversationStatusBadges conversation={conversation} />
             {!isMobile ? (
               <ActionMenu
@@ -182,7 +218,7 @@ export function ConversationMain({
                 className="conversation-title-menu"
                 group="conversation"
                 {...(conversation ? { onArchive: () => void onArchiveConversation(conversation) } : {})}
-                {...(conversation ? { onRename: () => void onRenameConversation(conversation) } : {})}
+                {...(conversation ? { onRename: onBeginRenameConversation } : {})}
                 {...(conversation ? { onRestore: () => void onRestoreConversation(conversation) } : {})}
               />
             ) : null}

@@ -44,6 +44,38 @@ body {
   padding: 0 5px;
 }
 
+.conversation-rename-form {
+  display: flex;
+  min-width: 240px;
+  max-width: min(520px, 100%);
+  align-items: center;
+  gap: 6px;
+}
+
+.conversation-rename-form input {
+  min-width: 0;
+  flex: 1;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-bg);
+  color: var(--cr-ink);
+  font: inherit;
+  letter-spacing: 0;
+  padding: 5px 7px;
+}
+
+.conversation-rename-form button {
+  min-height: 28px;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+  color: var(--cr-ink);
+  font-size: var(--cr-text-compact);
+  font-weight: var(--cr-weight-emphasis);
+  letter-spacing: 0;
+  padding: 0 8px;
+}
+
 .conversation-approval-card {
   display: grid;
   min-width: 0;

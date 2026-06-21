@@ -102,7 +102,11 @@ test("conversation workbench UI when lifecycle state exists, should expose badge
   assert.match(actionMenuSource, /onArchive/);
   assert.match(actionMenuSource, /onRestore/);
   assert.match(shellSource, /renameConversation/);
+  assert.match(shellSource, /renamingConversationKey/);
+  assert.match(mainPanelsSource, /aria-label="重命名对话"/);
+  assert.match(mainPanelsSource, /maxLength=\{120\}/);
+  assert.match(mainPanelsSource, /onBeginRenameConversation/);
   assert.match(shellSource, /archiveConversation/);
   assert.match(shellSource, /unarchiveConversation/);
-  assert.match(shellSource, /window\.prompt/);
+  assert.doesNotMatch(shellSource, /window\.prompt/);
 });
