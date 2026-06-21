@@ -57,7 +57,7 @@ flowchart LR
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 能力 | 已完成；approval decision 留安全 real-gap |
 | 10. Isolated Approval Fixture | 隔离验证 approval decision decline/cancel | 已实现 fixture；blocked 于 app-server 未产生 safe pending approval |
 | 11. Conversation Workbench Parity | Codex App-like browser workbench | 已完成；approval decision 留既有安全 real-gap |
-| 12. Local Work Tools Read-only | 文件/命令/Git/MCP/插件等本地工作工具只读能力 | 待设计 |
+| 12. Local Work Tools Read-only | 文件/命令/Git/MCP/插件等本地工作工具只读能力 | 设计中 |
 
 ```mermaid
 flowchart TB
@@ -116,10 +116,24 @@ Stage 11 non-goals：
 
 - rollback、raw `inject_items`、任意 shell/filesystem 写、plugin install、account login/logout、realtime voice、Windows setup、feedback upload、external agent import、production approval safety model。
 
+## Active Stage 12
+
+Active docs:
+
+- `docs/superpowers/specs/2026-06-21-local-workbench-readonly-design.md`
+- `docs/superpowers/plans/2026-06-21-local-workbench-readonly.md`
+
+Stage 12 当前方向：
+
+- 只读本地工具面：文件 tree/metadata/preview、Git/review/search、MCP status/resources/tools list、skills/hooks/plugins/marketplace/apps inventory。
+- Worker 继续作为唯一 filesystem、Git、shell、app-server 边界。
+- Web 只消费 Control Plane-shaped API。
+- 不做文件写、shell 执行、command evidence/output、review start、MCP tool call、插件安装、config/account 写操作。
+
 ## Stage 11+ Draft Roadmap
 
 1. Stage 11：Conversation Workbench Parity。Codex App-like browser workbench：open/resume、archive/unarchive、rename、loaded/live badge、snapshot-first timeline 内容展示、Worker-projected live/request events、approval/request pending/resolved cards、composer 内 start/follow-up/interrupt/steer/queue、Settings -> 已归档对话、assistant message action row、protocol-derived permission menu placeholder。
-2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、command history/output、turn diff/working tree diff、review findings、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps list。
+2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、Git/review 摘要、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps inventory。Command history/output 留到后续受控 shell/terminal 阶段。
 3. Stage 13：Controlled Local Actions。显式用户 shell command、allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows with local confirmation。
 4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps richer management。
 5. Stage 15+：Advanced Platform Watchlist。realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations。
@@ -163,4 +177,4 @@ Stage 11 non-goals：
 
 ## 下一步
 
-下一步进入 Stage 12 设计：先写 Local Work Tools Read-only spec/plan，范围限定为文件预览/metadata、命令输出只读、Git diff、review findings、fuzzy search、MCP status/resources/tools list、plugin/marketplace read、skills/hooks/apps list。
+下一步执行 Stage 12 architecture review：你作为架构师思考需要审核的维度，指派 subagent 审核该计划。根据 review 修正 spec/plan 后，再进入 subagent-driven implementation。

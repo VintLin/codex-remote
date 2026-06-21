@@ -78,7 +78,7 @@ Rules:
 Future stages should be split by product capability area, not by raw app-server method.
 
 1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Stage 11 closure gates passed; approval decision remains the known real-gap from the isolated approval fixture.
-2. Local work tools read-only: filesystem preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
+2. Local work tools read-only: filesystem preview/metadata, Git/review summaries, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps inventory. Command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
 3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.
 5. Advanced realtime and platform watchlist: realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations.
