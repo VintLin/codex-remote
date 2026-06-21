@@ -21,7 +21,7 @@ const unsafeTextPatterns = [
   /\bjsonrpc\b/i,
   /\bcommand output\b/i,
   /(?:^|[^\w])\/Users\//,
-  /[A-Za-z]:\\/,
+  /[A-Za-z]:[\\/]/,
 ];
 
 export async function resolveProjectPath(
@@ -324,7 +324,17 @@ function sanitizeGitPath(rawPath: string, allowedProjectRoot: string): string | 
     }
   }
 
-  return trimmed.replaceAll("\\", "/");
+  const normalizedPath = normalize(trimmed.replaceAll("\\", "/")).replaceAll(sep, "/");
+  if (
+    normalizedPath === "." ||
+    normalizedPath === ".." ||
+    normalizedPath.startsWith("../") ||
+    normalizedPath.includes("/../")
+  ) {
+    return null;
+  }
+
+  return normalizedPath;
 }
 
 function mapGitStatus(indexStatus: string, worktreeStatus: string): ProjectGitSummary["changedFiles"][number]["status"] {

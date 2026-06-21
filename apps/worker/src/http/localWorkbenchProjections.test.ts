@@ -80,6 +80,63 @@ test("local workbench projections when projecting git diff, should keep only fil
   assert.doesNotMatch(JSON.stringify(summary), /diff --git|@@|sk-test-secret-token|PROMPT|private\/path/);
 });
 
+test("local workbench projections when projecting git diff paths, should reject parent traversal entries", async () => {
+  const summary = projectGitDiffToSummary(
+    {
+      sha: "abc123" as never,
+      diff: [
+        "## feature/local-workbench...origin/main",
+        " M src/changed.ts | 4 ++--",
+        " M ../outside.txt | 1 +",
+        " M src/../../escape.ts | 1 +",
+      ].join("\n"),
+    },
+    "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+  );
+
+  assert.deepEqual(summary, {
+    branch: "feature/local-workbench",
+    status: "dirty",
+    aheadCount: 0,
+    behindCount: 0,
+    stagedCount: 0,
+    unstagedCount: 1,
+    untrackedCount: 0,
+    reviewState: "unknown",
+    changedFiles: [
+      { path: "src/changed.ts", status: "modified", additions: 2, deletions: 2 },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(summary), /\.\.\/outside\.txt|src\/\.\.\/\.\.\/escape\.ts/);
+});
+
+test("local workbench projections when projecting git diff paths, should drop Windows slash absolute paths", async () => {
+  const summary = projectGitDiffToSummary(
+    {
+      sha: "abc123" as never,
+      diff: [
+        "## feature/local-workbench...origin/main",
+        " M C:/Users/vint/private.ts | 1 +",
+        " M src/changed.ts | 2 ++",
+      ].join("\n"),
+    },
+    "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+  );
+
+  assert.deepEqual(summary, {
+    branch: "feature/local-workbench",
+    status: "dirty",
+    aheadCount: 0,
+    behindCount: 0,
+    stagedCount: 0,
+    unstagedCount: 1,
+    untrackedCount: 0,
+    reviewState: "unknown",
+    changedFiles: [{ path: "src/changed.ts", status: "modified", additions: 2, deletions: 0 }],
+  });
+  assert.doesNotMatch(JSON.stringify(summary), /C:\/Users\/vint\/private\.ts/);
+});
+
 test("local workbench projections when projecting extension inventory, should expose only whitelist metadata", async () => {
   const inventory = projectExtensionInventory(
     {

@@ -328,6 +328,48 @@ test("local workbench handlers when search results include sibling-prefix paths,
   assert.doesNotMatch(JSON.stringify(search), /project-evil|secret\.ts/);
 });
 
+test("local workbench handlers when searching inside a subdirectory, should reject project-root matches outside the requested path", async () => {
+  const paths = await createTempProject();
+  await mkdir(join(paths.projectRoot, "src"), { recursive: true });
+  await writeFile(join(paths.projectRoot, "src", "index.ts"), "export const value = 1;\n", "utf8");
+  await writeFile(join(paths.projectRoot, "README.md"), "# Local Workbench\n", "utf8");
+
+  const search = await searchProjectFiles(
+    createContext(paths.allowedRoot, new FakeClient({
+      fuzzyResponse: {
+        files: [
+          {
+            root: join(paths.projectRoot, "src"),
+            path: "index.ts",
+            match_type: "file",
+            file_name: "index.ts",
+            score: 0.9,
+            indices: [0, 1],
+          },
+          {
+            root: paths.projectRoot,
+            path: "README.md",
+            match_type: "file",
+            file_name: "README.md",
+            score: 0.8,
+            indices: [0, 1],
+          },
+        ],
+      },
+    })),
+    "local-project",
+    "index",
+    "src",
+    20,
+  );
+
+  assert.deepEqual(search, {
+    query: "index",
+    matches: [{ path: "src/index.ts", lineNumber: 1, columnNumber: null, match: "index.ts", snippet: null, score: 0.9 }],
+  });
+  assert.doesNotMatch(JSON.stringify(search), /README\.md/);
+});
+
 test("local workbench handlers when routes are mounted, should expose get-only local workbench endpoints", async () => {
   const paths = await createTempProject();
   await writeFile(join(paths.projectRoot, "README.md"), "# Local Workbench\n", "utf8");

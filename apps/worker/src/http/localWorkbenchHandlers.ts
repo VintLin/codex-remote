@@ -217,15 +217,20 @@ export async function searchProjectFiles(
     for (const match of response.files.slice(0, boundedLimit)) {
       const absolutePath = match.path.startsWith("/") ? match.path : join(match.root, match.path);
 
-      const configuredRelativePath = normalizeSearchResultPath(relative(context.config.allowedProjectRoot, absolutePath));
-      const canonicalRelativePath = normalizeSearchResultPath(relative(resolved.absolutePath, absolutePath));
-      const relativePath = configuredRelativePath ?? canonicalRelativePath;
-      if (!relativePath) {
+      const projectRelativePath = normalizeSearchResultPath(relative(context.config.allowedProjectRoot, absolutePath));
+      if (!projectRelativePath) {
         continue;
       }
 
+      if (resolved.relativePath) {
+        const requestedPrefix = `${resolved.relativePath}/`;
+        if (projectRelativePath !== resolved.relativePath && !projectRelativePath.startsWith(requestedPrefix)) {
+          continue;
+        }
+      }
+
       matches.push({
-        path: relativePath,
+        path: projectRelativePath,
         lineNumber: 1,
         columnNumber: null,
         match: match.file_name.slice(0, 240),
