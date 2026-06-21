@@ -56,6 +56,13 @@ const schemaTypeNames = [
   "ProbeCheckResult",
   "ProbeMode",
   "WorkerProbeSummary",
+  "LocalWorkbenchSummary",
+  "ProjectDirectoryListing",
+  "ProjectFilePreview",
+  "ProjectGitSummary",
+  "ProjectSearchResult",
+  "McpServerSummary",
+  "ExtensionInventory",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 const stage2Paths = [
@@ -134,6 +141,48 @@ const stage7TaskPaths = [
   "/v1/tasks:",
   "/v1/tasks/{taskId}/conversation-links:",
   "/v1/tasks/{taskId}/conversation-links/{deviceId}/{conversationId}:",
+] as const;
+const stage12Paths = [
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/summary:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/files:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/file-preview:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/git:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/search:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/mcp:",
+  "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/extensions:",
+] as const;
+const stage12RouteExpectedSchemas = new Map<(typeof stage12Paths)[number], readonly string[]>([
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/summary:", ["LocalWorkbenchSummary"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/files:", ["ProjectDirectoryListing"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/file-preview:", ["ProjectFilePreview"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/git:", ["ProjectGitSummary"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/search:", ["ProjectSearchResult"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/mcp:", ["McpServerSummary"]],
+  ["/v1/devices/{deviceId}/projects/{projectId}/local-workbench/extensions:", ["ExtensionInventory"]],
+]);
+const stage12ErrorResponsesByStatus = new Map([
+  ["400", "BadRequestError"],
+  ["401", "UnauthorizedError"],
+  ["403", "ForbiddenError"],
+  ["404", "DeviceNotFoundError"],
+  ["408", "RequestTimeoutError"],
+  ["424", "DeviceUnavailableError"],
+  ["500", "InternalWorkerError"],
+] as const);
+const stage12ForbiddenLeakFields = [
+  "absolutePath",
+  "rawCommand",
+  "rawOutput",
+  "commandText",
+  "fullDiff",
+  "diffHunk",
+  "jsonRpc",
+  "token",
+  "secret",
+  "appServerUrl",
+  "sourcePath",
+  "marketplacePath",
+  "contents",
 ] as const;
 const stage7TaskWritePathMethodPairs = [
   "/v1/tasks:post",
@@ -832,6 +881,77 @@ test("when control plane routes are maintained, no unversioned public control pl
     controlPlanePathLines.filter((line) => !/^  \/v1\//.test(line)),
     [],
   );
+});
+
+test("when stage 12 local workbench contract is maintained, openapi should define versioned read-only project routes", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  for (const path of stage12Paths) {
+    assert.equal(versionedPathLines.includes(path), true);
+  }
+
+  for (const path of stage12Paths) {
+    const pathBlockLines = extractPathBlock(source, path);
+    assert.equal(pathBlockLines.length > 0, true);
+
+    const methods = extractMethodBlocks(pathBlockLines);
+    assert.deepEqual(
+      methods.map((methodBlock) => methodBlock.method),
+      ["get"],
+    );
+
+    const method = expectDefined(methods.find((methodBlock) => methodBlock.method === "get"), `${path} should define GET`);
+    const methodSource = method.lines.join("\n");
+    const responseRefs = extractResponseRefs(method.lines);
+    const expectedSchemas = expectDefined(stage12RouteExpectedSchemas.get(path), `${path} should map to expected schemas`);
+
+    for (const schemaName of expectedSchemas) {
+      assert.match(methodSource, new RegExp(`#\\/components\\/schemas\\/${schemaName}`));
+    }
+    for (const [status, responseName] of stage12ErrorResponsesByStatus) {
+      assert.deepEqual(responseRefs.get(status)?.componentResponseRefs, [responseName]);
+    }
+    assert.equal(method.lines.some((line) => /^ {6}requestBody:\s*$/.test(line)), false);
+  }
+});
+
+test("when stage 12 public schemas are maintained, local workbench schemas should stay closed and leak-free", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const stage12SchemaNames = [
+    "LocalWorkbenchSummary",
+    "ProjectDirectoryListing",
+    "ProjectFilePreview",
+    "ProjectGitSummary",
+    "ProjectSearchResult",
+    "McpServerSummary",
+    "ExtensionInventory",
+  ] as const;
+
+  for (const schemaName of stage12SchemaNames) {
+    const schemaBlockLines = expectSchemaDisallowsAdditionalProperties(source, schemaName);
+    assert.match(schemaBlockLines.join("\n"), /^        /m);
+
+    for (const leakField of stage12ForbiddenLeakFields) {
+      assert.doesNotMatch(schemaBlockLines.join("\n"), new RegExp(`\\b${escapeRegExp(leakField)}\\b`));
+    }
+  }
+});
+
+test("when stage 12 public api types are exported, source index should re-export local workbench aliases", () => {
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+
+  for (const aliasName of [
+    "LocalWorkbenchSummary",
+    "ProjectDirectoryListing",
+    "ProjectFilePreview",
+    "ProjectGitSummary",
+    "ProjectSearchResult",
+    "McpServerSummary",
+    "ExtensionInventory",
+  ] as const) {
+    assert.match(publicExportSource, new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`));
+  }
 });
 
 test("when task board api is maintained, openapi should define versioned stage 7 task paths", () => {

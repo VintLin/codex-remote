@@ -23,6 +23,13 @@ export type ProbeFailureType = components["schemas"]["ProbeFailureType"];
 export type ProbeCheckResult = components["schemas"]["ProbeCheckResult"];
 export type ProbeMode = components["schemas"]["ProbeMode"];
 export type WorkerProbeSummary = components["schemas"]["WorkerProbeSummary"];
+export type LocalWorkbenchSummary = components["schemas"]["LocalWorkbenchSummary"];
+export type ProjectDirectoryListing = components["schemas"]["ProjectDirectoryListing"];
+export type ProjectFilePreview = components["schemas"]["ProjectFilePreview"];
+export type ProjectGitSummary = components["schemas"]["ProjectGitSummary"];
+export type ProjectSearchResult = components["schemas"]["ProjectSearchResult"];
+export type McpServerSummary = components["schemas"]["McpServerSummary"];
+export type ExtensionInventory = components["schemas"]["ExtensionInventory"];
 
 export type Device = components["schemas"]["Device"];
 export type RemoteProject = components["schemas"]["RemoteProject"];

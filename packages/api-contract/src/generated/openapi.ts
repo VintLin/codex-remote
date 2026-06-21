@@ -660,6 +660,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLocalWorkbenchSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listLocalWorkbenchProjectFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/file-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLocalWorkbenchFilePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLocalWorkbenchGitSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchLocalWorkbenchProjectFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLocalWorkbenchMcpSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/projects/{projectId}/local-workbench/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getLocalWorkbenchExtensionInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -848,6 +960,130 @@ export interface components {
                 readyz: boolean;
             };
             checks: components["schemas"]["ProbeCheckResult"][];
+        };
+        LocalWorkbenchSummary: {
+            deviceId: string;
+            projectId: string;
+            projectPath: string;
+            projectName: string;
+            fileCount: number;
+            directoryCount: number;
+            /** @enum {string} */
+            gitStatus: "clean" | "dirty" | "unavailable" | "unknown";
+            searchResultCount: number;
+            mcpServerCount: number;
+            extensionCount: number;
+            previewAvailable?: boolean;
+        };
+        ProjectDirectoryListing: {
+            projectPath: string;
+            entries: {
+                path: string;
+                name: string;
+                /** @enum {string} */
+                kind: "directory" | "file";
+                sizeBytes?: number | null;
+                modifiedAt?: string | null;
+                childCount?: number | null;
+                truncated?: boolean;
+            }[];
+        };
+        ProjectFilePreview: {
+            projectPath: string;
+            path: string;
+            /** @enum {string} */
+            previewKind: "text" | "unavailable";
+            mimeType?: string | null;
+            byteCount?: number | null;
+            lineCount?: number | null;
+            truncated: boolean;
+            previewText?: string | null;
+            reason?: string | null;
+        };
+        ProjectGitSummary: {
+            projectPath: string;
+            branch: string;
+            /** @enum {string} */
+            status: "clean" | "dirty" | "detached" | "unavailable" | "unknown";
+            aheadCount: number;
+            behindCount: number;
+            stagedCount: number;
+            unstagedCount: number;
+            untrackedCount: number;
+            /** @enum {string} */
+            reviewState?: "not_requested" | "in_review" | "changes_requested" | "approved" | "unknown";
+            changedFiles: {
+                path: string;
+                /** @enum {string} */
+                status: "added" | "modified" | "deleted" | "renamed" | "copied" | "untracked" | "ignored" | "unknown";
+                additions?: number | null;
+                deletions?: number | null;
+            }[];
+        };
+        ProjectSearchResult: {
+            projectPath: string;
+            query: string;
+            matches: {
+                path: string;
+                lineNumber: number;
+                columnNumber?: number | null;
+                match: string;
+                snippet?: string | null;
+                score?: number | null;
+            }[];
+        };
+        McpServerSummary: {
+            deviceId: string;
+            projectId: string;
+            servers: {
+                name: string;
+                /** @enum {string} */
+                status: "connected" | "disconnected" | "initializing" | "error" | "unknown";
+                description?: string | null;
+                tools: string[];
+                resources: string[];
+                resourceTemplates: string[];
+                /** @enum {string} */
+                authStatus?: "ready" | "needs_auth" | "error" | "unknown";
+            }[];
+        };
+        ExtensionInventory: {
+            deviceId: string;
+            projectId: string;
+            skills: {
+                name: string;
+                enabled: boolean;
+                description?: string | null;
+                /** @enum {string} */
+                status?: "installed" | "available" | "unknown";
+            }[];
+            hooks: {
+                name: string;
+                enabled: boolean;
+                description?: string | null;
+                event?: string | null;
+            }[];
+            plugins: {
+                id: string;
+                name: string;
+                enabled: boolean;
+                description?: string | null;
+                skillCount?: number | null;
+                appCount?: number | null;
+                mcpServerCount?: number | null;
+            }[];
+            marketplaceEntries: {
+                name: string;
+                /** @enum {string} */
+                installStatus: "installed" | "not_installed" | "unknown";
+                description?: string | null;
+            }[];
+            apps: {
+                id: string;
+                name: string;
+                enabled: boolean;
+                description?: string | null;
+            }[];
         };
         Device: {
             id: string;
@@ -2460,6 +2696,224 @@ export interface operations {
             401: components["responses"]["UnauthorizedError"];
             403: components["responses"]["ForbiddenError"];
             404: components["responses"]["TaskNotFoundError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getLocalWorkbenchSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only local workbench summary for a configured device project. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkbenchSummary"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    listLocalWorkbenchProjectFiles: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only directory listing for a project-relative path. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDirectoryListing"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getLocalWorkbenchFilePreview: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded text preview or safe unavailable metadata for a project file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFilePreview"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getLocalWorkbenchGitSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parsed read-only Git summary for the selected project. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectGitSummary"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    searchLocalWorkbenchProjectFiles: {
+        parameters: {
+            query: {
+                query: string;
+                path?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded fuzzy file search results for the selected project. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSearchResult"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getLocalWorkbenchMcpSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only MCP server status with resources and tools listed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerSummary"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getLocalWorkbenchExtensionInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only extension inventory for skills, hooks, plugins, marketplace entries, and apps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionInventory"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };
     };

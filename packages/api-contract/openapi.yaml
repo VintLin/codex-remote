@@ -1473,6 +1473,278 @@ paths:
           $ref: "#/components/responses/TaskNotFoundError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/summary:
+    get:
+      operationId: getLocalWorkbenchSummary
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only local workbench summary for a configured device project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalWorkbenchSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/files:
+    get:
+      operationId: listLocalWorkbenchProjectFiles
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only directory listing for a project-relative path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDirectoryListing"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/file-preview:
+    get:
+      operationId: getLocalWorkbenchFilePreview
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bounded text preview or safe unavailable metadata for a project file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectFilePreview"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/git:
+    get:
+      operationId: getLocalWorkbenchGitSummary
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Parsed read-only Git summary for the selected project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectGitSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/search:
+    get:
+      operationId: searchLocalWorkbenchProjectFiles
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Bounded fuzzy file search results for the selected project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSearchResult"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/mcp:
+    get:
+      operationId: getLocalWorkbenchMcpSummary
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only MCP server status with resources and tools listed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpServerSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/local-workbench/extensions:
+    get:
+      operationId: getLocalWorkbenchExtensionInventory
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only extension inventory for skills, hooks, plugins, marketplace entries, and apps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtensionInventory"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
   responses:
     BadRequestError:
@@ -2112,6 +2384,503 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProbeCheckResult"
+    LocalWorkbenchSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - projectId
+        - projectPath
+        - projectName
+        - fileCount
+        - directoryCount
+        - gitStatus
+        - searchResultCount
+        - mcpServerCount
+        - extensionCount
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        projectPath:
+          type: string
+          maxLength: 400
+        projectName:
+          type: string
+          maxLength: 200
+        fileCount:
+          type: integer
+          minimum: 0
+        directoryCount:
+          type: integer
+          minimum: 0
+        gitStatus:
+          type: string
+          enum:
+            - clean
+            - dirty
+            - unavailable
+            - unknown
+        searchResultCount:
+          type: integer
+          minimum: 0
+        mcpServerCount:
+          type: integer
+          minimum: 0
+        extensionCount:
+          type: integer
+          minimum: 0
+        previewAvailable:
+          type: boolean
+    ProjectDirectoryListing:
+      type: object
+      additionalProperties: false
+      required:
+        - projectPath
+        - entries
+      properties:
+        projectPath:
+          type: string
+          maxLength: 400
+        entries:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - name
+              - kind
+            properties:
+              path:
+                type: string
+                maxLength: 400
+              name:
+                type: string
+                maxLength: 200
+              kind:
+                type: string
+                enum:
+                  - directory
+                  - file
+              sizeBytes:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+              modifiedAt:
+                type:
+                  - string
+                  - "null"
+              childCount:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+              truncated:
+                type: boolean
+    ProjectFilePreview:
+      type: object
+      additionalProperties: false
+      required:
+        - projectPath
+        - path
+        - previewKind
+        - truncated
+      properties:
+        projectPath:
+          type: string
+          maxLength: 400
+        path:
+          type: string
+          maxLength: 400
+        previewKind:
+          type: string
+          enum:
+            - text
+            - unavailable
+        mimeType:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        byteCount:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        lineCount:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        truncated:
+          type: boolean
+        previewText:
+          type:
+            - string
+            - "null"
+          maxLength: 20000
+        reason:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+    ProjectGitSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - projectPath
+        - branch
+        - status
+        - aheadCount
+        - behindCount
+        - stagedCount
+        - unstagedCount
+        - untrackedCount
+        - changedFiles
+      properties:
+        projectPath:
+          type: string
+          maxLength: 400
+        branch:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          enum:
+            - clean
+            - dirty
+            - detached
+            - unavailable
+            - unknown
+        aheadCount:
+          type: integer
+          minimum: 0
+        behindCount:
+          type: integer
+          minimum: 0
+        stagedCount:
+          type: integer
+          minimum: 0
+        unstagedCount:
+          type: integer
+          minimum: 0
+        untrackedCount:
+          type: integer
+          minimum: 0
+        reviewState:
+          type: string
+          enum:
+            - not_requested
+            - in_review
+            - changes_requested
+            - approved
+            - unknown
+        changedFiles:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - status
+            properties:
+              path:
+                type: string
+                maxLength: 400
+              status:
+                type: string
+                enum:
+                  - added
+                  - modified
+                  - deleted
+                  - renamed
+                  - copied
+                  - untracked
+                  - ignored
+                  - unknown
+              additions:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+              deletions:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+    ProjectSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - projectPath
+        - query
+        - matches
+      properties:
+        projectPath:
+          type: string
+          maxLength: 400
+        query:
+          type: string
+          maxLength: 200
+        matches:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - lineNumber
+              - match
+            properties:
+              path:
+                type: string
+                maxLength: 400
+              lineNumber:
+                type: integer
+                minimum: 1
+              columnNumber:
+                type:
+                  - integer
+                  - "null"
+                minimum: 1
+              match:
+                type: string
+                maxLength: 240
+              snippet:
+                type:
+                  - string
+                  - "null"
+                maxLength: 2000
+              score:
+                type:
+                  - number
+                  - "null"
+    McpServerSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - projectId
+        - servers
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        servers:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - name
+              - status
+              - tools
+              - resources
+              - resourceTemplates
+            properties:
+              name:
+                type: string
+                maxLength: 200
+              status:
+                type: string
+                enum:
+                  - connected
+                  - disconnected
+                  - initializing
+                  - error
+                  - unknown
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
+              tools:
+                type: array
+                maxItems: 50
+                items:
+                  type: string
+                  maxLength: 200
+              resources:
+                type: array
+                maxItems: 50
+                items:
+                  type: string
+                  maxLength: 200
+              resourceTemplates:
+                type: array
+                maxItems: 50
+                items:
+                  type: string
+                  maxLength: 200
+              authStatus:
+                type: string
+                enum:
+                  - ready
+                  - needs_auth
+                  - error
+                  - unknown
+    ExtensionInventory:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - projectId
+        - skills
+        - hooks
+        - plugins
+        - marketplaceEntries
+        - apps
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        skills:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - name
+              - enabled
+            properties:
+              name:
+                type: string
+                maxLength: 200
+              enabled:
+                type: boolean
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
+              status:
+                type: string
+                enum:
+                  - installed
+                  - available
+                  - unknown
+        hooks:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - name
+              - enabled
+            properties:
+              name:
+                type: string
+                maxLength: 200
+              enabled:
+                type: boolean
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
+              event:
+                type:
+                  - string
+                  - "null"
+                maxLength: 120
+        plugins:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+              - enabled
+            properties:
+              id:
+                type: string
+                maxLength: 200
+              name:
+                type: string
+                maxLength: 200
+              enabled:
+                type: boolean
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
+              skillCount:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+              appCount:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+              mcpServerCount:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+        marketplaceEntries:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - name
+              - installStatus
+            properties:
+              name:
+                type: string
+                maxLength: 200
+              installStatus:
+                type: string
+                enum:
+                  - installed
+                  - not_installed
+                  - unknown
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
+        apps:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+              - enabled
+            properties:
+              id:
+                type: string
+                maxLength: 200
+              name:
+                type: string
+                maxLength: 200
+              enabled:
+                type: boolean
+              description:
+                type:
+                  - string
+                  - "null"
+                maxLength: 200
     Device:
       type: object
       additionalProperties: false
