@@ -137,9 +137,15 @@ Stage 12 完成范围：
 
 ## Active Stage 13
 
+Active docs:
+
+- `docs/superpowers/specs/2026-06-22-controlled-local-actions-design.md`
+- `docs/superpowers/plans/2026-06-22-controlled-local-actions.md`
+
 Stage 13 当前方向：
 
-- Controlled Local Actions：显式用户 shell command、allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows with local confirmation。
+- Controlled Local Actions：allowlisted project actions、review start、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows with local confirmation。
+- 架构审核后首批实现切片收窄为 explicit confirmation 后的 fixed-target `review/start` for uncommitted changes。`thread/shellCommand` 因 full-access unsandboxed 且保留 shell syntax，延后到单独 allowlisted action policy。
 - 先定义公共 contract 与安全确认模型，再实现任何本地写/执行能力。
 - 继续禁止 raw command output、full diff、raw JSON-RPC、provider secrets 或 app-server URL 暴露到 Web/Control Plane。
 
@@ -191,4 +197,4 @@ Stage 13 当前方向：
 
 ## 下一步
 
-下一步进入 Stage 13 design：定义 Controlled Local Actions 的 public contract、安全确认模型、审计/降级状态和最小可验证垂直切片；实现前继续要求 architecture review 与 subagent review。
+下一步执行 Stage 13 architecture review：审核 `docs/superpowers/specs/2026-06-22-controlled-local-actions-design.md` 和 `docs/superpowers/plans/2026-06-22-controlled-local-actions.md` 的范围、安全模型、边界、验证和是否应继续收窄首批切片。
