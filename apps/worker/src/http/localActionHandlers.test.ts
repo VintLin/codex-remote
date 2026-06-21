@@ -107,6 +107,7 @@ test("worker local action handlers when review starts, should call fixed uncommi
   assert.deepEqual(client.startReviewCalls, [
     {
       threadId: "thread-1",
+      delivery: "inline",
       target: { type: "uncommittedChanges" },
     },
   ]);
@@ -216,7 +217,7 @@ class FakeLocalActionClient implements WorkerLocalActionAppServerClient {
     if (this.reviewStartError) {
       throw this.reviewStartError;
     }
-    return {};
+    return createReviewStartResponse();
   }
 
   close(): void {
@@ -300,6 +301,22 @@ function createThread(overrides: Partial<v2.Thread> = {}): v2.Thread {
     name: null,
     turns: [],
     ...overrides,
+  };
+}
+
+function createReviewStartResponse(): v2.ReviewStartResponse {
+  return {
+    reviewThreadId: "thread-123",
+    turn: {
+      id: "turn-review-1",
+      items: [],
+      itemsView: "full",
+      status: "inProgress",
+      error: null,
+      startedAt: 1_718_791_210,
+      completedAt: null,
+      durationMs: null,
+    },
   };
 }
 

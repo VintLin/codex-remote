@@ -173,7 +173,7 @@ test("read-only http server cli when review-start route is requested, should for
         readThread: async () => ({ thread: createThread({ cwd: projectChild }) }),
         startReview: async (params) => {
           startReviewCalls.push(params);
-          return {};
+          return createReviewStartResponse();
         },
       }),
       startedByWorker: false,
@@ -207,6 +207,7 @@ test("read-only http server cli when review-start route is requested, should for
   assert.deepEqual(startReviewCalls, [
     {
       threadId: "thread-123",
+      delivery: "inline",
       target: { type: "uncommittedChanges" },
     },
   ]);
@@ -286,7 +287,7 @@ function createFakeWorkerClient(overrides: Partial<AppServerWorkerClient> = {}):
     },
     interruptTurn: async () => ({}),
     steerTurn: async () => ({ turnId: "turn-1" }),
-    startReview: async () => ({}),
+    startReview: async () => createReviewStartResponse(),
     gitDiffToRemote: async () => ({ sha: "abc123" as never, diff: "## main\n" }),
     fuzzyFileSearch: async () => ({ files: [] }),
     listMcpServerStatus: async () => ({ data: [], nextCursor: null }),
@@ -326,5 +327,21 @@ function createThread(overrides: Partial<v2.Thread> = {}): v2.Thread {
     name: null,
     turns: [],
     ...overrides,
+  };
+}
+
+function createReviewStartResponse(): v2.ReviewStartResponse {
+  return {
+    reviewThreadId: "thread-123",
+    turn: {
+      id: "turn-review-1",
+      items: [],
+      itemsView: "full",
+      status: "inProgress",
+      error: null,
+      startedAt: 1_718_791_210,
+      completedAt: null,
+      durationMs: null,
+    },
   };
 }

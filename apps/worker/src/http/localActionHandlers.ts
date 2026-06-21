@@ -47,6 +47,7 @@ export async function startLocalReview(
     await readAllowedConversationThread(client, context.config.allowedProjectRoot, conversationId, operation);
     await client.startReview({
       threadId: conversationId,
+      delivery: "inline",
       target: { type: "uncommittedChanges" },
     });
 

@@ -63,9 +63,10 @@ const messageMaxLength = 20_000;
 const reviewStartRoute = "/v1/conversations/:conversationId/local-actions/review-start";
 
 export function createWorkerHttpApp(
-  context: WorkerControlHandlerContext & WorkerLocalActionHandlerContext,
+  context: WorkerControlHandlerContext,
 ): Hono<WorkerHonoEnv> {
   const localWorkbenchContext = context as unknown as WorkerLocalWorkbenchHandlerContext;
+  const localActionContext = context as unknown as WorkerLocalActionHandlerContext;
   const app = new Hono<WorkerHonoEnv>();
 
   app.onError((error, c) => {
@@ -152,7 +153,7 @@ export function createWorkerHttpApp(
     c.json(await followUpConversation(context, c.req.param("conversationId"), await readFollowUpInput(c)), 202),
   );
   app.post(reviewStartRoute, async (c) =>
-    c.json(await startLocalReview(context, c.req.param("conversationId"), await readStartReviewInput(c)), 202),
+    c.json(await startLocalReview(localActionContext, c.req.param("conversationId"), await readStartReviewInput(c)), 202),
   );
   app.post("/v1/conversations/:conversationId/turns/:turnId/interrupt", async (c) =>
     c.json(
