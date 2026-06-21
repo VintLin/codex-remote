@@ -31,6 +31,14 @@ export type ProjectSearchResult = components["schemas"]["ProjectSearchResult"];
 export type McpServerSummary = components["schemas"]["McpServerSummary"];
 export type ExtensionInventory = components["schemas"]["ExtensionInventory"];
 export type StartReviewInput = components["schemas"]["StartReviewInput"];
+export type RuntimeSettingsSummary = components["schemas"]["RuntimeSettingsSummary"];
+export type RuntimeSettingsSectionStatus = components["schemas"]["RuntimeSettingsSectionStatus"];
+export type RuntimeModelSummary = components["schemas"]["RuntimeModelSummary"];
+export type RuntimeProviderCapabilities = components["schemas"]["RuntimeProviderCapabilities"];
+export type RuntimeAccountSummary = components["schemas"]["RuntimeAccountSummary"];
+export type RuntimeConfigPosture = components["schemas"]["RuntimeConfigPosture"];
+export type RuntimePermissionProfileSummary = components["schemas"]["RuntimePermissionProfileSummary"];
+export type RuntimeExperimentalFeatureSummary = components["schemas"]["RuntimeExperimentalFeatureSummary"];
 
 export type Device = components["schemas"]["Device"];
 export type RemoteProject = components["schemas"]["RemoteProject"];

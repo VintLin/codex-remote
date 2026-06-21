@@ -11,6 +11,10 @@ import type {
   WorkerLocalActionAppServerClient,
   WorkerLocalActionHandlerContext,
 } from "../http/localActionHandlers.ts";
+import type {
+  WorkerRuntimeSettingsAppServerClient,
+  WorkerRuntimeSettingsHandlerContext,
+} from "../http/runtimeSettingsHandlers.ts";
 import { createWorkerHttpApp } from "../http/workerHttpApp.ts";
 import { loadWorkerHttpConfig, type WorkerHttpConfig } from "../http/workerHttpConfig.ts";
 import {
@@ -56,7 +60,10 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
 function createDefaultWorkerHandlerContext(
   config: WorkerHttpConfig,
   openWorkerSession = openWorkerAppServerSession,
-): WorkerControlHandlerContext & WorkerLocalWorkbenchHandlerContext & WorkerLocalActionHandlerContext {
+): WorkerControlHandlerContext &
+  WorkerLocalWorkbenchHandlerContext &
+  WorkerLocalActionHandlerContext &
+  WorkerRuntimeSettingsHandlerContext {
   const approvalRegistry = createWorkerApprovalRegistry();
   let sharedSession: Promise<WorkerAppServerSession> | null = null;
 
@@ -96,7 +103,10 @@ function createDefaultWorkerHandlerContext(
 function createSessionClient(
   client: AppServerWorkerClient,
   closeSession: () => void,
-): WorkerControlAppServerClient & WorkerLocalWorkbenchAppServerClient & WorkerLocalActionAppServerClient {
+): WorkerControlAppServerClient &
+  WorkerLocalWorkbenchAppServerClient &
+  WorkerLocalActionAppServerClient &
+  WorkerRuntimeSettingsAppServerClient {
   return {
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
@@ -122,6 +132,13 @@ function createSessionClient(
     listPlugins: (params) => client.listPlugins(params),
     readPlugin: (params) => client.readPlugin(params),
     listApps: (params) => client.listApps(params),
+    listModels: (params) => client.listModelsWithParams(params),
+    readModelProviderCapabilities: (params) => client.readModelProviderCapabilities(params),
+    readAccount: (params) => client.readAccount(params),
+    getAuthStatus: (params) => client.getAuthStatus(params),
+    readConfig: (params) => client.readConfig(params),
+    listPermissionProfiles: (params) => client.listPermissionProfiles(params),
+    listExperimentalFeatures: (params) => client.listExperimentalFeatures(params),
     sendApprovalResponse: (params) => client.sendApprovalResponse(params),
     close: () => closeSession(),
   };

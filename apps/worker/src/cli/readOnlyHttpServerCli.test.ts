@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -210,6 +210,85 @@ test("read-only http server cli when review-start route is requested, should for
       delivery: "inline",
       target: { type: "uncommittedChanges" },
     },
+  ]);
+});
+
+test("read-only http server cli when runtime-settings route is requested, should forward stage 14 read-only methods", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
+  const canonicalProjectRoot = await realpath(projectRoot);
+  const writes = createWritable();
+  const captured: { fetch?: (request: Request) => Promise<Response> | Response } = {};
+  const methods: string[] = [];
+
+  const exitCode = await startReadOnlyHttpServer({
+    env: {
+      CODEX_REMOTE_WORKER_TOKEN: "example-token",
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: projectRoot,
+      CODEX_REMOTE_ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+      CODEX_APP_SERVER_URL: "ws://127.0.0.1:4321",
+    },
+    stdout: writes.stdout,
+    stderr: writes.stderr,
+    openWorkerSession: async () => ({
+      client: createFakeWorkerClient({
+        listModelsWithParams: async (params) => {
+          methods.push(`model/list:${JSON.stringify(params)}`);
+          return { data: [], nextCursor: null };
+        },
+        readModelProviderCapabilities: async () => {
+          methods.push("modelProvider/capabilities/read");
+          return { namespaceTools: true, imageGeneration: false, webSearch: true };
+        },
+        readAccount: async (params) => {
+          methods.push(`account/read:${JSON.stringify(params)}`);
+          return { account: null, requiresOpenaiAuth: true };
+        },
+        getAuthStatus: async (params) => {
+          methods.push(`getAuthStatus:${JSON.stringify(params)}`);
+          return { authMethod: null, authToken: "SECRET_TOKEN", requiresOpenaiAuth: true };
+        },
+        readConfig: async (params) => {
+          methods.push(`config/read:${JSON.stringify(params)}`);
+          return { config: {} as never, origins: {}, layers: null };
+        },
+        listPermissionProfiles: async (params) => {
+          methods.push(`permissionProfile/list:${JSON.stringify(params)}`);
+          return { data: [], nextCursor: null };
+        },
+        listExperimentalFeatures: async (params) => {
+          methods.push(`experimentalFeature/list:${JSON.stringify(params)}`);
+          return { data: [], nextCursor: null };
+        },
+      }),
+      startedByWorker: false,
+      close: () => {},
+    }),
+    serveHttp: (options) => {
+      captured.fetch = (request) => options.fetch(request, undefined as never) as Promise<Response> | Response;
+      return undefined as never;
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  if (!captured.fetch) {
+    throw new Error("fetch app was not captured");
+  }
+
+  const response: Response = await captured.fetch(new Request("http://127.0.0.1:8787/v1/projects/local-project/runtime-settings", {
+    headers: { authorization: "Bearer example-token" },
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.projectId, "local-project");
+  assert.deepEqual(methods, [
+    "model/list:{\"cursor\":null,\"limit\":50,\"includeHidden\":false}",
+    "modelProvider/capabilities/read",
+    "account/read:{\"refreshToken\":false}",
+    "getAuthStatus:{\"includeToken\":false,\"refreshToken\":false}",
+    `config/read:{"includeLayers":false,"cwd":"${canonicalProjectRoot}"}`,
+    `permissionProfile/list:{"cursor":null,"limit":50,"cwd":"${canonicalProjectRoot}"}`,
+    "experimentalFeature/list:{\"cursor\":null,\"limit\":50,\"threadId\":null}",
   ]);
 });
 

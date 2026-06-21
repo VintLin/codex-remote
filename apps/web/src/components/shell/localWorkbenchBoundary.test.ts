@@ -19,6 +19,18 @@ test("local workbench Web source when rendered should stay on public API boundar
   assert.deepEqual(offenders, []);
 });
 
+test("runtime settings Web source when rendered should stay on public API boundary", () => {
+  const offenders = webSources
+    .filter((entry) => entry.source.includes("@codex-remote/codex-protocol"))
+    .map((entry) => entry.path);
+  const combined = webSources.map((entry) => entry.source).join("\n");
+
+  assert.deepEqual(offenders, []);
+  assert.match(combined, /RuntimeSettingsSummary/);
+  assert.match(combined, /getRuntimeSettingsSummary/);
+  assert.match(combined, /runtime-settings/);
+});
+
 test("review-start Web source when rendered should stay on public contract and avoid raw protocol actions", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
@@ -63,6 +75,71 @@ test("local workbench Web source when rendered should not reference raw leak mar
   );
 
   assert.deepEqual(offenders, []);
+});
+
+test("runtime settings UI source should render read-only summary without raw leak marker fields", () => {
+  const combined = webSources.map((entry) => entry.source).join("\n");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const expectedUiMarkers = [
+    "Runtime & Settings",
+    "Models",
+    "Provider capabilities",
+    "Account",
+    "Config posture",
+    "Permission profiles",
+    "Experimental features",
+    "section statuses",
+  ];
+  const forbiddenMarkers = [
+    "authToken",
+    "apiKey",
+    "rawConfig",
+    "layers",
+    "developerInstructions",
+    "compactPrompt",
+    "cwd",
+    "absolutePath",
+    "jsonRpc",
+    "appServerUrl",
+    "stack",
+    "cause",
+    "stdout",
+    "stderr",
+    "fullDiff",
+    "rawPrompt",
+  ];
+  const missing = expectedUiMarkers.filter((marker) => !combined.includes(marker));
+  const offenders = forbiddenMarkers.filter((marker) => mainPanelsSource.includes(marker));
+
+  assert.deepEqual(missing, []);
+  assert.deepEqual(offenders, []);
+});
+
+test("runtime settings SettingsPage source should keep archive restore and avoid unsupported write controls", () => {
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const combined = `${mainPanelsSource}\n${shellSource}`;
+  const unsupportedActionMarkers = [
+    "login",
+    "logout",
+    "model switch",
+    "模型切换",
+    "config write",
+    "写入配置",
+    "experimental enable",
+    "启用实验",
+    "permissionProfile/list",
+    "account/login",
+    "account/logout",
+    "config/value/write",
+    "experimentalFeature/enablement/set",
+  ];
+
+  assert.match(mainPanelsSource, /RuntimeSettingsPanel/);
+  assert.match(mainPanelsSource, /已归档对话/);
+  assert.match(mainPanelsSource, /onRestoreConversation/);
+  assert.match(shellSource, /runtimeSettings=\{runtimeSettings\}/);
+  assert.deepEqual(unsupportedActionMarkers.filter((marker) => combined.includes(marker)), []);
 });
 
 test("local workbench UI source should not render hooks commands skills contents command output or diff hunks", () => {

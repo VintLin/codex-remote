@@ -788,6 +788,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/projects/{projectId}/runtime-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getControlPlaneDeviceProjectRuntimeSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -976,6 +992,72 @@ export interface components {
                 readyz: boolean;
             };
             checks: components["schemas"]["ProbeCheckResult"][];
+        };
+        RuntimeSettingsSummary: {
+            deviceId: string;
+            projectId: string;
+            /** Format: date-time */
+            readAt: string;
+            sections: components["schemas"]["RuntimeSettingsSectionStatus"][];
+            models: components["schemas"]["RuntimeModelSummary"][];
+            providerCapabilities: components["schemas"]["RuntimeProviderCapabilities"];
+            account: components["schemas"]["RuntimeAccountSummary"];
+            config: components["schemas"]["RuntimeConfigPosture"];
+            permissionProfiles: components["schemas"]["RuntimePermissionProfileSummary"][];
+            experimentalFeatures: components["schemas"]["RuntimeExperimentalFeatureSummary"][];
+        };
+        RuntimeSettingsSectionStatus: {
+            /** @enum {string} */
+            section: "models" | "providerCapabilities" | "account" | "config" | "permissionProfiles" | "experimentalFeatures";
+            /** @enum {string} */
+            status: "loaded" | "degraded" | "unavailable";
+            error?: components["schemas"]["ErrorEnvelope"];
+        };
+        RuntimeModelSummary: {
+            id: string;
+            displayName: string;
+            isDefault: boolean;
+            supportedReasoningEfforts: string[];
+            inputModalities: string[];
+            serviceTiers: string[];
+        };
+        RuntimeProviderCapabilities: {
+            supportsReasoning: boolean;
+            supportsImages: boolean;
+            supportsWebSearch: boolean;
+            supportsStructuredOutput: boolean;
+        };
+        RuntimeAccountSummary: {
+            type: string;
+            planType: string | null;
+            emailDomain: string | null;
+            requiresOpenaiAuth: boolean;
+        };
+        RuntimeConfigPosture: {
+            model: string | null;
+            reviewModel: string | null;
+            modelProvider: string | null;
+            approvalPolicy: string | null;
+            approvalsReviewer: string | null;
+            sandboxMode: string | null;
+            reasoningEffort: string | null;
+            serviceTier: string | null;
+            webSearch: boolean | null;
+            customGuidanceOmitted: boolean;
+            developerGuidanceOmitted: boolean;
+            compactionGuidanceOmitted: boolean;
+        };
+        RuntimePermissionProfileSummary: {
+            id: string;
+            description: string | null;
+        };
+        RuntimeExperimentalFeatureSummary: {
+            name: string;
+            stage: string;
+            displayName: string | null;
+            description: string | null;
+            enabled: boolean;
+            defaultEnabled: boolean;
         };
         LocalWorkbenchSummary: {
             deviceId: string;
@@ -2962,6 +3044,34 @@ export interface operations {
             403: components["responses"]["ForbiddenError"];
             404: components["responses"]["DeviceNotFoundError"];
             408: components["responses"]["RequestTimeoutError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getControlPlaneDeviceProjectRuntimeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only runtime and settings summary for a configured device project. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeSettingsSummary"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            404: components["responses"]["DeviceNotFoundError"];
             424: components["responses"]["DeviceUnavailableError"];
             500: components["responses"]["InternalWorkerError"];
         };

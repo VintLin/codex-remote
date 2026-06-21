@@ -64,6 +64,14 @@ const schemaTypeNames = [
   "McpServerSummary",
   "ExtensionInventory",
   "StartReviewInput",
+  "RuntimeSettingsSummary",
+  "RuntimeSettingsSectionStatus",
+  "RuntimeModelSummary",
+  "RuntimeProviderCapabilities",
+  "RuntimeAccountSummary",
+  "RuntimeConfigPosture",
+  "RuntimePermissionProfileSummary",
+  "RuntimeExperimentalFeatureSummary",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 const stage2Paths = [
@@ -247,6 +255,55 @@ const stage13ForbiddenPublicReviewFields = [
   "shell-command",
   "shellCommand",
   "command/exec",
+] as const;
+const stage14RuntimeSettingsPath =
+  "/v1/devices/{deviceId}/projects/{projectId}/runtime-settings:" as const;
+const stage14RuntimeSettingsErrorResponsesByStatus = new Map([
+  ["400", "BadRequestError"],
+  ["401", "UnauthorizedError"],
+  ["404", "DeviceNotFoundError"],
+  ["424", "DeviceUnavailableError"],
+  ["500", "InternalWorkerError"],
+] as const);
+const stage14SchemaNames = [
+  "RuntimeSettingsSummary",
+  "RuntimeSettingsSectionStatus",
+  "RuntimeModelSummary",
+  "RuntimeProviderCapabilities",
+  "RuntimeAccountSummary",
+  "RuntimeConfigPosture",
+  "RuntimePermissionProfileSummary",
+  "RuntimeExperimentalFeatureSummary",
+] as const;
+const stage14ForbiddenLeakFields = [
+  "authToken",
+  "token",
+  "secret",
+  "apiKey",
+  "rawConfig",
+  "layers",
+  "instructions",
+  "developerInstructions",
+  "compactPrompt",
+  "cwd",
+  "absolutePath",
+  "jsonRpc",
+  "appServerUrl",
+  "stack",
+  "cause",
+  "stdout",
+  "stderr",
+  "fullDiff",
+] as const;
+const stage14ForbiddenWriteRouteTerms = [
+  "login",
+  "logout",
+  "config/write",
+  "config-write",
+  "model/switch",
+  "model-switch",
+  "experimentalFeature/enablement/set",
+  "experimental-enable",
 ] as const;
 const stage7TaskWritePathMethodPairs = [
   "/v1/tasks:post",
@@ -1143,6 +1200,96 @@ test("when stage 13 public api types are exported, source index should re-export
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
 
   assert.match(publicExportSource, /export type StartReviewInput = components\["schemas"\]\["StartReviewInput"\];/);
+});
+
+test("when stage 14 runtime settings contract is maintained, openapi should define one project-scoped read route", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  assert.equal(versionedPathLines.includes(stage14RuntimeSettingsPath), true);
+
+  const pathBlockLines = extractPathBlock(source, stage14RuntimeSettingsPath);
+  assert.equal(pathBlockLines.length > 0, true);
+  const methods = extractMethodBlocks(pathBlockLines);
+  assert.deepEqual(
+    methods.map((methodBlock) => methodBlock.method),
+    ["get"],
+  );
+
+  const method = expectDefined(
+    methods.find((methodBlock) => methodBlock.method === "get"),
+    "runtime settings should define GET",
+  );
+  const methodSource = method.lines.join("\n");
+  assert.match(methodSource, /^ {6}operationId:\s*getControlPlaneDeviceProjectRuntimeSettings$/m);
+  assert.match(methodSource, /#\/components\/schemas\/RuntimeSettingsSummary/);
+  assert.equal(method.lines.some((line) => /^ {6}requestBody:\s*$/.test(line)), false);
+
+  const responseRefs = extractResponseRefs(method.lines);
+  assert.deepEqual([...responseRefs.keys()].sort(), ["200", "400", "401", "404", "424", "500"]);
+  assert.deepEqual(responseRefs.get("200")?.componentResponseRefs, []);
+  assert.equal(responseRefs.get("200")?.hasDirectSchemaRef, false);
+  for (const [status, responseName] of stage14RuntimeSettingsErrorResponsesByStatus) {
+    assert.deepEqual(responseRefs.get(status)?.componentResponseRefs, [responseName]);
+  }
+});
+
+test("when stage 14 runtime settings schemas are maintained, public response schemas should stay closed and leak-free", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of stage14SchemaNames) {
+    const schemaBlockLines = expectSchemaDisallowsAdditionalProperties(source, schemaName);
+    assert.match(schemaBlockLines.join("\n"), /^        /m);
+
+    for (const leakField of stage14ForbiddenLeakFields) {
+      assert.doesNotMatch(schemaBlockLines.join("\n"), new RegExp(`\\b${escapeRegExp(leakField)}\\b`, "i"));
+    }
+  }
+
+  const summaryBlock = expectSchemaDisallowsAdditionalProperties(source, "RuntimeSettingsSummary");
+  const summarySource = summaryBlock.join("\n");
+  for (const fieldName of [
+    "deviceId",
+    "projectId",
+    "readAt",
+    "sections",
+    "models",
+    "providerCapabilities",
+    "account",
+    "config",
+    "permissionProfiles",
+    "experimentalFeatures",
+  ] as const) {
+    assert.match(summarySource, new RegExp(`^        ${fieldName}:`, "m"));
+  }
+});
+
+test("when stage 14 runtime settings contract is maintained, public api should not expose runtime write routes", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const runtimeSettingsPathLines = extractVersionedPathLines(source).filter((path) => /runtime-settings/i.test(path));
+  assert.deepEqual(runtimeSettingsPathLines, [stage14RuntimeSettingsPath]);
+
+  const pathMethodPairs = extractPathMethodPairs(source);
+  const forbiddenWriteRoutes = pathMethodPairs.filter((pathMethodPair) => {
+    const method = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
+    if (!writeMethods.includes(method as (typeof writeMethods)[number])) {
+      return false;
+    }
+    return stage14ForbiddenWriteRouteTerms.some((term) => pathMethodPair.toLowerCase().includes(term.toLowerCase()));
+  });
+
+  assert.deepEqual(forbiddenWriteRoutes, []);
+  for (const forbiddenTerm of stage14ForbiddenWriteRouteTerms) {
+    assert.doesNotMatch(source, new RegExp(escapeRegExp(forbiddenTerm), "i"));
+  }
+});
+
+test("when stage 14 public api types are exported, source index should re-export runtime settings aliases", () => {
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+
+  for (const aliasName of stage14SchemaNames) {
+    assert.match(publicExportSource, new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`));
+  }
 });
 
 test("when task board api is maintained, openapi should define versioned stage 7 task paths", () => {

@@ -20,6 +20,7 @@ import type {
   RemoteProject,
   RenameConversationInput,
   ProjectSearchResult,
+  RuntimeSettingsSummary,
   StartConversationInput,
   StartReviewInput,
   SteerTurnInput,
@@ -47,6 +48,7 @@ export interface WorkerUpstreamClient {
   ): Promise<ProjectSearchResult>;
   getMcpServerSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<McpServerSummary>;
   getExtensionInventory(device: ConfiguredWorkerDevice, projectId: string): Promise<ExtensionInventory>;
+  getRuntimeSettingsSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<RuntimeSettingsSummary>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
   openConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
@@ -178,6 +180,12 @@ export function createWorkerUpstreamClient(options: {
         method: "GET",
         notFoundCode: "project_not_found",
         project: projectExtensionInventory,
+      }),
+    getRuntimeSettingsSummary: (device, projectId) =>
+      request<RuntimeSettingsSummary>(device, `/v1/projects/${encodeURIComponent(projectId)}/runtime-settings`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectRuntimeSettingsSummary,
       }),
     listConversations: (device) => request<CodexConversation[]>(device, "/v1/conversations", { method: "GET", project: projectConversationList }),
     readTimeline: (device, conversationId) =>
@@ -572,6 +580,156 @@ function projectExtensionInventory(value: unknown): ExtensionInventory {
   };
 }
 
+function projectRuntimeSettingsSummary(value: unknown): RuntimeSettingsSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, [
+    "deviceId",
+    "projectId",
+    "readAt",
+    "sections",
+    "models",
+    "providerCapabilities",
+    "account",
+    "config",
+    "permissionProfiles",
+    "experimentalFeatures",
+  ]);
+  return {
+    deviceId: readString(body, "deviceId"),
+    projectId: readString(body, "projectId"),
+    readAt: readString(body, "readAt"),
+    sections: requireArray(body.sections).map(projectRuntimeSettingsSectionStatus),
+    models: requireArray(body.models).map(projectRuntimeModelSummary),
+    providerCapabilities: projectRuntimeProviderCapabilities(body.providerCapabilities),
+    account: projectRuntimeAccountSummary(body.account),
+    config: projectRuntimeConfigPosture(body.config),
+    permissionProfiles: requireArray(body.permissionProfiles).map(projectRuntimePermissionProfileSummary),
+    experimentalFeatures: requireArray(body.experimentalFeatures).map(projectRuntimeExperimentalFeatureSummary),
+  };
+}
+
+function projectRuntimeSettingsSectionStatus(value: unknown): RuntimeSettingsSummary["sections"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["section", "status", "error"]);
+  return {
+    section: readEnum(body, "section", ["models", "providerCapabilities", "account", "config", "permissionProfiles", "experimentalFeatures"]),
+    status: readEnum(body, "status", ["loaded", "degraded", "unavailable"]),
+    ...(body.error === undefined ? {} : { error: projectErrorEnvelope(body.error) }),
+  };
+}
+
+function projectRuntimeModelSummary(value: unknown): RuntimeSettingsSummary["models"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "displayName", "isDefault", "supportedReasoningEfforts", "inputModalities", "serviceTiers"]);
+  return {
+    id: readString(body, "id"),
+    displayName: readString(body, "displayName"),
+    isDefault: readBoolean(body, "isDefault"),
+    supportedReasoningEfforts: readStringArray(body, "supportedReasoningEfforts"),
+    inputModalities: readStringArray(body, "inputModalities"),
+    serviceTiers: readStringArray(body, "serviceTiers"),
+  };
+}
+
+function projectRuntimeProviderCapabilities(value: unknown): RuntimeSettingsSummary["providerCapabilities"] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["supportsReasoning", "supportsImages", "supportsWebSearch", "supportsStructuredOutput"]);
+  return {
+    supportsReasoning: readBoolean(body, "supportsReasoning"),
+    supportsImages: readBoolean(body, "supportsImages"),
+    supportsWebSearch: readBoolean(body, "supportsWebSearch"),
+    supportsStructuredOutput: readBoolean(body, "supportsStructuredOutput"),
+  };
+}
+
+function projectRuntimeAccountSummary(value: unknown): RuntimeSettingsSummary["account"] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["type", "planType", "emailDomain", "requiresOpenaiAuth"]);
+  return {
+    type: readString(body, "type"),
+    planType: readNullableString(body, "planType"),
+    emailDomain: readNullableString(body, "emailDomain"),
+    requiresOpenaiAuth: readBoolean(body, "requiresOpenaiAuth"),
+  };
+}
+
+function projectRuntimeConfigPosture(value: unknown): RuntimeSettingsSummary["config"] {
+  const body = requireRecord(value);
+  assertExactFields(body, [
+    "model",
+    "reviewModel",
+    "modelProvider",
+    "approvalPolicy",
+    "approvalsReviewer",
+    "sandboxMode",
+    "reasoningEffort",
+    "serviceTier",
+    "webSearch",
+    "customGuidanceOmitted",
+    "developerGuidanceOmitted",
+    "compactionGuidanceOmitted",
+  ]);
+  return {
+    model: readNullableString(body, "model"),
+    reviewModel: readNullableString(body, "reviewModel"),
+    modelProvider: readNullableString(body, "modelProvider"),
+    approvalPolicy: readNullableString(body, "approvalPolicy"),
+    approvalsReviewer: readNullableString(body, "approvalsReviewer"),
+    sandboxMode: readNullableString(body, "sandboxMode"),
+    reasoningEffort: readNullableString(body, "reasoningEffort"),
+    serviceTier: readNullableString(body, "serviceTier"),
+    webSearch: readNullableBoolean(body, "webSearch"),
+    customGuidanceOmitted: readBoolean(body, "customGuidanceOmitted"),
+    developerGuidanceOmitted: readBoolean(body, "developerGuidanceOmitted"),
+    compactionGuidanceOmitted: readBoolean(body, "compactionGuidanceOmitted"),
+  };
+}
+
+function projectRuntimePermissionProfileSummary(value: unknown): RuntimeSettingsSummary["permissionProfiles"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "description"]);
+  return {
+    id: readString(body, "id"),
+    description: readNullableString(body, "description"),
+  };
+}
+
+function projectRuntimeExperimentalFeatureSummary(value: unknown): RuntimeSettingsSummary["experimentalFeatures"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["name", "stage", "displayName", "description", "enabled", "defaultEnabled"]);
+  return {
+    name: readString(body, "name"),
+    stage: readString(body, "stage"),
+    displayName: readNullableString(body, "displayName"),
+    description: readNullableString(body, "description"),
+    enabled: readBoolean(body, "enabled"),
+    defaultEnabled: readBoolean(body, "defaultEnabled"),
+  };
+}
+
+function projectErrorEnvelope(value: unknown): ErrorEnvelope {
+  const body = requireRecord(value);
+  assertExactFields(body, ["code", "message", "details", "requestId"]);
+  return {
+    code: isSafeUpstreamCode(readString(body, "code")) ? readString(body, "code") : "worker_internal_error",
+    message: "Runtime settings section is unavailable.",
+    ...(isRecord(body.details) ? { details: projectRuntimeSectionErrorDetails(body.details) } : {}),
+    ...(typeof body.requestId === "string" ? { requestId: readString(body, "requestId") } : {}),
+  };
+}
+
+function projectRuntimeSectionErrorDetails(details: Record<string, unknown>): NonNullable<ErrorEnvelope["details"]> {
+  return {
+    ...(typeof details.operation === "string" && isSafeDetailText(details.operation) ? { operation: details.operation } : {}),
+    ...(typeof details.retryable === "boolean" ? { retryable: details.retryable } : {}),
+    ...(typeof details.diagnosticId === "string" && isSafeDetailText(details.diagnosticId) ? { diagnosticId: details.diagnosticId } : {}),
+    ...(typeof details.field === "string" && isSafeDetailText(details.field) ? { field: details.field } : {}),
+    ...(typeof details.limit === "number" ? { limit: details.limit } : {}),
+    ...(typeof details.expected === "string" && isSafeDetailText(details.expected) ? { expected: details.expected } : {}),
+    ...(typeof details.actualKind === "string" && isSafeDetailText(details.actualKind) ? { actualKind: details.actualKind } : {}),
+  };
+}
+
 function projectSkillSummary(value: unknown): ExtensionInventory["skills"][number] {
   const body = requireRecord(value);
   assertExactFields(body, ["name", "enabled", "description", "status"]);
@@ -861,6 +1019,14 @@ function readBoolean(body: Record<string, unknown>, field: string): boolean {
   return value;
 }
 
+function readNullableBoolean(body: Record<string, unknown>, field: string): boolean | null {
+  const value = body[field];
+  if (value === null || typeof value === "boolean") {
+    return value;
+  }
+  throw new ControlPlaneHttpError(424, "device_unavailable", "Device response was invalid.", { field, operation: "worker_response", retryable: false });
+}
+
 function readNullableNumber(body: Record<string, unknown>, field: string): number | null {
   const value = body[field];
   if (value === null || typeof value === "number") {
@@ -895,6 +1061,10 @@ function readEnum<const TValue extends string>(body: Record<string, unknown>, fi
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isSafeDetailText(value: string): boolean {
+  return /^[A-Za-z0-9_./:-]{1,120}$/.test(value) && !/https?:|token|secret|stack|cause|jsonrpc|\/Users\//i.test(value);
 }
 
 function isSafeUpstreamCode(code: string): boolean {

@@ -17,7 +17,7 @@ import type {
   TaskConversationLink,
   TaskStatus,
 } from "@codex-remote/api-contract";
-import type { LocalWorkbenchData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
+import type { LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -120,6 +120,7 @@ interface SettingsPageProps {
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
+  runtimeSettings: RuntimeSettingsData;
 }
 
 interface SearchDialogProps {
@@ -319,6 +320,7 @@ export function SettingsPage({
   onExpandDetail,
   onExpandSidebar,
   onRestoreConversation,
+  runtimeSettings,
 }: SettingsPageProps) {
   const archivedConversations = conversations.filter((conversation) => conversation.archived === true);
 
@@ -341,6 +343,7 @@ export function SettingsPage({
         </div>
       </header>
       <div className="content-scroll settings-content">
+        <RuntimeSettingsPanel runtimeSettings={runtimeSettings} />
         <section aria-label="已归档对话" className="settings-section">
           <h2>已归档对话</h2>
           {archivedConversations.length === 0 ? (
@@ -364,6 +367,142 @@ export function SettingsPage({
       </div>
     </main>
   );
+}
+
+function RuntimeSettingsPanel({ runtimeSettings }: { runtimeSettings: RuntimeSettingsData }) {
+  if (runtimeSettings.status === "empty" || runtimeSettings.status === "unavailable") {
+    return (
+      <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
+        <h2>Runtime & Settings</h2>
+        <p className="empty-state">选择已连接设备上的项目后显示运行时与设置摘要。</p>
+      </section>
+    );
+  }
+
+  if (!runtimeSettings.summary) {
+    return (
+      <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
+        <h2>Runtime & Settings</h2>
+        <p className="empty-state">运行时摘要暂不可用{runtimeSettings.error?.code ? `：${runtimeSettings.error.code}` : ""}</p>
+      </section>
+    );
+  }
+
+  const summary = runtimeSettings.summary;
+  const defaultModel = summary.models.find((model) => model.isDefault) ?? summary.models[0] ?? null;
+
+  return (
+    <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
+      <header className="runtime-settings-header">
+        <h2>Runtime & Settings</h2>
+        <code>{runtimeSettings.status}</code>
+      </header>
+      <div className="runtime-settings-grid">
+        <RuntimeSettingsCard title="Models" status={findRuntimeSectionStatus(summary, "models")}>
+          <RuntimeSettingsRow label="默认模型" value={defaultModel ? `${defaultModel.displayName} (${defaultModel.id})` : "未返回"} />
+          <RuntimeSettingsRow label="模型数量" value={String(summary.models.length)} />
+          <RuntimeSettingsRow label="推理强度" value={defaultModel?.supportedReasoningEfforts.join(", ") || "未返回"} />
+          <RuntimeSettingsRow label="输入模态" value={defaultModel?.inputModalities.join(", ") || "未返回"} />
+          <RuntimeSettingsRow label="服务层级" value={defaultModel?.serviceTiers.join(", ") || "未返回"} />
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Provider capabilities" status={findRuntimeSectionStatus(summary, "providerCapabilities")}>
+          <RuntimeSettingsRow label="Reasoning" value={formatBoolean(summary.providerCapabilities.supportsReasoning)} />
+          <RuntimeSettingsRow label="Images" value={formatBoolean(summary.providerCapabilities.supportsImages)} />
+          <RuntimeSettingsRow label="Web search" value={formatBoolean(summary.providerCapabilities.supportsWebSearch)} />
+          <RuntimeSettingsRow label="Structured output" value={formatBoolean(summary.providerCapabilities.supportsStructuredOutput)} />
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Account" status={findRuntimeSectionStatus(summary, "account")}>
+          <RuntimeSettingsRow label="类型" value={summary.account.type} />
+          <RuntimeSettingsRow label="计划" value={summary.account.planType ?? "未返回"} />
+          <RuntimeSettingsRow label="邮箱域" value={summary.account.emailDomain ?? "未返回"} />
+          <RuntimeSettingsRow label="需要 OpenAI Auth" value={formatBoolean(summary.account.requiresOpenaiAuth)} />
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Config posture" status={findRuntimeSectionStatus(summary, "config")}>
+          <RuntimeSettingsRow label="模型" value={summary.config.model ?? "未返回"} />
+          <RuntimeSettingsRow label="Review 模型" value={summary.config.reviewModel ?? "未返回"} />
+          <RuntimeSettingsRow label="Provider" value={summary.config.modelProvider ?? "未返回"} />
+          <RuntimeSettingsRow label="Approval" value={summary.config.approvalPolicy ?? "未返回"} />
+          <RuntimeSettingsRow label="Reviewer" value={summary.config.approvalsReviewer ?? "未返回"} />
+          <RuntimeSettingsRow label="Sandbox" value={summary.config.sandboxMode ?? "未返回"} />
+          <RuntimeSettingsRow label="Reasoning" value={summary.config.reasoningEffort ?? "未返回"} />
+          <RuntimeSettingsRow label="Service tier" value={summary.config.serviceTier ?? "未返回"} />
+          <RuntimeSettingsRow label="Web search" value={summary.config.webSearch === null ? "未返回" : formatBoolean(summary.config.webSearch)} />
+          <RuntimeSettingsRow label="自定义指导已省略" value={formatBoolean(summary.config.customGuidanceOmitted)} />
+          <RuntimeSettingsRow label="开发者指导已省略" value={formatBoolean(summary.config.developerGuidanceOmitted)} />
+          <RuntimeSettingsRow label="压缩指导已省略" value={formatBoolean(summary.config.compactionGuidanceOmitted)} />
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Permission profiles" status={findRuntimeSectionStatus(summary, "permissionProfiles")}>
+          {summary.permissionProfiles.length ? summary.permissionProfiles.map((profile) => (
+            <RuntimeSettingsRow key={profile.id} label={profile.id} value={profile.description ?? "无描述"} />
+          )) : <p className="empty-state">未返回权限 profile</p>}
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Experimental features" status={findRuntimeSectionStatus(summary, "experimentalFeatures")}>
+          {summary.experimentalFeatures.length ? summary.experimentalFeatures.map((feature) => (
+            <RuntimeSettingsRow
+              key={feature.name}
+              label={feature.displayName ?? feature.name}
+              value={`${feature.stage} · ${feature.enabled ? "已启用" : "未启用"} · 默认 ${feature.defaultEnabled ? "开" : "关"}`}
+            />
+          )) : <p className="empty-state">未返回实验功能</p>}
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="section statuses" status={runtimeSettings.status}>
+          {summary.sections.map((section) => (
+            <RuntimeSettingsRow
+              key={section.section}
+              label={section.section}
+              value={section.error?.code ? `${section.status} · ${section.error.code}` : section.status}
+            />
+          ))}
+        </RuntimeSettingsCard>
+      </div>
+    </section>
+  );
+}
+
+function RuntimeSettingsCard({
+  children,
+  status,
+  title,
+}: {
+  children: ReactNode;
+  status: "degraded" | "loaded" | "unavailable";
+  title: string;
+}) {
+  return (
+    <article className="runtime-settings-card" data-status={status}>
+      <header>
+        <h3>{title}</h3>
+        <code>{status}</code>
+      </header>
+      <div className="runtime-settings-list">{children}</div>
+    </article>
+  );
+}
+
+function RuntimeSettingsRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="runtime-settings-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function findRuntimeSectionStatus(
+  summary: NonNullable<RuntimeSettingsData["summary"]>,
+  section: NonNullable<RuntimeSettingsData["summary"]>["sections"][number]["section"],
+): "degraded" | "loaded" | "unavailable" {
+  return summary.sections.find((item) => item.section === section)?.status ?? "unavailable";
+}
+
+function formatBoolean(value: boolean): string {
+  return value ? "是" : "否";
 }
 
 function ConversationStatusBadges(props: { conversation: CodexConversation | null }) {

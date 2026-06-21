@@ -14,6 +14,7 @@ import type {
   ProjectGitSummary,
   ProjectSearchResult,
   RemoteProject,
+  RuntimeSettingsSummary,
   CodexConversation,
   ErrorEnvelope,
 } from "@codex-remote/api-contract";
@@ -67,6 +68,14 @@ export interface LocalWorkbenchData {
   extensions: LocalWorkbenchSection<ExtensionInventory>;
 }
 
+export interface RuntimeSettingsData {
+  deviceId: string | null;
+  error?: SourceErrorEnvelope;
+  projectId: string | null;
+  status: "degraded" | "empty" | "loaded" | "unavailable";
+  summary: RuntimeSettingsSummary | null;
+}
+
 export interface WorkbenchData {
   source: {
     reason:
@@ -88,6 +97,7 @@ export interface WorkbenchData {
   queuedMessages: ConversationQueuedMessage[];
   tasks: BoardTask[];
   localWorkbench: LocalWorkbenchData;
+  runtimeSettings: RuntimeSettingsData;
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
 }
@@ -119,6 +129,7 @@ export function createFallbackWorkbenchData(
     queuedMessages: [],
     tasks: [...mockTasks],
     localWorkbench: createUnavailableLocalWorkbenchData(),
+    runtimeSettings: createUnavailableRuntimeSettingsData(),
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
   };
@@ -142,6 +153,22 @@ function createUnavailableLocalWorkbenchData(): LocalWorkbenchData {
 function createEmptyLocalWorkbenchData(): LocalWorkbenchData {
   return {
     ...createUnavailableLocalWorkbenchData(),
+    status: "empty",
+  };
+}
+
+function createUnavailableRuntimeSettingsData(): RuntimeSettingsData {
+  return {
+    deviceId: null,
+    projectId: null,
+    status: "unavailable",
+    summary: null,
+  };
+}
+
+function createEmptyRuntimeSettingsData(): RuntimeSettingsData {
+  return {
+    ...createUnavailableRuntimeSettingsData(),
     status: "empty",
   };
 }
@@ -423,6 +450,10 @@ function createLocalWorkbenchErrorEnvelope(error: unknown): SourceErrorEnvelope 
   };
 }
 
+function createRuntimeSettingsErrorEnvelope(error: unknown): SourceErrorEnvelope {
+  return createLocalWorkbenchErrorEnvelope(error);
+}
+
 function createSearchRecents(
   conversations: readonly CodexConversation[],
   selectedConversationKey?: string | null,
@@ -503,6 +534,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     const approvalCards = projectApprovalCards(timeline);
     const selectedProject = findLocalWorkbenchProject(projects, selectedConversation, options.selectedDeviceId ?? devices[0]?.id ?? null);
     const localWorkbench = await loadLocalWorkbenchData(client, selectedProject);
+    const runtimeSettings = await loadRuntimeSettingsData(client, selectedProject);
 
     if (timelineError) {
       return {
@@ -515,6 +547,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         queuedMessages: [],
         tasks,
         localWorkbench,
+        runtimeSettings,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -531,6 +564,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         queuedMessages,
         tasks: [],
         localWorkbench,
+        runtimeSettings,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -546,6 +580,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       queuedMessages,
       tasks,
       localWorkbench,
+      runtimeSettings,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
     };
@@ -632,6 +667,31 @@ async function loadLocalWorkbenchData(client: WorkerApiClient, project: RemotePr
     mcp,
     extensions,
   };
+}
+
+async function loadRuntimeSettingsData(client: WorkerApiClient, project: RemoteProject | null): Promise<RuntimeSettingsData> {
+  if (!project) {
+    return createEmptyRuntimeSettingsData();
+  }
+
+  try {
+    const summary = await client.getRuntimeSettingsSummary(project.deviceId, project.id);
+    const hasDegradedSection = summary.sections.some((section) => section.status !== "loaded");
+    return {
+      deviceId: project.deviceId,
+      projectId: project.id,
+      status: hasDegradedSection ? "degraded" : "loaded",
+      summary,
+    };
+  } catch (error: unknown) {
+    return {
+      deviceId: project.deviceId,
+      error: createRuntimeSettingsErrorEnvelope(error),
+      projectId: project.id,
+      status: "degraded",
+      summary: null,
+    };
+  }
 }
 
 async function settle<TData>(run: () => Promise<TData>): Promise<PromiseSettledResult<TData>> {

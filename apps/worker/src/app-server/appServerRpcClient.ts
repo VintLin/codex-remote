@@ -55,12 +55,18 @@ interface StdioSocketLikeOptions {
 
 type WorkerAppServerMethod =
   | "app/list"
+  | "account/read"
+  | "config/read"
+  | "experimentalFeature/list"
   | "fuzzyFileSearch"
   | "gitDiffToRemote"
+  | "getAuthStatus"
   | "hooks/list"
   | "initialize"
   | "mcpServerStatus/list"
   | "model/list"
+  | "modelProvider/capabilities/read"
+  | "permissionProfile/list"
   | "plugin/list"
   | "plugin/read"
   | "review/start"

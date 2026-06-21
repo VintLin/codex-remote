@@ -1,6 +1,8 @@
 import type {
   FuzzyFileSearchParams,
   FuzzyFileSearchResponse,
+  GetAuthStatusParams,
+  GetAuthStatusResponse,
   GitDiffToRemoteParams,
   GitDiffToRemoteResponse,
   InitializeResponse,
@@ -108,6 +110,10 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
       limit: 25,
       includeHidden: false,
     });
+  }
+
+  async listModelsWithParams(params: v2.ModelListParams): Promise<v2.ModelListResponse> {
+    return (await this.rpc.request("model/list", params)) as v2.ModelListResponse;
   }
 
   async listThreads(): Promise<ThreadListProbeEvidence> {
@@ -305,6 +311,32 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
 
   async listApps(params: v2.AppsListParams): Promise<v2.AppsListResponse> {
     return (await this.rpc.request("app/list", params)) as v2.AppsListResponse;
+  }
+
+  async readModelProviderCapabilities(
+    params: v2.ModelProviderCapabilitiesReadParams,
+  ): Promise<v2.ModelProviderCapabilitiesReadResponse> {
+    return (await this.rpc.request("modelProvider/capabilities/read", params)) as v2.ModelProviderCapabilitiesReadResponse;
+  }
+
+  async readAccount(params: v2.GetAccountParams): Promise<v2.GetAccountResponse> {
+    return (await this.rpc.request("account/read", params)) as v2.GetAccountResponse;
+  }
+
+  async getAuthStatus(params: GetAuthStatusParams): Promise<GetAuthStatusResponse> {
+    return (await this.rpc.request("getAuthStatus", params)) as GetAuthStatusResponse;
+  }
+
+  async readConfig(params: v2.ConfigReadParams): Promise<v2.ConfigReadResponse> {
+    return (await this.rpc.request("config/read", params)) as v2.ConfigReadResponse;
+  }
+
+  async listPermissionProfiles(params: v2.PermissionProfileListParams): Promise<v2.PermissionProfileListResponse> {
+    return (await this.rpc.request("permissionProfile/list", params)) as v2.PermissionProfileListResponse;
+  }
+
+  async listExperimentalFeatures(params: v2.ExperimentalFeatureListParams): Promise<v2.ExperimentalFeatureListResponse> {
+    return (await this.rpc.request("experimentalFeature/list", params)) as v2.ExperimentalFeatureListResponse;
   }
 
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {

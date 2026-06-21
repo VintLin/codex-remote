@@ -21,6 +21,7 @@ import type {
   ProjectDirectoryListing,
   ProjectFilePreview,
   ProjectGitSummary,
+  RuntimeSettingsSummary,
   StartConversationInput,
   StartReviewInput,
   ProjectSearchResult,
@@ -246,6 +247,13 @@ export function createControlPlaneHttpApp(params: {
     const projectId = c.req.param("projectId");
     const inventory = await runForDevice(device, "local-workbench/extensions", () => params.workerClient.getExtensionInventory(device, projectId));
     return c.json(normalizeExtensionInventory(device, projectId, inventory));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/runtime-settings", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    const summary = await runForDevice(device, "runtime-settings/read", () => params.workerClient.getRuntimeSettingsSummary(device, projectId));
+    return c.json(normalizeRuntimeSettingsSummary(device, projectId, summary));
   });
 
   app.post("/v1/devices/:deviceId/conversations", async (c) => {
@@ -561,6 +569,14 @@ function normalizeExtensionInventory(
   inventory: ExtensionInventory,
 ): ExtensionInventory {
   return { ...inventory, deviceId: device.id, projectId };
+}
+
+function normalizeRuntimeSettingsSummary(
+  device: ConfiguredWorkerDevice,
+  projectId: string,
+  summary: RuntimeSettingsSummary,
+): RuntimeSettingsSummary {
+  return { ...summary, deviceId: device.id, projectId };
 }
 
 function normalizeConversationTimeline(device: ConfiguredWorkerDevice, timeline: ConversationTimeline): ConversationTimeline {

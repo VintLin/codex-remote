@@ -24,6 +24,7 @@ import type {
   ProjectSearchResult,
   RemoteProject,
   RenameConversationInput,
+  RuntimeSettingsSummary,
   StartConversationInput,
   StartReviewInput,
   SteerTurnInput,
@@ -786,6 +787,44 @@ test("control plane http app when local workbench routes use an unknown device o
   assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|project-a/);
 });
 
+test("control plane http app when runtime settings route is requested, should call only selected device and normalize public ids", async () => {
+  const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/devices/device-b/projects/project-a/runtime-settings");
+  const summary = await response.json() as RuntimeSettingsSummary;
+
+  assert.equal(response.status, 200);
+  assert.equal(summary.deviceId, "device-b");
+  assert.equal(summary.projectId, "project-a");
+  assert.equal(summary.models[0]?.id, "gpt-5");
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["getRuntimeSettingsSummary:device-b"]);
+  assert.deepEqual(client.localWorkbenchProjectCalls, [{ method: "getRuntimeSettingsSummary", projectId: "project-a" }]);
+});
+
+test("control plane http app when runtime settings route uses unknown device or upstream fails, should return sanitized errors", async () => {
+  const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) });
+  const app = createApp(client);
+
+  const missing = await request(app, "/v1/devices/missing/projects/project-a/runtime-settings");
+  const unavailable = await request(app, "/v1/devices/device-a/projects/project-a/runtime-settings");
+
+  assert.equal(missing.status, 404);
+  assert.equal(unavailable.status, 424);
+  const body = `${await missing.text()} ${await unavailable.text()}`;
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|project-a|authToken|fullEmail|rawConfig|jsonrpc|stack|cause/);
+});
+
+test("control plane http app when runtime settings route succeeds, should not serialize forbidden runtime values", async () => {
+  const app = createApp();
+
+  const response = await request(app, "/v1/devices/device-a/projects/project-a/runtime-settings");
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(body, /secret-token|person@example\.com|\/Users\/Vint|rawConfig|appServerUrl|jsonrpc|stack|cause|stdout|stderr|fullDiff/);
+});
+
 test("control plane http app when local workbench search limit is invalid, should reject before worker call", async () => {
   for (const limit of ["101", "1abc"]) {
     const client = new FakeWorkerClient();
@@ -1106,6 +1145,13 @@ class FakeWorkerClient implements WorkerUpstreamClient {
     };
   }
 
+  async getRuntimeSettingsSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<RuntimeSettingsSummary> {
+    this.record(device, "getRuntimeSettingsSummary");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getRuntimeSettingsSummary", projectId });
+    return createRuntimeSettingsSummary(this.upstreamDeviceId ?? device.id, projectId);
+  }
+
   async readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline> {
     this.record(device, "readTimeline");
     this.throwIfUnavailable(device);
@@ -1285,6 +1331,69 @@ function createLifecycleResult(
         },
       ],
     },
+  };
+}
+
+function createRuntimeSettingsSummary(deviceId: string, projectId: string): RuntimeSettingsSummary {
+  return {
+    deviceId,
+    projectId,
+    readAt: "2026-06-22T00:00:00.000Z",
+    sections: [
+      { section: "models", status: "loaded" },
+      { section: "providerCapabilities", status: "loaded" },
+      { section: "account", status: "loaded" },
+      { section: "config", status: "loaded" },
+      { section: "permissionProfiles", status: "loaded" },
+      { section: "experimentalFeatures", status: "loaded" },
+    ],
+    models: [
+      {
+        id: "gpt-5",
+        displayName: "GPT-5",
+        isDefault: true,
+        supportedReasoningEfforts: ["medium"],
+        inputModalities: ["text"],
+        serviceTiers: ["default"],
+      },
+    ],
+    providerCapabilities: {
+      supportsReasoning: true,
+      supportsImages: true,
+      supportsWebSearch: false,
+      supportsStructuredOutput: true,
+    },
+    account: {
+      type: "chatgpt",
+      planType: "plus",
+      emailDomain: "example.com",
+      requiresOpenaiAuth: false,
+    },
+    config: {
+      model: "gpt-5",
+      reviewModel: "gpt-5",
+      modelProvider: "openai",
+      approvalPolicy: "never",
+      approvalsReviewer: null,
+      sandboxMode: "workspace-write",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      webSearch: false,
+      customGuidanceOmitted: true,
+      developerGuidanceOmitted: true,
+      compactionGuidanceOmitted: true,
+    },
+    permissionProfiles: [{ id: "readonly", description: "Read-only" }],
+    experimentalFeatures: [
+      {
+        name: "feature-a",
+        stage: "experimental",
+        displayName: "Feature A",
+        description: "A feature",
+        enabled: false,
+        defaultEnabled: false,
+      },
+    ],
   };
 }
 

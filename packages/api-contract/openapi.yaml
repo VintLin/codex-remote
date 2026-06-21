@@ -1782,6 +1782,37 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/runtime-settings:
+    get:
+      operationId: getControlPlaneDeviceProjectRuntimeSettings
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only runtime and settings summary for a configured device project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeSettingsSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
   responses:
     BadRequestError:
@@ -2421,6 +2452,269 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProbeCheckResult"
+    RuntimeSettingsSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - projectId
+        - readAt
+        - sections
+        - models
+        - providerCapabilities
+        - account
+        - config
+        - permissionProfiles
+        - experimentalFeatures
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        readAt:
+          type: string
+          format: date-time
+        sections:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/RuntimeSettingsSectionStatus"
+        models:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/RuntimeModelSummary"
+        providerCapabilities:
+          $ref: "#/components/schemas/RuntimeProviderCapabilities"
+        account:
+          $ref: "#/components/schemas/RuntimeAccountSummary"
+        config:
+          $ref: "#/components/schemas/RuntimeConfigPosture"
+        permissionProfiles:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/RuntimePermissionProfileSummary"
+        experimentalFeatures:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/RuntimeExperimentalFeatureSummary"
+    RuntimeSettingsSectionStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - section
+        - status
+      properties:
+        section:
+          type: string
+          enum:
+            - models
+            - providerCapabilities
+            - account
+            - config
+            - permissionProfiles
+            - experimentalFeatures
+        status:
+          type: string
+          enum:
+            - loaded
+            - degraded
+            - unavailable
+        error:
+          $ref: "#/components/schemas/ErrorEnvelope"
+    RuntimeModelSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - displayName
+        - isDefault
+        - supportedReasoningEfforts
+        - inputModalities
+        - serviceTiers
+      properties:
+        id:
+          type: string
+          maxLength: 200
+        displayName:
+          type: string
+          maxLength: 200
+        isDefault:
+          type: boolean
+        supportedReasoningEfforts:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 80
+        inputModalities:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 80
+        serviceTiers:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 80
+    RuntimeProviderCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - supportsReasoning
+        - supportsImages
+        - supportsWebSearch
+        - supportsStructuredOutput
+      properties:
+        supportsReasoning:
+          type: boolean
+        supportsImages:
+          type: boolean
+        supportsWebSearch:
+          type: boolean
+        supportsStructuredOutput:
+          type: boolean
+    RuntimeAccountSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - planType
+        - emailDomain
+        - requiresOpenaiAuth
+      properties:
+        type:
+          type: string
+          maxLength: 80
+        planType:
+          type:
+            - string
+            - "null"
+          maxLength: 80
+        emailDomain:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+        requiresOpenaiAuth:
+          type: boolean
+    RuntimeConfigPosture:
+      type: object
+      additionalProperties: false
+      required:
+        - model
+        - reviewModel
+        - modelProvider
+        - approvalPolicy
+        - approvalsReviewer
+        - sandboxMode
+        - reasoningEffort
+        - serviceTier
+        - webSearch
+        - customGuidanceOmitted
+        - developerGuidanceOmitted
+        - compactionGuidanceOmitted
+      properties:
+        model:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+        reviewModel:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+        modelProvider:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        approvalPolicy:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        approvalsReviewer:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        sandboxMode:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        reasoningEffort:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        serviceTier:
+          type:
+            - string
+            - "null"
+          maxLength: 120
+        webSearch:
+          type:
+            - boolean
+            - "null"
+        customGuidanceOmitted:
+          type: boolean
+        developerGuidanceOmitted:
+          type: boolean
+        compactionGuidanceOmitted:
+          type: boolean
+    RuntimePermissionProfileSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - description
+      properties:
+        id:
+          type: string
+          maxLength: 200
+        description:
+          type:
+            - string
+            - "null"
+          maxLength: 400
+    RuntimeExperimentalFeatureSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - stage
+        - displayName
+        - description
+        - enabled
+        - defaultEnabled
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        stage:
+          type: string
+          maxLength: 80
+        displayName:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+        description:
+          type:
+            - string
+            - "null"
+          maxLength: 400
+        enabled:
+          type: boolean
+        defaultEnabled:
+          type: boolean
     LocalWorkbenchSummary:
       type: object
       additionalProperties: false

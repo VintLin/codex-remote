@@ -10,6 +10,7 @@ import type {
   ProjectFilePreview,
   ProjectGitSummary,
   ProjectSearchResult,
+  RuntimeSettingsSummary,
   StartReviewInput,
 } from "@codex-remote/api-contract";
 
@@ -267,6 +268,121 @@ test("worker upstream client local workbench methods when called, should use sta
   ]);
 });
 
+test("worker upstream client runtime settings method when called, should use project-scoped worker route and bearer auth", async () => {
+  const requests: Array<{ headers: Headers; method: string | undefined; url: string }> = [];
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async (request, init) => {
+      requests.push({ headers: new Headers(init?.headers), method: init?.method, url: String(request) });
+      return Response.json(createRuntimeSettingsSummary({ deviceId: "upstream-device" }));
+    },
+  });
+
+  const summary = await client.getRuntimeSettingsSummary(device, "project-a");
+
+  assert.equal(requests[0]?.method, "GET");
+  assert.equal(requests[0]?.url, "http://127.0.0.1:8788/v1/projects/project-a/runtime-settings");
+  assert.equal(requests[0]?.headers.get("authorization"), "Bearer example-token");
+  assert.deepEqual(summary, createRuntimeSettingsSummary({ deviceId: "upstream-device" }));
+});
+
+test("worker upstream client when runtime settings response has extra public fields, should fail closed without leaking them", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json({
+        ...createRuntimeSettingsSummary(),
+        authToken: "secret-token",
+        fullEmail: "person@example.com",
+        rawConfig: { model: "gpt-5" },
+        appServerUrl: "http://127.0.0.1:8788",
+        stack: "raw stack",
+      }),
+  });
+
+  await assert.rejects(client.getRuntimeSettingsSummary(device, "project-a"), (error) => {
+    const serialized = JSON.stringify(error);
+    assert.doesNotMatch(serialized, /authToken|secret-token|fullEmail|person@example\.com|rawConfig|appServerUrl|8788|stack/);
+    assert.equal((error as { status?: number }).status, 424);
+    return true;
+  });
+});
+
+test("worker upstream client when runtime settings response field type is invalid, should fail closed without leaking response values", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json({
+        ...createRuntimeSettingsSummary(),
+        account: {
+          type: "chatgpt",
+          planType: "plus",
+          emailDomain: "example.com",
+          requiresOpenaiAuth: "no",
+        },
+      }),
+  });
+
+  await assert.rejects(client.getRuntimeSettingsSummary(device, "project-a"), (error) => {
+    const serialized = JSON.stringify(error);
+    assert.doesNotMatch(serialized, /example\.com|chatgpt|plus/);
+    assert.equal((error as { status?: number }).status, 424);
+    return true;
+  });
+});
+
+test("worker upstream client when runtime settings section error contains raw details, should sanitize the projected error", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json(createRuntimeSettingsSummary({
+        sections: [
+          {
+            section: "config",
+            status: "degraded",
+            error: {
+              code: "worker_internal_error",
+              message: "raw http://127.0.0.1:8788 example-token person@example.com /Users/Vint/project jsonrpc stack cause",
+              details: {
+                operation: "config/read",
+                retryable: true,
+                reason: "raw /Users/Vint/project secret-token",
+                deviceId: "device-a",
+              },
+            },
+          },
+        ],
+      })),
+  });
+
+  const summary = await client.getRuntimeSettingsSummary(device, "project-a");
+  const serialized = JSON.stringify(summary);
+
+  assert.equal(summary.sections[0]?.error?.message, "Runtime settings section is unavailable.");
+  assert.doesNotMatch(serialized, /127\.0\.0\.1|8788|example-token|person@example\.com|\/Users\/Vint|jsonrpc|stack|cause|secret-token/);
+});
+
+test("worker upstream client when runtime settings nested object has extra fields, should fail closed without leaking them", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json(createRuntimeSettingsSummary({
+        config: {
+          ...createRuntimeSettingsSummary().config,
+          cwd: "/Users/Vint/project",
+          rawConfig: "secret-token",
+        } as RuntimeSettingsSummary["config"],
+      })),
+  });
+
+  await assert.rejects(client.getRuntimeSettingsSummary(device, "project-a"), (error) => {
+    const serialized = JSON.stringify(error);
+    assert.doesNotMatch(serialized, /cwd|\/Users\/Vint|rawConfig|secret-token/);
+    assert.equal((error as { status?: number }).status, 424);
+    return true;
+  });
+});
+
 test("worker upstream client when starting review, should use conversation local action route and public body", async () => {
   const input: StartReviewInput = {
     projectId: "project-a",
@@ -493,6 +609,70 @@ function createExtensionInventory(overrides: Partial<ExtensionInventory> = {}): 
     plugins: [{ id: "plugin-a", name: "Plugin A", enabled: true, description: "A plugin", skillCount: 1, appCount: 1, mcpServerCount: 1 }],
     marketplaceEntries: [{ name: "entry-a", installStatus: "installed", description: "A marketplace entry" }],
     apps: [{ id: "github", name: "GitHub", enabled: true, description: "GitHub app" }],
+    ...overrides,
+  };
+}
+
+function createRuntimeSettingsSummary(overrides: Partial<RuntimeSettingsSummary> = {}): RuntimeSettingsSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    readAt: "2026-06-22T00:00:00.000Z",
+    sections: [
+      { section: "models", status: "loaded" },
+      { section: "providerCapabilities", status: "loaded" },
+      { section: "account", status: "loaded" },
+      { section: "config", status: "loaded" },
+      { section: "permissionProfiles", status: "loaded" },
+      { section: "experimentalFeatures", status: "loaded" },
+    ],
+    models: [
+      {
+        id: "gpt-5",
+        displayName: "GPT-5",
+        isDefault: true,
+        supportedReasoningEfforts: ["medium"],
+        inputModalities: ["text"],
+        serviceTiers: ["default"],
+      },
+    ],
+    providerCapabilities: {
+      supportsReasoning: true,
+      supportsImages: true,
+      supportsWebSearch: false,
+      supportsStructuredOutput: true,
+    },
+    account: {
+      type: "chatgpt",
+      planType: "plus",
+      emailDomain: "example.com",
+      requiresOpenaiAuth: false,
+    },
+    config: {
+      model: "gpt-5",
+      reviewModel: "gpt-5",
+      modelProvider: "openai",
+      approvalPolicy: "never",
+      approvalsReviewer: null,
+      sandboxMode: "workspace-write",
+      reasoningEffort: "medium",
+      serviceTier: "default",
+      webSearch: false,
+      customGuidanceOmitted: true,
+      developerGuidanceOmitted: true,
+      compactionGuidanceOmitted: true,
+    },
+    permissionProfiles: [{ id: "readonly", description: "Read-only" }],
+    experimentalFeatures: [
+      {
+        name: "feature-a",
+        stage: "experimental",
+        displayName: "Feature A",
+        description: "A feature",
+        enabled: false,
+        defaultEnabled: false,
+      },
+    ],
     ...overrides,
   };
 }

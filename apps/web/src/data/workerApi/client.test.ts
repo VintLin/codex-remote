@@ -14,6 +14,7 @@ import type {
   ProjectGitSummary,
   ProjectSearchResult,
   RemoteProject,
+  RuntimeSettingsSummary,
   TaskConversationLink,
   WorkerHealth,
 } from "@codex-remote/api-contract";
@@ -465,6 +466,32 @@ test("WorkerApiClient local workbench methods when called, should use seven devi
 }
 );
 
+test("WorkerApiClient runtime settings summary when called, should use project-scoped Control Plane GET route", async () => {
+  const runtimeSettings = createRuntimeSettingsSummary();
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(runtimeSettings), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  const response = await client.getRuntimeSettingsSummary("device/a", "project/a");
+
+  assert.deepEqual(response, runtimeSettings);
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "GET http://127.0.0.1:8787/v1/devices/device%2Fa/projects/project%2Fa/runtime-settings",
+  ]);
+  assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+  assert.equal((requests[0]?.init.headers as Headers).get("content-type"), null);
+});
+
 function createLocalWorkbenchSummary(): LocalWorkbenchSummary {
   return {
     deviceId: "device-a",
@@ -548,5 +575,68 @@ function createExtensionInventory(): ExtensionInventory {
     plugins: [{ id: "github", name: "GitHub", enabled: true, skillCount: 2, appCount: 1, mcpServerCount: 1 }],
     marketplaceEntries: [{ name: "Data Analytics", installStatus: "not_installed" }],
     apps: [{ id: "gmail", name: "Gmail", enabled: false }],
+  };
+}
+
+function createRuntimeSettingsSummary(): RuntimeSettingsSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    readAt: "2026-06-22T00:00:00.000Z",
+    sections: [
+      { section: "models", status: "loaded" },
+      { section: "providerCapabilities", status: "loaded" },
+      { section: "account", status: "loaded" },
+      { section: "config", status: "loaded" },
+      { section: "permissionProfiles", status: "loaded" },
+      { section: "experimentalFeatures", status: "loaded" },
+    ],
+    models: [
+      {
+        id: "gpt-5",
+        displayName: "GPT-5",
+        isDefault: true,
+        supportedReasoningEfforts: ["medium"],
+        inputModalities: ["text"],
+        serviceTiers: ["default"],
+      },
+    ],
+    providerCapabilities: {
+      supportsImages: true,
+      supportsReasoning: true,
+      supportsStructuredOutput: true,
+      supportsWebSearch: false,
+    },
+    account: {
+      type: "chatgpt",
+      planType: "plus",
+      emailDomain: "example.com",
+      requiresOpenaiAuth: false,
+    },
+    config: {
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      compactionGuidanceOmitted: false,
+      customGuidanceOmitted: true,
+      developerGuidanceOmitted: true,
+      model: "gpt-5",
+      modelProvider: "openai",
+      reasoningEffort: "medium",
+      reviewModel: "gpt-5",
+      sandboxMode: "workspace-write",
+      serviceTier: "default",
+      webSearch: false,
+    },
+    permissionProfiles: [{ id: "default", description: "Default profile" }],
+    experimentalFeatures: [
+      {
+        name: "safe-feature",
+        stage: "beta",
+        displayName: "Safe feature",
+        description: "Read-only feature summary",
+        enabled: false,
+        defaultEnabled: false,
+      },
+    ],
   };
 }

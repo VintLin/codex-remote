@@ -59,7 +59,8 @@ flowchart LR
 | 11. Conversation Workbench Parity | Codex App-like browser workbench | 已完成；approval decision 留既有安全 real-gap |
 | 12. Local Work Tools Read-only | 文件/Git/MCP/插件等本地工作工具只读能力 | 已完成；MCP 在当前 real stack 可降级为 408 |
 | 13. Controlled Local Actions | 显式用户本地动作、受控 shell/Git/review/extension 操作 | 已完成首批 confirmed review-start 切片 |
-| 14. Runtime And Settings Parity | 模型/profile、账号/运行时/config 只读投影与设置面 | 下一阶段 |
+| 14. Runtime And Settings Parity | 模型/profile、账号/运行时/config 只读投影与设置面 | 已完成 |
+| 15. Advanced App-like Platform | 高级 App-like 平台能力拆分与验证 | 下一阶段 |
 
 ```mermaid
 flowchart TB
@@ -77,9 +78,10 @@ flowchart TB
   P11["11 Workbench Parity"]
   P12["12 Local Work Tools Read-only"]
   P13["13 Controlled Local Actions"]
-  P14["14 Runtime And Settings Parity - next"]
+  P14["14 Runtime And Settings Parity"]
+  P15["15 Advanced App-like Platform - next"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12 --> P13 --> P14
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12 --> P13 --> P14 --> P15
 ```
 
 ## 当前状态
@@ -93,6 +95,8 @@ flowchart TB
 - Stage 12 closure verification 通过：`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`。`real:check` 仍为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是既有 approval fixture gap；Stage 12 direct API smoke 返回 fileEntries=28、searchMatches=5、extensionItems=305，MCP 在当前环境允许 408 degraded。
 - Stage 13 已完成首批 controlled local action：Web -> Control Plane -> Worker -> Codex app-server 的 confirmed `review/start` for uncommitted changes。`thread/shellCommand`、`command/exec`、Git mutation、filesystem write、plugin/MCP/account/config mutation 仍未暴露。
 - Stage 13 closure verification 通过：focused package tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`、浏览器 Local Tools disabled/confirmation/accepted/fallback no-leak smoke。`real:check` 仍为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是既有 approval fixture gap。
+- Stage 14 已完成 project-scoped Runtime & Settings read-only parity：OpenAPI public contract、Worker app-server projection、Control Plane route、Web Settings panel 均已接通，覆盖 model catalog、provider capabilities、sanitized account/auth、config posture、permission profiles、experimental features 和 section status degraded handling。
+- Stage 14 closure verification 通过：focused api-contract/worker/control-plane/web tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、API real smoke `Web -> Control Plane -> Worker -> Codex app-server` runtime-settings loaded、Chrome desktop normal no-leak、Chrome mobile degraded no-leak。截图：`logs/stage14-runtime-settings-desktop.png`、`logs/stage14-runtime-settings-degraded-mobile.png`。
 
 ## Completed Stage 11
 
@@ -163,25 +167,34 @@ Stage 13 non-goals：
 - skill/plugin/MCP/account/config/model mutation。
 - raw command output、full diff、raw JSON-RPC、provider secrets、app-server URL、private path、stack/cause/prompt 暴露。
 
-## Active Stage 14
+## Completed Stage 14
 
 Active docs:
 
 - `docs/superpowers/specs/2026-06-22-runtime-settings-parity-design.md`
 - `docs/superpowers/plans/2026-06-22-runtime-settings-parity.md`
 
-Stage 14 下一步方向：
+Stage 14 完成范围：
 
-- Runtime And Settings Parity：先做 project-scoped read-only runtime/settings summary，覆盖 model catalog、provider capability、sanitized account/auth、config posture、permission profiles、experimental features。
-- 架构审核已完成并收窄：runtime/settings route 必须同时带 `deviceId` + `projectId`，`config/read` 与 `permissionProfile/list` 的 `cwd` 只能由 Worker 验证后的 project root 派生；no-leak 验证必须包含 fake Worker smoke server 和 serialized response-body value scans。
-- 下一步执行 Stage 14 implementation slices；仍禁止 model switch、config write、login/logout、token refresh、usage/rate/credits、MCP OAuth、experimental enablement。
+- Public contract 增加 `GET /v1/devices/{deviceId}/projects/{projectId}/runtime-settings` 和 closed runtime/settings summary schemas。
+- Worker 增加 project-scoped runtime settings adapter，调用 app-server `model/list`、`modelProvider/capabilities/read`、`account/read`、`getAuthStatus`、`config/read`、`permissionProfile/list`、`experimentalFeature/list`，并按 section 独立 degraded/unavailable。
+- `config/read` 与 `permissionProfile/list` 的 `cwd` 只来自 Worker 验证后的 allowed project root；Web/Control Plane 不传本地 path。
+- Control Plane 增加 device/project-scoped route 和 fail-closed response projection；Web Settings 增加只读 Runtime & Settings panel。
+- 仍禁止 model switch、config write、login/logout、token refresh、usage/rate/credits、MCP OAuth、experimental enablement、permission mutation。
+
+## Active Stage 15
+
+Stage 15 下一步方向：
+
+- Advanced App-like Platform：基于 Stage 11-14 的已完成 app-like browser workbench，继续拆分高级平台能力。
+- 候选方向包括 realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations；开始前必须先写 Stage 15 spec/plan 并做 subagent architecture review。
 
 ## Stage 11+ Draft Roadmap
 
 1. Stage 11：Conversation Workbench Parity。Codex App-like browser workbench：open/resume、archive/unarchive、rename、loaded/live badge、snapshot-first timeline 内容展示、Worker-projected live/request events、approval/request pending/resolved cards、composer 内 start/follow-up/interrupt/steer/queue、Settings -> 已归档对话、assistant message action row、protocol-derived permission menu placeholder。
 2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、Git/review 摘要、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps inventory。已完成；Command history/output 留到后续受控 shell/terminal 阶段。
 3. Stage 13：Controlled Local Actions。已完成 confirmed uncommitted-changes review start；显式 shell command、allowlisted project actions、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows 后续再拆。
-4. Stage 14：Runtime And Extension Management。模型/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps richer management。下一阶段。
+4. Stage 14：Runtime And Extension Management。已完成 project-scoped runtime/settings read-only projection 与 Settings panel；skills/plugins/MCP/apps richer management 的 mutation 类能力仍延后。
 5. Stage 15+：Advanced Platform Watchlist。realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations。
 
 ## 当前技术栈
@@ -225,4 +238,4 @@ Stage 14 下一步方向：
 
 ## 下一步
 
-下一步执行 Stage 14 implementation slices：先改 OpenAPI public contract，再实现 Worker projection、Control Plane route、Web Settings read-only panel，最后跑 focused/full/real/browser verification。
+下一步执行 Stage 15 spec/plan：先明确 Advanced App-like Platform 的首个垂直切片、non-goals 和验证方式，再做 subagent architecture review。

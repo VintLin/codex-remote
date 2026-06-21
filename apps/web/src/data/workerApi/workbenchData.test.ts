@@ -9,6 +9,7 @@ import type {
   ProjectDirectoryListing,
   ProjectFilePreview,
   ProjectGitSummary,
+  RuntimeSettingsSummary,
 } from "@codex-remote/api-contract";
 import type {
   AssistantTimelineNode,
@@ -438,6 +439,84 @@ test("workbench datasource when local workbench summary fails should mark degrad
   assert.equal(data.localWorkbench.files.status, "loaded");
 });
 
+test("workbench datasource when runtime settings summary loads should expose selected project runtime data", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-runtime", icon: "laptop", name: "Runtime", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Runtime", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("project-runtime", "Runtime", "device-runtime")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "device-runtime", projectId: "project-runtime" })),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "device-runtime", projectId: "project-runtime" })),
+      "/v1/devices/device-runtime/projects/project-runtime/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "device-runtime", projectId: "project-runtime" })),
+      "/v1/devices/device-runtime/projects/project-runtime/runtime-settings": jsonResponse(createRuntimeSettingsSummary({ deviceId: "device-runtime", projectId: "project-runtime" })),
+    }),
+  });
+
+  assert.equal(data.runtimeSettings.status, "loaded");
+  assert.equal(data.runtimeSettings.summary?.projectId, "project-runtime");
+  assert.equal(data.runtimeSettings.summary?.models[0]?.id, "gpt-5");
+  assert.equal(data.runtimeSettings.summary?.account.emailDomain, "example.com");
+});
+
+test("workbench datasource when no selected project exists should mark runtime settings empty", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-empty", icon: "laptop", name: "Empty", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([]),
+      "/v1/tasks": jsonResponse([]),
+    }),
+  });
+
+  assert.equal(data.runtimeSettings.status, "empty");
+  assert.equal(data.runtimeSettings.summary, null);
+  assert.equal(data.runtimeSettings.deviceId, null);
+  assert.equal(data.runtimeSettings.projectId, null);
+});
+
+test("workbench datasource when runtime settings request fails should keep app source loaded and mark runtime degraded", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-runtime-fail", icon: "laptop", name: "Runtime fail", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Runtime", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("project-runtime-fail", "Runtime", "device-runtime-fail")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "device-runtime-fail", projectId: "project-runtime-fail" })),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "device-runtime-fail", projectId: "project-runtime-fail" })),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "device-runtime-fail", projectId: "project-runtime-fail" })),
+      "/v1/devices/device-runtime-fail/projects/project-runtime-fail/runtime-settings": jsonResponse(
+        { code: "app_server_unavailable", message: "runtime unavailable" },
+        424,
+      ),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.runtimeSettings.status, "degraded");
+  assert.equal(data.runtimeSettings.summary, null);
+  assert.equal(data.runtimeSettings.error?.code, "app_server_unavailable");
+  assert.equal(data.localWorkbench.status, "loaded");
+});
+
 function createLocalWorkbenchSummary(overrides: Partial<LocalWorkbenchSummary> = {}): LocalWorkbenchSummary {
   return {
     deviceId: "w1",
@@ -516,6 +595,70 @@ function createExtensionInventory(overrides: Partial<ExtensionInventory> = {}): 
     plugins: [{ id: "github", name: "GitHub", enabled: true, skillCount: 2, appCount: 1, mcpServerCount: 1 }],
     marketplaceEntries: [{ name: "Data Analytics", installStatus: "not_installed" }],
     apps: [{ id: "gmail", name: "Gmail", enabled: false }],
+    ...overrides,
+  };
+}
+
+function createRuntimeSettingsSummary(overrides: Partial<RuntimeSettingsSummary> = {}): RuntimeSettingsSummary {
+  return {
+    deviceId: "w1",
+    projectId: "p-live",
+    readAt: "2026-06-22T00:00:00.000Z",
+    sections: [
+      { section: "models", status: "loaded" },
+      { section: "providerCapabilities", status: "loaded" },
+      { section: "account", status: "loaded" },
+      { section: "config", status: "loaded" },
+      { section: "permissionProfiles", status: "loaded" },
+      { section: "experimentalFeatures", status: "loaded" },
+    ],
+    models: [
+      {
+        id: "gpt-5",
+        displayName: "GPT-5",
+        isDefault: true,
+        supportedReasoningEfforts: ["medium"],
+        inputModalities: ["text"],
+        serviceTiers: ["default"],
+      },
+    ],
+    providerCapabilities: {
+      supportsImages: true,
+      supportsReasoning: true,
+      supportsStructuredOutput: true,
+      supportsWebSearch: false,
+    },
+    account: {
+      type: "chatgpt",
+      planType: "plus",
+      emailDomain: "example.com",
+      requiresOpenaiAuth: false,
+    },
+    config: {
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      compactionGuidanceOmitted: false,
+      customGuidanceOmitted: true,
+      developerGuidanceOmitted: true,
+      model: "gpt-5",
+      modelProvider: "openai",
+      reasoningEffort: "medium",
+      reviewModel: "gpt-5",
+      sandboxMode: "workspace-write",
+      serviceTier: "default",
+      webSearch: false,
+    },
+    permissionProfiles: [{ id: "default", description: "Default profile" }],
+    experimentalFeatures: [
+      {
+        name: "safe-feature",
+        stage: "beta",
+        displayName: "Safe feature",
+        description: "Read-only feature summary",
+        enabled: false,
+        defaultEnabled: false,
+      },
+    ],
     ...overrides,
   };
 }
