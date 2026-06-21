@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
+import type { v2 } from "@codex-remote/codex-protocol";
 import type { AppServerWorkerClient } from "../probe/appServerReadOnlyProbeClient.ts";
+import { localReviewConfirmationText } from "../http/localActionHandlers.ts";
 import { startReadOnlyHttpServer } from "./readOnlyHttpServerCli.ts";
 
 test("read-only http server cli when config is invalid, should fail without binding", async () => {
@@ -149,6 +151,67 @@ test("read-only http server cli when local workbench route is requested, should 
   assert.deepEqual(methods, ["gitDiffToRemote"]);
 });
 
+test("read-only http server cli when review-start route is requested, should forward fixed review-start method", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
+  const projectChild = join(projectRoot, "child");
+  await mkdir(projectChild);
+  const writes = createWritable();
+  const captured: { fetch?: (request: Request) => Promise<Response> | Response } = {};
+  const startReviewCalls: unknown[] = [];
+
+  const exitCode = await startReadOnlyHttpServer({
+    env: {
+      CODEX_REMOTE_WORKER_TOKEN: "example-token",
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: projectRoot,
+      CODEX_REMOTE_ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+      CODEX_APP_SERVER_URL: "ws://127.0.0.1:4321",
+    },
+    stdout: writes.stdout,
+    stderr: writes.stderr,
+    openWorkerSession: async () => ({
+      client: createFakeWorkerClient({
+        readThread: async () => ({ thread: createThread({ cwd: projectChild }) }),
+        startReview: async (params) => {
+          startReviewCalls.push(params);
+          return {};
+        },
+      }),
+      startedByWorker: false,
+      close: () => {},
+    }),
+    serveHttp: (options) => {
+      captured.fetch = (request) => options.fetch(request, undefined as never) as Promise<Response> | Response;
+      return undefined as never;
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  if (!captured.fetch) {
+    throw new Error("fetch app was not captured");
+  }
+
+  const response: Response = await captured.fetch(new Request("http://127.0.0.1:8787/v1/conversations/thread-123/local-actions/review-start", {
+    method: "POST",
+    headers: { authorization: "Bearer example-token", "content-type": "application/json" },
+    body: JSON.stringify({
+      projectId: "local-project",
+      expectedConversationId: "thread-123",
+      clientRequestId: "client-review-cli-1",
+      confirmationText: localReviewConfirmationText,
+    }),
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(body.status, "accepted");
+  assert.deepEqual(startReviewCalls, [
+    {
+      threadId: "thread-123",
+      target: { type: "uncommittedChanges" },
+    },
+  ]);
+});
+
 test("read-only http server cli when server binding fails, should print sanitized internal error", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
   const writes = createWritable();
@@ -223,6 +286,7 @@ function createFakeWorkerClient(overrides: Partial<AppServerWorkerClient> = {}):
     },
     interruptTurn: async () => ({}),
     steerTurn: async () => ({ turnId: "turn-1" }),
+    startReview: async () => ({}),
     gitDiffToRemote: async () => ({ sha: "abc123" as never, diff: "## main\n" }),
     fuzzyFileSearch: async () => ({ files: [] }),
     listMcpServerStatus: async () => ({ data: [], nextCursor: null }),
@@ -237,4 +301,30 @@ function createFakeWorkerClient(overrides: Partial<AppServerWorkerClient> = {}):
     close: () => {},
     ...overrides,
   } as unknown as AppServerWorkerClient;
+}
+
+function createThread(overrides: Partial<v2.Thread> = {}): v2.Thread {
+  return {
+    id: "thread-123",
+    sessionId: "session-123",
+    forkedFromId: null,
+    parentThreadId: null,
+    preview: "Thread preview",
+    ephemeral: false,
+    modelProvider: "openai",
+    createdAt: 1_718_791_200,
+    updatedAt: 1_718_791_205,
+    status: { type: "idle" },
+    path: null,
+    cwd: "/tmp/project" as v2.Thread["cwd"],
+    cliVersion: "1.0.0",
+    source: "cli",
+    threadSource: null,
+    agentNickname: null,
+    agentRole: null,
+    gitInfo: null,
+    name: null,
+    turns: [],
+    ...overrides,
+  };
 }

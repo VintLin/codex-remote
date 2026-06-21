@@ -8,6 +8,7 @@ import type {
   InterruptTurnInput,
   RenameConversationInput,
   StartConversationInput,
+  StartReviewInput,
   SteerTurnInput,
 } from "@codex-remote/api-contract";
 
@@ -46,6 +47,7 @@ import {
   unarchiveConversation,
   type WorkerControlHandlerContext,
 } from "./controlHandlers.ts";
+import { startLocalReview, type WorkerLocalActionHandlerContext } from "./localActionHandlers.ts";
 
 type WorkerHonoEnv = {
   Variables: {
@@ -58,8 +60,11 @@ const corsAllowHeaders = "Authorization, Content-Type, X-Request-ID";
 const corsAllowMethods = "GET, POST, PATCH, OPTIONS";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
+const reviewStartRoute = "/v1/conversations/:conversationId/local-actions/review-start";
 
-export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<WorkerHonoEnv> {
+export function createWorkerHttpApp(
+  context: WorkerControlHandlerContext & WorkerLocalActionHandlerContext,
+): Hono<WorkerHonoEnv> {
   const localWorkbenchContext = context as unknown as WorkerLocalWorkbenchHandlerContext;
   const app = new Hono<WorkerHonoEnv>();
 
@@ -146,6 +151,9 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
   app.post("/v1/conversations/:conversationId/follow-up", async (c) =>
     c.json(await followUpConversation(context, c.req.param("conversationId"), await readFollowUpInput(c)), 202),
   );
+  app.post(reviewStartRoute, async (c) =>
+    c.json(await startLocalReview(context, c.req.param("conversationId"), await readStartReviewInput(c)), 202),
+  );
   app.post("/v1/conversations/:conversationId/turns/:turnId/interrupt", async (c) =>
     c.json(
       await interruptTurn(context, c.req.param("conversationId"), c.req.param("turnId"), await readInterruptInput(c)),
@@ -193,6 +201,18 @@ async function readFollowUpInput(c: Context<WorkerHonoEnv>): Promise<FollowUpInp
     message: getRequiredStringField(body, "message", { maxLength: messageMaxLength }),
     clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
     ...(expectedConversationId === undefined ? {} : { expectedConversationId }),
+  };
+}
+
+async function readStartReviewInput(c: Context<WorkerHonoEnv>): Promise<StartReviewInput> {
+  const body = await readJsonObject(c);
+  assertKnownFields(body, ["projectId", "expectedConversationId", "clientRequestId", "confirmationText"]);
+
+  return {
+    projectId: getRequiredStringField(body, "projectId"),
+    expectedConversationId: getRequiredStringField(body, "expectedConversationId"),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", { maxLength: clientRequestIdMaxLength }),
+    confirmationText: getRequiredStringField(body, "confirmationText", { maxLength: 200 }),
   };
 }
 

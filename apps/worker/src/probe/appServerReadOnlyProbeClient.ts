@@ -255,6 +255,10 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
     return (await this.rpc.request("turn/steer", params)) as v2.TurnSteerResponse;
   }
 
+  async startReview(params: v2.ReviewStartParams): Promise<v2.ReviewStartResponse> {
+    return (await this.rpc.request("review/start", params)) as v2.ReviewStartResponse;
+  }
+
   async resumeThread(params: v2.ThreadResumeParams): Promise<v2.ThreadResumeResponse> {
     return (await this.rpc.request("thread/resume", params)) as v2.ThreadResumeResponse;
   }

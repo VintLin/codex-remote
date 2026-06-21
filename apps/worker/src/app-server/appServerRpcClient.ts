@@ -63,6 +63,7 @@ type WorkerAppServerMethod =
   | "model/list"
   | "plugin/list"
   | "plugin/read"
+  | "review/start"
   | "skills/list"
   | "thread/archive"
   | "thread/loaded/list"

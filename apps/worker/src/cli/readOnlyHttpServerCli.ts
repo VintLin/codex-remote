@@ -7,6 +7,10 @@ import type {
   WorkerLocalWorkbenchAppServerClient,
   WorkerLocalWorkbenchHandlerContext,
 } from "../http/localWorkbenchHandlers.ts";
+import type {
+  WorkerLocalActionAppServerClient,
+  WorkerLocalActionHandlerContext,
+} from "../http/localActionHandlers.ts";
 import { createWorkerHttpApp } from "../http/workerHttpApp.ts";
 import { loadWorkerHttpConfig, type WorkerHttpConfig } from "../http/workerHttpConfig.ts";
 import {
@@ -52,7 +56,7 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
 function createDefaultWorkerHandlerContext(
   config: WorkerHttpConfig,
   openWorkerSession = openWorkerAppServerSession,
-): WorkerControlHandlerContext & WorkerLocalWorkbenchHandlerContext {
+): WorkerControlHandlerContext & WorkerLocalWorkbenchHandlerContext & WorkerLocalActionHandlerContext {
   const approvalRegistry = createWorkerApprovalRegistry();
   let sharedSession: Promise<WorkerAppServerSession> | null = null;
 
@@ -92,7 +96,7 @@ function createDefaultWorkerHandlerContext(
 function createSessionClient(
   client: AppServerWorkerClient,
   closeSession: () => void,
-): WorkerControlAppServerClient & WorkerLocalWorkbenchAppServerClient {
+): WorkerControlAppServerClient & WorkerLocalWorkbenchAppServerClient & WorkerLocalActionAppServerClient {
   return {
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
@@ -109,6 +113,7 @@ function createSessionClient(
     listLoadedThreads: (params) => client.listLoadedThreads(params),
     interruptTurn: (params) => client.interruptTurn(params),
     steerTurn: (params) => client.steerTurn(params),
+    startReview: (params) => client.startReview(params),
     gitDiffToRemote: (params) => client.gitDiffToRemote(params),
     fuzzyFileSearch: (params) => client.fuzzyFileSearch(params),
     listMcpServerStatus: (params) => client.listMcpServerStatus(params),
