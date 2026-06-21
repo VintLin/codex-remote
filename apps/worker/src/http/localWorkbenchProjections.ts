@@ -316,6 +316,26 @@ function sanitizeGitPath(rawPath: string, allowedProjectRoot: string): string | 
     return null;
   }
 
+  const arrowIndex = trimmed.indexOf(" -> ");
+  if (arrowIndex >= 0) {
+    const sourcePath = sanitizeGitSinglePath(trimmed.slice(0, arrowIndex), allowedProjectRoot);
+    const targetPath = sanitizeGitSinglePath(trimmed.slice(arrowIndex + 4), allowedProjectRoot);
+    if (!sourcePath || !targetPath) {
+      return null;
+    }
+
+    return targetPath;
+  }
+
+  return sanitizeGitSinglePath(trimmed, allowedProjectRoot);
+}
+
+function sanitizeGitSinglePath(rawPath: string, allowedProjectRoot: string): string | null {
+  const trimmed = rawPath.trim();
+  if (!trimmed || unsafeTextPatterns.some((pattern) => pattern.test(trimmed))) {
+    return null;
+  }
+
   if (isAbsolute(trimmed)) {
     try {
       return toProjectRelativePath(allowedProjectRoot, trimmed);
@@ -329,7 +349,8 @@ function sanitizeGitPath(rawPath: string, allowedProjectRoot: string): string | 
     normalizedPath === "." ||
     normalizedPath === ".." ||
     normalizedPath.startsWith("../") ||
-    normalizedPath.includes("/../")
+    normalizedPath.includes("/../") ||
+    /^[A-Za-z]:\//.test(normalizedPath)
   ) {
     return null;
   }

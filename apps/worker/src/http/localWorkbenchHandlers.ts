@@ -331,7 +331,13 @@ function assertProjectId(projectId: string): void {
 
 function normalizeSearchResultPath(path: string): string | null {
   const normalized = path.replaceAll("\\", "/");
-  if (!normalized || normalized === "." || normalized.startsWith("..") || normalized.startsWith("/")) {
+  if (
+    !normalized ||
+    normalized === "." ||
+    normalized.startsWith("..") ||
+    normalized.startsWith("/") ||
+    /^[A-Za-z]:\//.test(normalized)
+  ) {
     return null;
   }
 

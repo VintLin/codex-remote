@@ -137,6 +137,33 @@ test("local workbench projections when projecting git diff paths, should drop Wi
   assert.doesNotMatch(JSON.stringify(summary), /C:\/Users\/vint\/private\.ts/);
 });
 
+test("local workbench projections when projecting git rename or copy paths, should drop traversal targets", async () => {
+  const summary = projectGitDiffToSummary(
+    {
+      sha: "abc123" as never,
+      diff: [
+        "## feature/local-workbench...origin/main",
+        " R src/old.ts -> ../secret.txt | 2 +-",
+        " C src/copy.ts -> src/copied.ts | 3 ++-",
+      ].join("\n"),
+    },
+    "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+  );
+
+  assert.deepEqual(summary, {
+    branch: "feature/local-workbench",
+    status: "dirty",
+    aheadCount: 0,
+    behindCount: 0,
+    stagedCount: 0,
+    unstagedCount: 1,
+    untrackedCount: 0,
+    reviewState: "unknown",
+    changedFiles: [{ path: "src/copied.ts", status: "copied", additions: 2, deletions: 1 }],
+  });
+  assert.doesNotMatch(JSON.stringify(summary), /->|\.\.\//);
+});
+
 test("local workbench projections when projecting extension inventory, should expose only whitelist metadata", async () => {
   const inventory = projectExtensionInventory(
     {
