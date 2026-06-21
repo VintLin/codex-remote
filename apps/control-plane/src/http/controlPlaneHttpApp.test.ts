@@ -9,6 +9,7 @@ import type {
   ApprovalDecisionInput,
   BoardTask,
   CodexConversation,
+  ConversationQueuedMessage,
   ConversationLifecycleInput,
   ConversationTimeline,
   FollowUpInput,
@@ -488,6 +489,104 @@ test("control plane http app when write and control routes are used, should prox
   ]);
 });
 
+test("control plane http app when queued messages are created and listed, should keep queue state in the repository", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createDatabaseApp(fixture.database);
+
+    const created = await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages", {
+      method: "POST",
+      body: JSON.stringify({ message: "Run after current turn", clientRequestId: "queue-1" }),
+    });
+    const repeated = await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages", {
+      method: "POST",
+      body: JSON.stringify({ message: "Ignored duplicate body", clientRequestId: "queue-1" }),
+    });
+    const listed = await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages");
+
+    assert.equal(created.status, 201);
+    assert.equal(repeated.status, 201);
+    const queued = await created.json() as ConversationQueuedMessage;
+    assert.equal(queued.message, "Run after current turn");
+    assert.equal(queued.status, "queued");
+    assert.deepEqual(await repeated.json(), queued);
+    assert.deepEqual(await listed.json(), [queued]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when a queued message is canceled, should return no content and hide it from pending queue", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const app = createDatabaseApp(fixture.database);
+    const queued = await (await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages", {
+      method: "POST",
+      body: JSON.stringify({ message: "Cancel this", clientRequestId: "queue-1" }),
+    })).json() as ConversationQueuedMessage;
+
+    const canceled = await request(app, `/v1/devices/device-a/conversations/thread-a/queued-messages/${queued.id}`, { method: "DELETE" });
+
+    assert.equal(canceled.status, 204);
+    assert.deepEqual(fixture.database.conversationQueue.listQueuedMessages("device-a", "thread-a"), []);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when a queued message is sent while idle, should call worker follow-up and mark the queue row sent", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const client = new FakeWorkerClient();
+    const app = createDatabaseApp(fixture.database, client);
+    const queued = await (await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages", {
+      method: "POST",
+      body: JSON.stringify({ message: "Flush this", clientRequestId: "queue-1" }),
+    })).json() as ConversationQueuedMessage;
+
+    const sent = await request(app, `/v1/devices/device-a/conversations/thread-a/queued-messages/${queued.id}/send`, {
+      method: "POST",
+      body: JSON.stringify({ clientRequestId: "send-1", expectedQueuedMessageId: queued.id }),
+    });
+
+    assert.equal(sent.status, 202);
+    assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["readTimeline:device-a", "followUp:device-a"]);
+    assert.deepEqual(client.followUpInputs, [
+      {
+        conversationId: "thread-a",
+        input: { clientRequestId: "send-1", expectedConversationId: "thread-a", message: "Flush this" },
+      },
+    ]);
+    assert.equal(fixture.database.conversationQueue.listMessages("device-a", "thread-a")[0]?.status, "sent");
+  } finally {
+    fixture.close();
+  }
+});
+
+test("control plane http app when a queued message is sent while a turn is active, should reject without claiming it", async () => {
+  const fixture = TaskDatabaseFixture.createMemory();
+  try {
+    const client = new FakeWorkerClient({ activeTimeline: true });
+    const app = createDatabaseApp(fixture.database, client);
+    const queued = await (await request(app, "/v1/devices/device-a/conversations/thread-a/queued-messages", {
+      method: "POST",
+      body: JSON.stringify({ message: "Wait", clientRequestId: "queue-1" }),
+    })).json() as ConversationQueuedMessage;
+
+    const blocked = await request(app, `/v1/devices/device-a/conversations/thread-a/queued-messages/${queued.id}/send`, {
+      method: "POST",
+      body: JSON.stringify({ clientRequestId: "send-1", expectedQueuedMessageId: queued.id }),
+    });
+
+    assert.equal(blocked.status, 409);
+    assert.equal((await blocked.json() as { code: string }).code, "conversation_busy");
+    assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["readTimeline:device-a"]);
+    assert.equal(fixture.database.conversationQueue.listMessages("device-a", "thread-a")[0]?.status, "queued");
+  } finally {
+    fixture.close();
+  }
+});
+
 test("control plane http app when lifecycle routes are used, should proxy selected device and normalize returned identity", async () => {
   const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
   const app = createApp(client);
@@ -557,6 +656,7 @@ function request(app: ReturnType<typeof createControlPlaneHttpApp>, path: string
 function createApp(workerClient: WorkerUpstreamClient = new FakeWorkerClient()): ReturnType<typeof createControlPlaneHttpApp> {
   return createControlPlaneHttpApp({
     config,
+    conversationQueueRepository: sharedTaskDatabase.conversationQueue,
     now: nowFixed,
     taskRepository: sharedTaskDatabase.tasks,
     workerClient,
@@ -566,11 +666,22 @@ function createApp(workerClient: WorkerUpstreamClient = new FakeWorkerClient()):
 function createTaskApp(taskRepository: TaskRepository): ReturnType<typeof createControlPlaneHttpApp> {
   const params = {
     config,
+    conversationQueueRepository: sharedTaskDatabase.conversationQueue,
     now: nowFixed,
     workerClient: new FakeWorkerClient(),
     taskRepository,
   };
   return createControlPlaneHttpApp(params);
+}
+
+function createDatabaseApp(database: TaskDatabase, workerClient: WorkerUpstreamClient = new FakeWorkerClient()): ReturnType<typeof createControlPlaneHttpApp> {
+  return createControlPlaneHttpApp({
+    config,
+    conversationQueueRepository: database.conversationQueue,
+    now: nowFixed,
+    taskRepository: database.tasks,
+    workerClient,
+  });
 }
 
 class TaskDatabaseFixture {
@@ -632,10 +743,13 @@ class ThrowingTaskRepository {
 
 class FakeWorkerClient implements WorkerUpstreamClient {
   readonly calls: Array<{ deviceId: string; method: string }> = [];
+  readonly followUpInputs: Array<{ conversationId: string; input: FollowUpInput }> = [];
+  private readonly activeTimeline: boolean;
   private readonly unavailableDeviceIds: Set<string>;
   private readonly upstreamDeviceId: string | null;
 
-  constructor(options: { unavailableDeviceIds?: Set<string>; upstreamDeviceId?: string } = {}) {
+  constructor(options: { activeTimeline?: boolean; unavailableDeviceIds?: Set<string>; upstreamDeviceId?: string } = {}) {
+    this.activeTimeline = options.activeTimeline ?? false;
     this.unavailableDeviceIds = options.unavailableDeviceIds ?? new Set();
     this.upstreamDeviceId = options.upstreamDeviceId ?? null;
   }
@@ -731,7 +845,19 @@ class FakeWorkerClient implements WorkerUpstreamClient {
       snapshotRevision: `${conversationId}:1`,
       runtimeStatus: "running",
       latestTurnStatus: "unknown",
-      turns: [],
+      turns: this.activeTimeline
+        ? [
+            {
+              id: "turn-active",
+              status: "in_progress",
+              startedAt: 1,
+              completedAt: null,
+              durationMs: null,
+              itemsView: "full",
+              nodes: [],
+            },
+          ]
+        : [],
     };
   }
 
@@ -758,8 +884,9 @@ class FakeWorkerClient implements WorkerUpstreamClient {
     return createAccepted(device.id, input.clientRequestId);
   }
 
-  async followUp(device: ConfiguredWorkerDevice, _conversationId: string, input: FollowUpInput) {
+  async followUp(device: ConfiguredWorkerDevice, conversationId: string, input: FollowUpInput) {
     this.record(device, "followUp");
+    this.followUpInputs.push({ conversationId, input });
     return createAccepted(device.id, input.clientRequestId);
   }
 

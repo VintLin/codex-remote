@@ -27,6 +27,9 @@ function createFetchMock(endpointMap: Record<string, Response>): typeof fetch {
     const response = endpointMap[requestUrl.pathname];
 
     if (!response) {
+      if (requestUrl.pathname.endsWith("/queued-messages")) {
+        return Promise.resolve(jsonResponse([]));
+      }
       throw new Error(`Unexpected endpoint: ${requestUrl.pathname}`);
     }
 
@@ -127,6 +130,17 @@ test("workbench datasource when endpoint responses are valid should create snaps
         },
       ],
     }),
+    "/v1/devices/w1/conversations/conv-live-1/queued-messages": jsonResponse([
+      {
+        id: "queue-live-1",
+        deviceId: "w1",
+        conversationId: "conv-live-1",
+        message: "Run later",
+        status: "queued",
+        createdAt: "2026-06-20T00:00:02.000Z",
+        updatedAt: "2026-06-20T00:00:02.000Z",
+      },
+    ]),
     "/v1/tasks": jsonResponse([
       {
         id: "task-live",
@@ -161,6 +175,7 @@ test("workbench datasource when endpoint responses are valid should create snaps
   assert.equal(data.searchRecents[0]?.conversationId, "conv-live-1");
   assert.equal(data.tasks[0]?.id, "task-live");
   assert.equal(data.tasks[0]?.linkedConversations[0]?.deviceId, "w1");
+  assert.equal(data.queuedMessages[0]?.message, "Run later");
   assert.equal(data.assistantThreads.length, 2);
 });
 

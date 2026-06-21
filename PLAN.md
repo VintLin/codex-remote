@@ -56,7 +56,8 @@ flowchart LR
 | 8. 产品化与扩展 | self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 能力 | 已完成；approval decision 留安全 real-gap |
 | 10. Isolated Approval Fixture | 隔离验证 approval decision decline/cancel | 已实现 fixture；blocked 于 app-server 未产生 safe pending approval |
-| 11. Conversation Workbench Parity | Codex App-like browser workbench | UI repair 已完成并通过 Web/real smoke；待最终全量验证与归档 |
+| 11. Conversation Workbench Parity | Codex App-like browser workbench | 已完成；approval decision 留既有安全 real-gap |
+| 12. Local Work Tools Read-only | 文件/命令/Git/MCP/插件等本地工作工具只读能力 | 待设计 |
 
 ```mermaid
 flowchart TB
@@ -71,30 +72,32 @@ flowchart TB
   P8["8 Product Readiness"]
   P9["9 Real Calibration"]
   P10["10 Approval Fixture"]
-  P11["11 Workbench Parity - active"]
+  P11["11 Workbench Parity"]
+  P12["12 Local Work Tools Read-only - next"]
 
-  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11
+  P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12
 ```
 
 ## 当前状态
 
 - Web -> Control Plane -> Worker -> Codex app-server 的本机主链已有 real evidence。
 - Approval decision 仍没有稳定真实 pending approval，不能宣称 product-ready。
-- Stage 11 已按 UI parity review 完成第一轮修复：composer-centered start/follow-up/interrupt/steer/queue、Settings archived restore、request cards、assistant actions、permission placeholders。
+- Stage 11 已按 UI parity review 完成修复并归档：composer-centered start/follow-up/interrupt/steer/queue、Control Plane/DB durable queued messages、Settings archived restore、request cards、assistant actions、permission placeholders。
 - Stage 11A app-server output calibration 与 Web projection cleanup 已完成；真实 timeline 缺失 `nodes` / `itemsView` 时 Web 保持 loaded 而不 fallback。
+- Stage 11 closure verification 通过：`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:start`、`pnpm real:status`、`pnpm real:check`、`pnpm web:e2e:smoke`。`real:check` 结果为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是 approval decision。
 
-## Active Stage 11
+## Completed Stage 11
 
-Active docs:
+Archived docs:
 
-- `docs/superpowers/specs/2026-06-21-conversation-workbench-parity-design.md`
-- `docs/superpowers/plans/2026-06-21-conversation-workbench-parity.md`
+- `docs/archives/specs/2026-06-21-conversation-workbench-parity-design.md`
+- `docs/archives/plans/2026-06-21-conversation-workbench-parity.md`
 - `docs/references/2026-06-21-feature-support-ui-audit.md`
 - `docs/references/2026-06-21-app-server-protocol-inventory.md`
 
-Stage 11 当前方向：
+Stage 11 完成范围：
 
-- Start/follow-up/interrupt/steer/queue 已收敛到 composer；当前 queue 是本地队列，刷新/跨设备持久化留给 Control Plane state。
+- Start/follow-up/interrupt/steer/queue 已收敛到 composer；queue-later 现在通过 Control Plane API 和 DB 持久化，支持刷新/跨设备恢复、取消、idle 后发送和失败状态。
 - Archive 已从正常侧边栏过滤，恢复入口在 Settings -> 已归档对话。
 - Timeline 使用 public safe nodes；真实 metadata-only turn 会显示安全 fallback。
 - Request cards 已进入 timeline/workbench flow。
@@ -153,10 +156,11 @@ Stage 11 non-goals：
 ## 已归档内容
 
 - Stage 2-10 spec/plan：`docs/archives/specs/` 与 `docs/archives/plans/`
+- Stage 11 spec/plan：`docs/archives/specs/2026-06-21-conversation-workbench-parity-design.md` 与 `docs/archives/plans/2026-06-21-conversation-workbench-parity.md`
 - Stage 11 pre-consensus spec/plan：`docs/archives/specs/2026-06-21-conversation-workbench-parity-design-pre-consensus.md` 与 `docs/archives/plans/2026-06-21-conversation-workbench-parity-pre-consensus.md`
 - Root `PLAN.md` 历史证据摘要：`docs/archives/references/2026-06-21-plan-history.md`
 - 调研回答：`docs/references/questions/`
 
 ## 下一步
 
-下一步执行 Stage 11 closure：跑最终全量验证、Chrome/Playwright 视觉路径检查，确认唯一 real-gap 仍为 approval fixture 无 pending request 后归档 Stage 11 spec/plan。
+下一步进入 Stage 12 设计：先写 Local Work Tools Read-only spec/plan，范围限定为文件预览/metadata、命令输出只读、Git diff、review findings、fuzzy search、MCP status/resources/tools list、plugin/marketplace read、skills/hooks/apps list。

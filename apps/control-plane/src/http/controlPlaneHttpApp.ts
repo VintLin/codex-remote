@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Hono, type Context } from "hono";
-import type { TaskRepository } from "@codex-remote/db";
+import type { ConversationQueueRepository, TaskRepository } from "@codex-remote/db";
 import type {
   ApprovalDecisionInput,
   BoardTask,
@@ -13,9 +13,11 @@ import type {
   InterruptTurnInput,
   LinkTaskConversationInput,
   OpenConversationResult,
+  QueueConversationMessageInput,
   RenameConversationInput,
   StartConversationInput,
   RemoteProject,
+  SendQueuedConversationMessageInput,
   SteerTurnInput,
   TaskConversationLink,
   TaskStatus,
@@ -45,6 +47,7 @@ const taskTitleMaxLength = 200;
 
 export function createControlPlaneHttpApp(params: {
   config: ControlPlaneConfig;
+  conversationQueueRepository: ConversationQueueRepository;
   now: () => string;
   taskRepository: TaskRepository;
   workerClient: WorkerUpstreamClient;
@@ -199,6 +202,76 @@ export function createControlPlaneHttpApp(params: {
       ),
       202,
     );
+  });
+
+  app.get("/v1/devices/:deviceId/conversations/:conversationId/queued-messages", (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    return c.json(runQueueOperation(params.conversationQueueRepository, "queue/list", (repository) =>
+      repository.listMessages(device.id, c.req.param("conversationId"))
+    ));
+  });
+
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/queued-messages", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const conversationId = c.req.param("conversationId");
+    const input = await readQueueConversationMessageInputBody(c);
+    const queued = runQueueOperation(params.conversationQueueRepository, "queue/create", (repository) =>
+      repository.queueMessage({
+        deviceId: device.id,
+        conversationId,
+        clientRequestId: input.clientRequestId,
+        message: input.message,
+      })
+    );
+    return c.json(queued, 201);
+  });
+
+  app.delete("/v1/devices/:deviceId/conversations/:conversationId/queued-messages/:queuedMessageId", (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    runQueueOperation(params.conversationQueueRepository, "queue/cancel", (repository) =>
+      repository.cancelMessage(device.id, c.req.param("conversationId"), c.req.param("queuedMessageId"))
+    );
+    return c.body(null, 204);
+  });
+
+  app.post("/v1/devices/:deviceId/conversations/:conversationId/queued-messages/:queuedMessageId/send", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const conversationId = c.req.param("conversationId");
+    const queuedMessageId = c.req.param("queuedMessageId");
+    const input = await readSendQueuedConversationMessageInputBody(c);
+    if (input.expectedQueuedMessageId !== queuedMessageId) {
+      throw new ControlPlaneHttpError(409, "duplicate_request", "Duplicate request conflicts with the original request.", {
+        operation: "queue/send",
+        retryable: false,
+      });
+    }
+
+    const timeline = await runForDevice(device, "queue/timeline", () => params.workerClient.readTimeline(device, conversationId));
+    if (hasActiveTurn(timeline)) {
+      throw new ControlPlaneHttpError(409, "conversation_busy", "Conversation is busy.", {
+        operation: "queue/send",
+        retryable: true,
+      });
+    }
+
+    const queued = runQueueOperation(params.conversationQueueRepository, "queue/claim", (repository) =>
+      repository.claimMessage(device.id, conversationId, queuedMessageId)
+    );
+
+    try {
+      const accepted = await runForDevice(device, "queue/send", () =>
+        params.workerClient.followUp(device, conversationId, {
+          clientRequestId: input.clientRequestId,
+          expectedConversationId: conversationId,
+          message: queued.message,
+        }),
+      );
+      runQueueOperation(params.conversationQueueRepository, "queue/mark-sent", (repository) => repository.markSent(queued.id));
+      return c.json(accepted, 202);
+    } catch (error) {
+      runQueueOperation(params.conversationQueueRepository, "queue/mark-failed", (repository) => repository.markFailed(queued.id, "worker_unavailable"));
+      throw error;
+    }
   });
 
   app.post("/v1/devices/:deviceId/conversations/:conversationId/open", async (c) => {
@@ -417,6 +490,24 @@ async function readFollowUpInputBody(c: Context<ControlPlaneHonoEnv>): Promise<F
   };
 }
 
+async function readQueueConversationMessageInputBody(c: Context<ControlPlaneHonoEnv>): Promise<QueueConversationMessageInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["message", "clientRequestId"]);
+  return {
+    message: getRequiredStringField(body, "message", messageMaxLength),
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
+  };
+}
+
+async function readSendQueuedConversationMessageInputBody(c: Context<ControlPlaneHonoEnv>): Promise<SendQueuedConversationMessageInput> {
+  const body = await readBody(c);
+  assertKnownFields(body, ["clientRequestId", "expectedQueuedMessageId"]);
+  return {
+    clientRequestId: getRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength),
+    expectedQueuedMessageId: getRequiredStringField(body, "expectedQueuedMessageId"),
+  };
+}
+
 async function readConversationLifecycleInputBody(c: Context<ControlPlaneHonoEnv>): Promise<ConversationLifecycleInput> {
   const body = await readBody(c);
   assertKnownFields(body, ["clientRequestId"]);
@@ -549,6 +640,47 @@ function runTaskOperation<T>(repository: TaskRepository, operation: string, run:
   } catch (error) {
     throw mapTaskError(error, operation);
   }
+}
+
+function runQueueOperation<T>(
+  repository: ConversationQueueRepository,
+  operation: string,
+  run: (repository: ConversationQueueRepository) => T,
+): T {
+  try {
+    return run(repository);
+  } catch (error) {
+    throw mapQueueError(error, operation);
+  }
+}
+
+function mapQueueError(error: unknown, operation: string): ControlPlaneHttpError {
+  if (error instanceof ControlPlaneHttpError) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.startsWith("queue_message_not_found:")) {
+    return new ControlPlaneHttpError(404, "queue_message_not_found", "Queued message was not found.", {
+      operation,
+      retryable: false,
+    });
+  }
+
+  if (error instanceof Error && error.message.startsWith("queue_message_conflict:")) {
+    return new ControlPlaneHttpError(409, "queue_message_conflict", "Queued message is not in a compatible state.", {
+      operation,
+      retryable: false,
+    });
+  }
+
+  return new ControlPlaneHttpError(500, "control_plane_unavailable", "Control Plane request failed.", {
+    operation,
+    retryable: true,
+  });
+}
+
+function hasActiveTurn(timeline: ConversationTimeline): boolean {
+  return timeline.turns.some((turn) => turn.status === "in_progress");
 }
 
 function requireLinkedConversation(task: BoardTask, input: LinkTaskConversationInput): TaskConversationLink {

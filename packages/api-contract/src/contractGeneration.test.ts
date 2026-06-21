@@ -24,6 +24,9 @@ const schemaTypeNames = [
   "LinkTaskConversationInput",
   "StartConversationInput",
   "FollowUpInput",
+  "QueueConversationMessageInput",
+  "SendQueuedConversationMessageInput",
+  "ConversationQueuedMessage",
   "InterruptTurnInput",
   "SteerTurnInput",
   "PendingApproval",
@@ -107,6 +110,9 @@ const stage6ControlPlanePaths = [
   "/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
 ] as const;
 const stage6ControlPlaneWritePaths = [
@@ -117,6 +123,9 @@ const stage6ControlPlaneWritePaths = [
   "/v1/devices/{deviceId}/conversations/{conversationId}/unarchive:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}:",
+  "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send:",
   "/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:",
 ] as const;
 const stage11WorkerPatchPaths = ["/v1/conversations/{conversationId}:"] as const;
@@ -623,7 +632,7 @@ test("when worker write http api is maintained, openapi should define only versi
   });
   const expectedWritePathMethodPairs = [
     ...[...stage4WritePaths, ...stage5WriteControlPaths, ...stage6ControlPlaneWritePaths].map(
-      (path) => `${path.slice(0, -1)}:post`,
+      (path) => `${path.slice(0, -1)}:${path.endsWith("/queued-messages/{queuedMessageId}:") ? "delete" : "post"}`,
     ),
     ...stage11WorkerLifecyclePostPaths.map((path) => `${path.slice(0, -1)}:post`),
     ...stage11WorkerPatchPaths.map((path) => `${path.slice(0, -1)}:patch`),
@@ -779,7 +788,7 @@ test("when control plane http api is maintained, openapi should define versioned
     assert.equal(versionedPathLines.includes(path), true);
   }
 
-  const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "get" | "post" | "patch">([
+  const expectedMethods = new Map<(typeof stage6ControlPlanePaths)[number], "delete" | "get" | "post" | "patch">([
     ["/v1/control-plane/health:", "get"],
     ["/v1/devices:", "get"],
     ["/v1/projects:", "get"],
@@ -797,6 +806,9 @@ test("when control plane http api is maintained, openapi should define versioned
     ["/v1/devices/{deviceId}/conversations/{conversationId}:", "patch"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:", "post"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages:", "post"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}:", "delete"],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send:", "post"],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", "post"],
   ]);
 
@@ -930,6 +942,9 @@ test("when control plane api is maintained, device scoped routes should reuse ex
     ["/v1/devices/{deviceId}/conversations/{conversationId}/follow-up:", ["FollowUpInput", "CommandAccepted"]],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/interrupt:", ["InterruptTurnInput", "CommandAccepted"]],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/turns/{turnId}/steer:", ["SteerTurnInput", "CommandAccepted"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages:", ["ConversationQueuedMessage", "QueueConversationMessageInput"]],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}:", []],
+    ["/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send:", ["SendQueuedConversationMessageInput", "CommandAccepted"]],
     ["/v1/devices/{deviceId}/conversations/{conversationId}/approvals/{approvalRequestId}/decision:", ["ApprovalDecisionInput", "CommandAccepted"]],
   ]);
 
@@ -939,6 +954,19 @@ test("when control plane api is maintained, device scoped routes should reuse ex
       assert.match(pathSource, new RegExp(`#\\/components\\/schemas\\/${schemaRef}`));
     }
   }
+});
+
+test("when queued conversation message schemas are maintained, queue state should stay narrowed", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const queuedMessageBlock = expectSchemaDisallowsAdditionalProperties(source, "ConversationQueuedMessage");
+  const queueInputBlock = expectSchemaDisallowsAdditionalProperties(source, "QueueConversationMessageInput");
+  const sendInputBlock = expectSchemaDisallowsAdditionalProperties(source, "SendQueuedConversationMessageInput");
+
+  expectPropertyMaxLength(queueInputBlock, "message", 20000);
+  expectPropertyMaxLength(queueInputBlock, "clientRequestId", 128);
+  expectPropertyMaxLength(sendInputBlock, "clientRequestId", 128);
+  expectPropertyEnum(queuedMessageBlock, "status", ["queued", "sending", "sent", "failed", "canceled"]);
+  assert.doesNotMatch(queuedMessageBlock.join("\n"), /raw|prompt|token|secret|jsonRpc|appServer/i);
 });
 
 test("when worker control schemas are maintained, request limits should stay explicit", () => {

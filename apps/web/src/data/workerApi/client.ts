@@ -2,6 +2,7 @@ import type {
   CodexConversation,
   BoardTask,
   CommandAccepted,
+  ConversationQueuedMessage,
   ConversationTimeline,
   CreateTaskInput,
   Device,
@@ -13,8 +14,10 @@ import type {
   LinkTaskConversationInput,
   OpenConversationResult,
   PendingApproval,
+  QueueConversationMessageInput,
   RemoteProject,
   RenameConversationInput,
+  SendQueuedConversationMessageInput,
   StartConversationInput,
   SteerTurnInput,
   TaskConversationLink,
@@ -45,6 +48,10 @@ export interface WorkerApiClientLike {
   renameConversation(deviceId: string, conversationId: string, input: RenameConversationInput): Promise<OpenConversationResult>;
   startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted>;
   followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
+  listQueuedMessages(deviceId: string, conversationId: string): Promise<ConversationQueuedMessage[]>;
+  queueConversationMessage(deviceId: string, conversationId: string, input: QueueConversationMessageInput): Promise<ConversationQueuedMessage>;
+  cancelQueuedMessage(deviceId: string, conversationId: string, queuedMessageId: string): Promise<void>;
+  sendQueuedMessage(deviceId: string, conversationId: string, queuedMessageId: string, input: SendQueuedConversationMessageInput): Promise<CommandAccepted>;
   interruptTurn(deviceId: string, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted>;
   steerTurn(deviceId: string, conversationId: string, turnId: string, input: SteerTurnInput): Promise<CommandAccepted>;
   listApprovals(deviceId: string, conversationId: string): Promise<PendingApproval[]>;
@@ -212,6 +219,50 @@ export class WorkerApiClient implements WorkerApiClientLike {
       },
     );
     return response;
+  }
+
+  public async listQueuedMessages(deviceId: string, conversationId: string): Promise<ConversationQueuedMessage[]> {
+    return this.request<ConversationQueuedMessage[]>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/queued-messages`,
+    );
+  }
+
+  public async queueConversationMessage(
+    deviceId: string,
+    conversationId: string,
+    input: QueueConversationMessageInput,
+  ): Promise<ConversationQueuedMessage> {
+    return this.request<ConversationQueuedMessage>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/queued-messages`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
+  }
+
+  public async cancelQueuedMessage(deviceId: string, conversationId: string, queuedMessageId: string): Promise<void> {
+    await this.request<void>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/queued-messages/${encodeURIComponent(queuedMessageId)}`,
+      {
+        method: "DELETE",
+      },
+    );
+  }
+
+  public async sendQueuedMessage(
+    deviceId: string,
+    conversationId: string,
+    queuedMessageId: string,
+    input: SendQueuedConversationMessageInput,
+  ): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/queued-messages/${encodeURIComponent(queuedMessageId)}/send`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
   }
 
   public async interruptTurn(deviceId: string, conversationId: string, turnId: string, input: InterruptTurnInput): Promise<CommandAccepted> {

@@ -356,6 +356,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listControlPlaneQueuedConversationMessages"];
+        put?: never;
+        post: operations["queueControlPlaneConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["cancelControlPlaneQueuedConversationMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sendControlPlaneQueuedConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{deviceId}/conversations/{conversationId}/approvals": {
         parameters: {
             query?: never;
@@ -880,6 +928,27 @@ export interface components {
             message: string;
             clientRequestId: string;
             expectedConversationId?: string;
+        };
+        QueueConversationMessageInput: {
+            message: string;
+            clientRequestId: string;
+        };
+        SendQueuedConversationMessageInput: {
+            clientRequestId: string;
+            expectedQueuedMessageId: string;
+        };
+        ConversationQueuedMessage: {
+            id: string;
+            deviceId: string;
+            conversationId: string;
+            message: string;
+            /** @enum {string} */
+            status: "queued" | "sending" | "sent" | "failed" | "canceled";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            failureCode?: string;
         };
         InterruptTurnInput: {
             clientRequestId: string;
@@ -1683,6 +1752,131 @@ export interface operations {
         };
         responses: {
             /** @description Device-scoped steer command accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            408: components["responses"]["RequestTimeoutError"];
+            409: components["responses"]["ConflictError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    listControlPlaneQueuedConversationMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued messages for a device-scoped conversation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationQueuedMessage"][];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    queueControlPlaneConversationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueConversationMessageInput"];
+            };
+        };
+        responses: {
+            /** @description Message queued for the selected conversation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationQueuedMessage"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            409: components["responses"]["ConflictError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    cancelControlPlaneQueuedConversationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+                queuedMessageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued message canceled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["ConversationNotFoundError"];
+            409: components["responses"]["ConflictError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    sendControlPlaneQueuedConversationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                conversationId: string;
+                queuedMessageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendQueuedConversationMessageInput"];
+            };
+        };
+        responses: {
+            /** @description Queued message follow-up command accepted. */
             202: {
                 headers: {
                     [name: string]: unknown;

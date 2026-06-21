@@ -66,7 +66,7 @@ Task 0 result:
 - [ ] Add failing contract tests for app-like timeline content nodes with redaction-safe fields.
 - [ ] Add failing contract tests for partial timeline state derived from `Turn.itemsView`.
 - [ ] Add failing contract tests for archived-conversation listing separate from normal conversation list semantics.
-- [ ] Add failing contract tests for queued message state: queued, sending, sent, failed, canceled.
+- [x] Add failing contract tests for queued message state: queued, sending, sent, failed, canceled.
 - [ ] Add failing contract tests for message action capability flags: copy, feedback placeholder, fork placeholder, hooks placeholder, timestamp.
 - [ ] Update OpenAPI from those tests, then regenerate generated types.
 - [ ] Run `pnpm --filter @codex-remote/api-contract test`.
@@ -105,10 +105,10 @@ Task 0 result:
 
 - [ ] Add failing tests for normal conversation list excluding archived conversations.
 - [ ] Add failing tests for Settings archived conversation list and restore.
-- [ ] Add failing tests for queue-after-current behavior when a conversation has an active turn.
-- [ ] Add failing tests for queue cancellation/failure state with sanitized errors.
-- [ ] Implement routing/state with the least durable store that satisfies multi-device/self-hosted requirements for this stage.
-- [ ] Run `pnpm --filter @codex-remote/control-plane test`.
+- [x] Add failing tests for queue-after-current behavior when a conversation has an active turn.
+- [x] Add failing tests for queue cancellation/failure state with sanitized errors.
+- [x] Implement routing/state with the least durable store that satisfies multi-device/self-hosted requirements for this stage.
+- [x] Run `pnpm --filter @codex-remote/control-plane test`.
 
 ## Task 4: Web Workbench UI Repair
 
@@ -212,11 +212,17 @@ pnpm web:e2e:smoke
 - UI repair pass after subagent REQUEST CHANGES:
   - Web no longer falls back from Control Plane env vars to Worker env vars.
   - Normal sidebar filters archived conversations; Settings -> 已归档对话 lists archived conversations and calls restore.
-  - Composer owns start/follow-up/interrupt/steer, with queue-later implemented as a local queue; durable Control Plane queue state is deferred.
+  - Composer owns start/follow-up/interrupt/steer; queue-later now uses Control Plane routes backed by DB state for create/list/cancel/send and no longer lives in Web local state.
   - Permission menu remains visible but options are disabled TODO placeholders.
   - Assistant messages render action rows with copy enabled and feedback/fork/hooks placeholders disabled.
   - Web carries `itemsView` into `AssistantTimelineTurn`.
   - Focused web tests and typecheck pass.
+- Durable queue repair:
+  - OpenAPI defines queued message create/list/cancel/send routes and generated public types.
+  - `packages/db` stores queued messages with device+conversation+clientRequestId idempotency.
+  - Control Plane sends queued messages only when timeline has no active in-progress turn, marks sent/failed, and returns sanitized queue errors.
+  - Web loads queued messages from Control Plane, shows pending/failed rows, queues via API, cancels via API, and auto-sends the first queued item when the active turn ends.
+  - Focused verification passed for api-contract, db, control-plane, and web tests/typecheck.
 - Real stack evidence after UI repair:
   - `pnpm real:status` shows Worker, Control Plane, and Web listening on `127.0.0.1:8787`, `127.0.0.1:8786`, and `127.0.0.1:5173`.
   - `pnpm real:check` reports `real-pass=18`, `real-gap=1`; the remaining gap is approval decision because the safe fixture has no pending request.

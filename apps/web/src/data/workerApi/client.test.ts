@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { BoardTask, CommandAccepted, OpenConversationResult, RemoteProject, TaskConversationLink, WorkerHealth } from "@codex-remote/api-contract";
+import type {
+  BoardTask,
+  CommandAccepted,
+  ConversationQueuedMessage,
+  OpenConversationResult,
+  RemoteProject,
+  TaskConversationLink,
+  WorkerHealth,
+} from "@codex-remote/api-contract";
 
 import { WorkerApiClient } from "./client.ts";
 
@@ -237,6 +245,61 @@ test("WorkerApiClient task methods when called, should use task board routes", a
       conversationId: "thread-1",
       projectId: "project-a",
     }),
+  );
+});
+
+test("WorkerApiClient queue methods when called, should use device-scoped queued message routes", async () => {
+  const queued: ConversationQueuedMessage = {
+    id: "queue-1",
+    deviceId: "device-a",
+    conversationId: "thread-1",
+    message: "Run later",
+    status: "queued",
+    createdAt: "2026-06-21T00:00:00.000Z",
+    updatedAt: "2026-06-21T00:00:00.000Z",
+  };
+  const accepted: CommandAccepted = {
+    id: "send-1",
+    status: "accepted",
+    conversationId: "thread-1",
+    turnId: "turn-1",
+    acceptedAt: "2026-06-21T00:00:01.000Z",
+  };
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    const index = requests.length;
+    if (index === 1) {
+      return new Response(JSON.stringify([queued]), { headers: { "content-type": "application/json" }, status: 200 });
+    }
+    if (index === 2) {
+      return new Response(JSON.stringify(queued), { headers: { "content-type": "application/json" }, status: 201 });
+    }
+    if (index === 3) {
+      return new Response(null, { status: 204 });
+    }
+    return new Response(JSON.stringify(accepted), { headers: { "content-type": "application/json" }, status: 202 });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  await client.listQueuedMessages("device-a", "thread-1");
+  await client.queueConversationMessage("device-a", "thread-1", { message: "Run later", clientRequestId: "queue-request-1" });
+  await client.cancelQueuedMessage("device-a", "thread-1", "queue-1");
+  await client.sendQueuedMessage("device-a", "thread-1", "queue-1", { clientRequestId: "send-request-1", expectedQueuedMessageId: "queue-1" });
+
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "GET http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/queued-messages",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/queued-messages",
+    "DELETE http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/queued-messages/queue-1",
+    "POST http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/queued-messages/queue-1/send",
+  ]);
+  assert.equal(
+    requests[3]?.init.body,
+    JSON.stringify({ clientRequestId: "send-request-1", expectedQueuedMessageId: "queue-1" }),
   );
 });
 

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient } from "../../data/workerApi/client";
-import type { BoardTask, PendingApproval, TaskConversationLink } from "@codex-remote/api-contract";
+import type { BoardTask, ConversationQueuedMessage, PendingApproval, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -72,7 +72,7 @@ export function CodexRemoteApp() {
   const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, approvalCards, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
+  const { devices, projects, conversations, approvalCards, queuedMessages, tasks, assistantThreads, searchRecents, source, taskSource } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const conversation =
     findConversationByKey(conversations, selectedConversationKey) ??
@@ -97,6 +97,10 @@ export function CodexRemoteApp() {
   const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(controlPlaneToken);
   const canStartConversation = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null;
   const activeTurnId = getActiveTurnId(assistantThread);
+  const workerClient = useMemo(() => new WorkerApiClient({
+    baseUrl: controlPlaneBaseUrl,
+    token: controlPlaneToken,
+  }), []);
 
   const refreshWorkbenchData = useCallback(async (conversationKey: string | null) => {
     const nextWorkbenchData = await loadWorkbenchData({
@@ -140,10 +144,62 @@ export function CodexRemoteApp() {
     });
   }, [conversation, refreshWorkbenchData]);
 
-  const workerClient = useMemo(() => new WorkerApiClient({
-    baseUrl: controlPlaneBaseUrl,
-    token: controlPlaneToken,
-  }), []);
+  const queueConversationMessage = useCallback(async (message: string) => {
+    if (!conversation || source.reason !== "loaded" || !controlPlaneToken) {
+      setFollowUpStatus("failed");
+      return "failed" as const;
+    }
+
+    setFollowUpStatus("submitting");
+    try {
+      await workerClient.queueConversationMessage(conversation.deviceId, conversation.id, {
+        message,
+        clientRequestId: crypto.randomUUID(),
+      });
+      await refreshWorkbenchData(createConversationKey(conversation));
+      setFollowUpStatus("accepted");
+      return "accepted" as const;
+    } catch {
+      setFollowUpStatus("failed");
+      return "failed" as const;
+    }
+  }, [conversation, refreshWorkbenchData, source.reason, workerClient]);
+
+  const sendQueuedConversationMessage = useCallback(async (message: ConversationQueuedMessage) => {
+    if (!conversation || source.reason !== "loaded" || !controlPlaneToken) {
+      setFollowUpStatus("failed");
+      return;
+    }
+
+    setFollowUpStatus("submitting");
+    try {
+      await workerClient.sendQueuedMessage(conversation.deviceId, conversation.id, message.id, {
+        clientRequestId: crypto.randomUUID(),
+        expectedQueuedMessageId: message.id,
+      });
+      await refreshWorkbenchData(createConversationKey(conversation));
+      setFollowUpStatus("accepted");
+    } catch {
+      setFollowUpStatus("failed");
+      await refreshWorkbenchData(createConversationKey(conversation));
+    }
+  }, [conversation, refreshWorkbenchData, source.reason, workerClient]);
+
+  const cancelQueuedConversationMessage = useCallback(async (message: ConversationQueuedMessage) => {
+    if (!conversation || source.reason !== "loaded" || !controlPlaneToken) {
+      setControlStatus("failed");
+      return;
+    }
+
+    setControlStatus("submitting");
+    try {
+      await workerClient.cancelQueuedMessage(conversation.deviceId, conversation.id, message.id);
+      await refreshWorkbenchData(createConversationKey(conversation));
+      setControlStatus("accepted");
+    } catch {
+      setControlStatus("failed");
+    }
+  }, [conversation, refreshWorkbenchData, source.reason, workerClient]);
 
   const submitStart = useCallback(async (message: string) => submitStartConversation({
     createClientRequestId: () => crypto.randomUUID(),
@@ -644,14 +700,17 @@ export function CodexRemoteApp() {
             }}
             onSelectAdjacentConversation={selectConversation}
             onArchiveConversation={archiveConversation}
+            onCancelQueuedMessage={cancelQueuedConversationMessage}
             onBeginRenameConversation={() => {
               if (conversation) {
                 setRenamingConversationKey(createConversationKey(conversation));
               }
             }}
             onCancelRenameConversation={() => setRenamingConversationKey(null)}
+            onQueueMessage={queueConversationMessage}
             onRenameConversation={renameConversation}
             onRestoreConversation={unarchiveConversation}
+            onSendQueuedMessage={sendQueuedConversationMessage}
             onSubmitApprovalDecision={submitApprovalControl}
             onSubmitFollowUp={submitFollowUp}
             onSubmitInterrupt={submitInterruptControl}
@@ -659,6 +718,7 @@ export function CodexRemoteApp() {
             onSubmitSteer={submitSteerControl}
             pendingApprovals={[]}
             approvalCards={approvalCards}
+            queuedMessages={[]}
             previousConversationKey={conversationNavigator.previousConversationKey}
             renaming={conversation ? renamingConversationKey === createConversationKey(conversation) : false}
             source={source}
@@ -703,10 +763,13 @@ export function CodexRemoteApp() {
           }}
           onSelectAdjacentConversation={selectConversation}
           onArchiveConversation={archiveConversation}
+          onCancelQueuedMessage={cancelQueuedConversationMessage}
           onBeginRenameConversation={() => setRenamingConversationKey(createConversationKey(conversation))}
           onCancelRenameConversation={() => setRenamingConversationKey(null)}
+          onQueueMessage={queueConversationMessage}
           onRenameConversation={renameConversation}
           onRestoreConversation={unarchiveConversation}
+          onSendQueuedMessage={sendQueuedConversationMessage}
           onSubmitApprovalDecision={submitApprovalControl}
           onSubmitFollowUp={submitFollowUp}
           onSubmitInterrupt={submitInterruptControl}
@@ -714,6 +777,7 @@ export function CodexRemoteApp() {
           onSubmitSteer={submitSteerControl}
           pendingApprovals={pendingApprovals}
           approvalCards={approvalCards}
+          queuedMessages={queuedMessages}
           previousConversationKey={conversationNavigator.previousConversationKey}
           renaming={renamingConversationKey === createConversationKey(conversation)}
           source={source}

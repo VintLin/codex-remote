@@ -8,7 +8,7 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { Icon } from "@codex-remote/ui";
-import type { ConversationApprovalCard, PendingApproval } from "@codex-remote/api-contract";
+import type { ConversationApprovalCard, ConversationQueuedMessage, PendingApproval } from "@codex-remote/api-contract";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -31,6 +31,9 @@ interface CodexAssistantThreadProps {
   controlStatus?: "accepted" | "failed" | "idle" | "submitting";
   followUpStatus?: "accepted" | "failed" | "idle" | "submitting";
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
+  onCancelQueuedMessage?: (message: ConversationQueuedMessage) => Promise<void>;
+  onQueueMessage?: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
+  onSendQueuedMessage?: (message: ConversationQueuedMessage) => Promise<void>;
   onSubmitApprovalDecision?: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   onSubmitInterrupt?: () => Promise<void>;
   onSubmitFollowUp?: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
@@ -39,6 +42,7 @@ interface CodexAssistantThreadProps {
   startStatus?: "accepted" | "failed" | "idle" | "submitting";
   approvalCards?: ConversationApprovalCard[];
   pendingApprovals?: PendingApproval[];
+  queuedMessages?: ConversationQueuedMessage[];
   thread: AssistantThreadSnapshot | null;
 }
 
@@ -68,6 +72,7 @@ const noopOpenDetail = () => {};
 const noopSubmitApprovalDecision = async () => {};
 const noopSubmitInterrupt = async () => {};
 const noopSubmitFollowUp = async () => {};
+const noopQueueMessage = async () => {};
 type ComposerMode = "send" | "start" | "steer" | "queue";
 
 const accessModeOptions = [
@@ -83,6 +88,9 @@ export function CodexAssistantThread({
   controlStatus = "idle",
   followUpStatus = "idle",
   onOpenDetail = noopOpenDetail,
+  onCancelQueuedMessage = noopQueueMessage,
+  onQueueMessage = noopSubmitFollowUp,
+  onSendQueuedMessage = noopQueueMessage,
   onSubmitApprovalDecision = noopSubmitApprovalDecision,
   onSubmitInterrupt = noopSubmitInterrupt,
   onSubmitFollowUp = noopSubmitFollowUp,
@@ -91,6 +99,7 @@ export function CodexAssistantThread({
   startStatus = "idle",
   approvalCards = [],
   pendingApprovals = [],
+  queuedMessages = [],
   thread,
 }: CodexAssistantThreadProps) {
   return (
@@ -102,6 +111,9 @@ export function CodexAssistantThread({
       followUpStatus={followUpStatus}
       key={thread?.id ?? "empty-thread"}
       onOpenDetail={onOpenDetail}
+      onCancelQueuedMessage={onCancelQueuedMessage}
+      onQueueMessage={onQueueMessage}
+      onSendQueuedMessage={onSendQueuedMessage}
       onSubmitApprovalDecision={onSubmitApprovalDecision}
       onSubmitInterrupt={onSubmitInterrupt}
       onSubmitFollowUp={onSubmitFollowUp}
@@ -110,6 +122,7 @@ export function CodexAssistantThread({
       startStatus={startStatus}
       approvalCards={approvalCards}
       pendingApprovals={pendingApprovals}
+      queuedMessages={queuedMessages}
       thread={thread}
     />
   );
@@ -122,6 +135,9 @@ function CodexAssistantRuntimeThread({
   controlStatus,
   followUpStatus,
   onOpenDetail,
+  onCancelQueuedMessage,
+  onQueueMessage,
+  onSendQueuedMessage,
   onSubmitApprovalDecision,
   onSubmitInterrupt,
   onSubmitFollowUp,
@@ -130,13 +146,13 @@ function CodexAssistantRuntimeThread({
   startStatus,
   approvalCards,
   pendingApprovals,
+  queuedMessages,
   thread,
 }: Required<CodexAssistantThreadProps>) {
   const [accessMenuOpen, setAccessMenuOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>("send");
   const [selectedAccessMode] = useState<(typeof accessModeOptions)[number]["key"]>("approval-request");
   const [draft, setDraft] = useState("");
-  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [expandedRunIds, setExpandedRunIds] = useState(() => new Set<string>());
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const accessMenuRef = useRef<HTMLDivElement | null>(null);
@@ -170,6 +186,8 @@ function CodexAssistantRuntimeThread({
     (composerMode === "send" && (canSubmitFollowUp || canStartConversation));
   const canSend = canSendNow && !isSubmitting && controlStatus !== "submitting" && startStatus !== "submitting" && draft.trim().length > 0;
   const selectedAccessModeOption = accessModeOptions.find((option) => option.key === selectedAccessMode) ?? accessModeOptions[2]!;
+  const pendingQueuedMessages = queuedMessages.filter((message) => message.status === "queued");
+  const nextQueuedMessage = pendingQueuedMessages[0] ?? null;
   const syncDraftFromComposer = useCallback(() => {
     setDraft(composerInputRef.current?.textContent ?? "");
   }, []);
@@ -180,12 +198,18 @@ function CodexAssistantRuntimeThread({
     }
 
     if (composerMode === "queue") {
-      // ponytail: local queue, move to Control Plane state when queued messages must survive refresh/device handoff.
-      setQueuedMessage(message);
-      setDraft("");
-      if (composerInputRef.current) {
-        composerInputRef.current.textContent = "";
-      }
+      await submitFollowUpDraft({
+        canSend,
+        message,
+        onSubmitFollowUp: onQueueMessage,
+        onClearDraft: () => {
+          setDraft("");
+          setComposerMode("send");
+          if (composerInputRef.current) {
+            composerInputRef.current.textContent = "";
+          }
+        },
+      });
       return;
     }
 
@@ -213,7 +237,7 @@ function CodexAssistantRuntimeThread({
         }
       },
     });
-  }, [canSend, canStartConversation, canSubmitFollowUp, composerMode, draft, onSubmitFollowUp, onSubmitStart, onSubmitSteer]);
+  }, [canSend, canStartConversation, canSubmitFollowUp, composerMode, draft, onQueueMessage, onSubmitFollowUp, onSubmitStart, onSubmitSteer]);
   const toggleRun = useCallback((runId: string) => {
     setExpandedRunIds((current) => {
       const next = new Set(current);
@@ -260,13 +284,11 @@ function CodexAssistantRuntimeThread({
   }, [canInterrupt, isInterrupting, onSubmitInterrupt]);
 
   useEffect(() => {
-    if (!queuedMessage || activeTurnId !== null || !canSubmitFollowUp) {
+    if (nextQueuedMessage === null || activeTurnId !== null || !canSubmitFollowUp || isSubmitting || controlStatus === "submitting") {
       return;
     }
-    const message = queuedMessage;
-    setQueuedMessage(null);
-    void onSubmitFollowUp(message);
-  }, [activeTurnId, canSubmitFollowUp, onSubmitFollowUp, queuedMessage]);
+    void onSendQueuedMessage(nextQueuedMessage);
+  }, [activeTurnId, canSubmitFollowUp, controlStatus, isSubmitting, nextQueuedMessage, onSendQueuedMessage]);
 
   useEffect(() => {
     let firstFrame = 0;
@@ -339,6 +361,11 @@ function CodexAssistantRuntimeThread({
                     onSubmitApprovalDecision={onSubmitApprovalDecision}
                     approvalCards={approvalCards}
                     pendingApprovals={pendingApprovals}
+                  />
+                  <ConversationQueuedMessages
+                    controlStatus={controlStatus}
+                    messages={queuedMessages}
+                    onCancelQueuedMessage={onCancelQueuedMessage}
                   />
 	              </div>
             </div>
@@ -445,7 +472,7 @@ function CodexAssistantRuntimeThread({
 		                  ) : null}
 	                  <span className="codex-assistant-composer-status">
 		                    {getComposerStatusLabel(followUpStatus, controlStatus, startStatus, composerMode, canSubmitFollowUp)}
-                        {queuedMessage ? " · 已排队 1 条" : ""}
+                        {pendingQueuedMessages.length > 0 ? ` · 已排队 ${pendingQueuedMessages.length} 条` : ""}
 	                  </span>
 	                </div>
 	                <div className="codex-assistant-composer-right">
@@ -646,6 +673,40 @@ function ConversationRequestCards(props: {
             {card.status === "resolved" ? "resolved" : "pending"} · {card.risk} · {card.title}
           </span>
           <span className="conversation-approval-summary">{card.summary}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConversationQueuedMessages(props: {
+  controlStatus: Required<CodexAssistantThreadProps>["controlStatus"];
+  messages: ConversationQueuedMessage[];
+  onCancelQueuedMessage: (message: ConversationQueuedMessage) => Promise<void>;
+}) {
+  const visibleMessages = props.messages.filter((message) => message.status === "queued" || message.status === "failed");
+  if (visibleMessages.length === 0) {
+    return null;
+  }
+
+  return (
+    <div aria-label="Queued messages" className="conversation-request-cards">
+      {visibleMessages.map((message) => (
+        <div className="conversation-approval-card" data-state={message.status} key={message.id}>
+          <span className="conversation-control-meta">
+            排队发送 · {message.status === "failed" ? "发送失败" : "等待当前执行结束"}
+          </span>
+          <span className="conversation-approval-summary">{message.message}</span>
+          <div className="conversation-request-actions">
+            <button
+              className="button secondary conversation-control-button"
+              disabled={props.controlStatus === "submitting"}
+              onClick={() => void props.onCancelQueuedMessage(message)}
+              type="button"
+            >
+              取消
+            </button>
+          </div>
         </div>
       ))}
     </div>

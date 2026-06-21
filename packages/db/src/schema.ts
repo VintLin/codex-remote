@@ -1,4 +1,4 @@
-import { primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
@@ -20,4 +20,22 @@ export const taskConversationLinks = sqliteTable(
     linkedAt: text("linked_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.taskId, table.deviceId, table.conversationId] })],
+);
+
+export const conversationQueuedMessages = sqliteTable(
+  "conversation_queued_messages",
+  {
+    id: text("id").primaryKey(),
+    deviceId: text("device_id").notNull(),
+    conversationId: text("conversation_id").notNull(),
+    clientRequestId: text("client_request_id").notNull(),
+    message: text("message").notNull(),
+    status: text("status", { enum: ["queued", "sending", "sent", "failed", "canceled"] }).notNull().default("queued"),
+    failureCode: text("failure_code"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("conversation_queue_request_idx").on(table.deviceId, table.conversationId, table.clientRequestId),
+  ],
 );

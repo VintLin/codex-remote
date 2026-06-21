@@ -1,6 +1,7 @@
 import type {
   ConversationTimeline,
   ConversationApprovalCard,
+  ConversationQueuedMessage,
   ConversationWorkbenchEvent,
   ConversationTimelineTurn,
   BoardTask,
@@ -55,6 +56,7 @@ export interface WorkbenchData {
   projects: RemoteProject[];
   conversations: CodexConversation[];
   approvalCards: ConversationApprovalCard[];
+  queuedMessages: ConversationQueuedMessage[];
   tasks: BoardTask[];
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
@@ -83,6 +85,7 @@ export function createFallbackWorkbenchData(
     projects: [...mockProjects],
     conversations,
     approvalCards: [],
+    queuedMessages: [],
     tasks: [...mockTasks],
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
@@ -405,6 +408,15 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       }
     }
 
+    let queuedMessages: ConversationQueuedMessage[] = [];
+    if (timelineDeviceId && timelineConversationId) {
+      try {
+        queuedMessages = await client.listQueuedMessages(timelineDeviceId, timelineConversationId);
+      } catch {
+        queuedMessages = [];
+      }
+    }
+
     const assistantThreads = createAssistantThreadsFromConversations(
       conversations,
       timelineConversationKey,
@@ -421,6 +433,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         projects,
         conversations,
         approvalCards: [],
+        queuedMessages: [],
         tasks,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
@@ -435,6 +448,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         projects,
         conversations,
         approvalCards,
+        queuedMessages,
         tasks: [],
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
@@ -448,6 +462,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       projects,
       conversations,
       approvalCards,
+      queuedMessages,
       tasks,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),

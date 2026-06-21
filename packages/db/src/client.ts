@@ -3,9 +3,11 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import * as schema from "./schema.ts";
+import { ConversationQueueRepository } from "./conversationQueueRepository.ts";
 import { TaskRepository } from "./taskRepository.ts";
 
 export type TaskDatabase = {
+  conversationQueue: ConversationQueueRepository;
   tasks: TaskRepository;
   close(): void;
 };
@@ -22,10 +24,12 @@ export function openTaskDatabase(path: string): TaskDatabase {
 
 class SqliteTaskDatabase implements TaskDatabase {
   private readonly connection: BetterSqlite3.Database;
+  readonly conversationQueue: ConversationQueueRepository;
   readonly tasks: TaskRepository;
 
   constructor(connection: BetterSqlite3.Database, database: BetterSQLite3Database<typeof schema>) {
     this.connection = connection;
+    this.conversationQueue = new ConversationQueueRepository(database);
     this.tasks = new TaskRepository(database);
   }
 

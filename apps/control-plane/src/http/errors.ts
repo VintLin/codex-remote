@@ -107,6 +107,12 @@ function getSafeMessage(code: string): string {
       return "Project was not found.";
     case "conversation_not_found":
       return "Conversation was not found.";
+    case "conversation_busy":
+      return "Conversation is busy.";
+    case "queue_message_conflict":
+      return "Queued message is not in a compatible state.";
+    case "queue_message_not_found":
+      return "Queued message was not found.";
     case "turn_not_found":
       return "Turn was not found.";
     case "task_not_found":

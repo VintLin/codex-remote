@@ -8,6 +8,7 @@ import type {
   BoardTask,
   CodexConversation,
   ConversationApprovalCard,
+  ConversationQueuedMessage,
   Device,
   DeviceConnectionStatus,
   PendingApproval,
@@ -36,6 +37,9 @@ interface ConversationMainProps {
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
   onSelectAdjacentConversation: (conversationKey: string) => void;
   onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
+  onCancelQueuedMessage: (message: ConversationQueuedMessage) => Promise<void>;
+  onQueueMessage: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
+  onSendQueuedMessage: (message: ConversationQueuedMessage) => Promise<void>;
   onSubmitFollowUp: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
   onSubmitInterrupt: () => Promise<void>;
   onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
@@ -52,6 +56,7 @@ interface ConversationMainProps {
   renaming: boolean;
   pendingApprovals: PendingApproval[];
   approvalCards: ConversationApprovalCard[];
+  queuedMessages: ConversationQueuedMessage[];
   source: WorkbenchData["source"];
   startStatus: "accepted" | "failed" | "idle" | "submitting";
   activeTurnId: string | null;
@@ -123,6 +128,9 @@ export function ConversationMain({
   onExpandSidebar,
   onOpenDetail,
   onSelectAdjacentConversation,
+  onCancelQueuedMessage,
+  onQueueMessage,
+  onSendQueuedMessage,
   onSubmitApprovalDecision,
   onSubmitFollowUp,
   onSubmitInterrupt,
@@ -137,6 +145,7 @@ export function ConversationMain({
   renaming,
   pendingApprovals,
   approvalCards,
+  queuedMessages,
   source,
   startStatus,
   activeTurnId,
@@ -265,6 +274,9 @@ export function ConversationMain({
           controlStatus={controlStatus}
           followUpStatus={followUpStatus}
           onOpenDetail={onOpenDetail}
+          onCancelQueuedMessage={onCancelQueuedMessage}
+          onQueueMessage={onQueueMessage}
+          onSendQueuedMessage={onSendQueuedMessage}
           onSubmitApprovalDecision={onSubmitApprovalDecision}
           onSubmitFollowUp={onSubmitFollowUp}
           onSubmitInterrupt={onSubmitInterrupt}
@@ -272,6 +284,7 @@ export function ConversationMain({
           onSubmitSteer={onSubmitSteer}
           startStatus={startStatus}
           pendingApprovals={pendingApprovals}
+          queuedMessages={queuedMessages}
           thread={assistantThread}
         />
       </div>

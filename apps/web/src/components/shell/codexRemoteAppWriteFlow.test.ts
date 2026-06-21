@@ -128,7 +128,8 @@ test("conversation workbench UI when composing messages, should keep start follo
   assert.match(assistantThreadSource, /onSubmitSteer/);
   assert.match(assistantThreadSource, /新对话/);
   assert.match(assistantThreadSource, /排队发送/);
-  assert.match(assistantThreadSource, /ponytail: local queue/);
+  assert.match(assistantThreadSource, /onQueueMessage/);
+  assert.doesNotMatch(assistantThreadSource, /local queue/);
 });
 
 test("conversation workbench UI when enforcing Stage 11 boundaries, should avoid Worker fallback and route archived rows through settings", () => {

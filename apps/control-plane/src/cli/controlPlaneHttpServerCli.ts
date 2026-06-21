@@ -11,6 +11,7 @@ export function startControlPlaneHttpServer(env: NodeJS.ProcessEnv = process.env
     const taskDatabase = openTaskDatabase(config.taskDatabasePath);
     const app = createControlPlaneHttpApp({
       config,
+      conversationQueueRepository: taskDatabase.conversationQueue,
       now: () => new Date().toISOString(),
       taskRepository: taskDatabase.tasks,
       workerClient: createWorkerUpstreamClient({ timeoutMs: config.requestTimeoutMs }),

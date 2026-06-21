@@ -690,6 +690,159 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/queued-messages:
+    get:
+      operationId: listControlPlaneQueuedConversationMessages
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Queued messages for a device-scoped conversation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationQueuedMessage"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+    post:
+      operationId: queueControlPlaneConversationMessage
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueueConversationMessageInput"
+      responses:
+        "201":
+          description: Message queued for the selected conversation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationQueuedMessage"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}:
+    delete:
+      operationId: cancelControlPlaneQueuedConversationMessage
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: queuedMessageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Queued message canceled.
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/conversations/{conversationId}/queued-messages/{queuedMessageId}/send:
+    post:
+      operationId: sendControlPlaneQueuedConversationMessage
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: queuedMessageId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendQueuedConversationMessageInput"
+      responses:
+        "202":
+          description: Queued message follow-up command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/ConversationNotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+        "408":
+          $ref: "#/components/responses/RequestTimeoutError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
   /v1/devices/{deviceId}/conversations/{conversationId}/approvals:
     get:
       operationId: listControlPlaneDevicePendingApprovals
@@ -2194,6 +2347,72 @@ components:
           minLength: 1
           maxLength: 128
         expectedConversationId:
+          type: string
+    QueueConversationMessageInput:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - clientRequestId
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    SendQueuedConversationMessageInput:
+      type: object
+      additionalProperties: false
+      required:
+        - clientRequestId
+        - expectedQueuedMessageId
+      properties:
+        clientRequestId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        expectedQueuedMessageId:
+          type: string
+          minLength: 1
+    ConversationQueuedMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - deviceId
+        - conversationId
+        - message
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        deviceId:
+          type: string
+        conversationId:
+          type: string
+        message:
+          type: string
+          maxLength: 20000
+        status:
+          type: string
+          enum:
+            - queued
+            - sending
+            - sent
+            - failed
+            - canceled
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        failureCode:
           type: string
     InterruptTurnInput:
       type: object
