@@ -54,8 +54,16 @@ interface StdioSocketLikeOptions {
 }
 
 type WorkerAppServerMethod =
+  | "app/list"
+  | "fuzzyFileSearch"
+  | "gitDiffToRemote"
+  | "hooks/list"
   | "initialize"
+  | "mcpServerStatus/list"
   | "model/list"
+  | "plugin/list"
+  | "plugin/read"
+  | "skills/list"
   | "thread/archive"
   | "thread/loaded/list"
   | "thread/list"

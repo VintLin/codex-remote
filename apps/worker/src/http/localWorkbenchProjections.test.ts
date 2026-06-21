@@ -80,6 +80,28 @@ test("local workbench projections when projecting git diff, should keep only fil
   assert.doesNotMatch(JSON.stringify(summary), /diff --git|@@|sk-test-secret-token|PROMPT|private\/path/);
 });
 
+test("local workbench projections when projecting full git diff context, should not treat context lines as changed file paths", () => {
+  const summary = projectGitDiffToSummary(
+    {
+      sha: "abc123" as never,
+      diff: [
+        "## main...origin/main",
+        " M src/changed.ts | 2 +-",
+        "diff --git a/src/changed.ts b/src/changed.ts",
+        "@@ -1,3 +1,3 @@",
+        "  const value = 1;",
+        "  P8[\"8 Product Readiness\"]",
+        "- Failed as expected before implementation.",
+      ].join("\n"),
+    },
+    "/Users/Vint/Repos/01_Project_Personal/050_codex_remote",
+  );
+
+  assert.deepEqual(summary.changedFiles, [
+    { path: "src/changed.ts", status: "modified", additions: 1, deletions: 1 },
+  ]);
+});
+
 test("local workbench projections when projecting git diff paths, should reject parent traversal entries", async () => {
   const summary = projectGitDiffToSummary(
     {
@@ -228,17 +250,26 @@ test("local workbench projections when projecting extension inventory, should ex
               localVersion: "1.0.0",
               name: "Safe Plugin",
               shareContext: null,
-              source: "local",
+              source: { type: "local", path: "/Users/vint/private/plugins/safe-plugin" },
               installed: true,
               enabled: true,
-              installPolicy: "allowed",
-              authPolicy: "notRequired",
-              availability: "available",
+              installPolicy: "AVAILABLE",
+              authPolicy: "ON_USE",
+              availability: "AVAILABLE",
               interface: null,
               keywords: ["private"],
             },
             description: "Plugin description",
-            skills: [{ name: "safe-skill", description: "Skill description", path: "/Users/vint/private/skill.md", scope: "project", enabled: true }],
+            skills: [
+              {
+                name: "safe-skill",
+                description: "Skill description",
+                shortDescription: null,
+                interface: null,
+                path: "/Users/vint/private/skill.md",
+                enabled: true,
+              },
+            ],
             hooks: [{ key: "post-tool", eventName: "postToolUse" }],
             apps: [{ id: "app-1", name: "Safe App", description: "App description", installUrl: "https://example.com", needsAuth: false }],
             appTemplates: [],
@@ -259,12 +290,12 @@ test("local workbench projections when projecting extension inventory, should ex
                 localVersion: "1.0.0",
                 name: "Safe Plugin",
                 shareContext: null,
-                source: "local",
+                source: { type: "local", path: "/Users/vint/private/plugins/safe-plugin" },
                 installed: true,
                 enabled: true,
-                installPolicy: "allowed",
-                authPolicy: "notRequired",
-                availability: "available",
+                installPolicy: "AVAILABLE",
+                authPolicy: "ON_USE",
+                availability: "AVAILABLE",
                 interface: null,
                 keywords: ["private"],
               },
@@ -283,10 +314,8 @@ test("local workbench projections when projecting extension inventory, should ex
                 name: "safe-skill",
                 description: "Skill description",
                 shortDescription: "Short description",
-                interface: undefined,
-                dependencies: undefined,
                 path: "/Users/vint/private/skill.md",
-                scope: "project",
+                scope: "repo",
                 enabled: true,
               },
             ],

@@ -34,6 +34,8 @@ import {
 
 import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
 
+const localWorkbenchOptionalTimeoutMs = 2_000;
+
 export interface SearchRecent {
   conversationId: string;
   conversationKey: string;
@@ -593,7 +595,11 @@ async function loadLocalWorkbenchData(client: WorkerApiClient, project: RemotePr
     client.getLocalWorkbenchSummary(project.deviceId, project.id),
     client.listLocalWorkbenchFiles(project.deviceId, project.id),
     client.getLocalWorkbenchGitSummary(project.deviceId, project.id),
-    client.getLocalWorkbenchMcpSummary(project.deviceId, project.id),
+    withFallbackTimeout(
+      client.getLocalWorkbenchMcpSummary(project.deviceId, project.id),
+      null,
+      localWorkbenchOptionalTimeoutMs,
+    ),
     client.getLocalWorkbenchExtensionInventory(project.deviceId, project.id),
   ]);
   const filePreviewPath = getPreviewPath(filesResult);
@@ -606,7 +612,9 @@ async function loadLocalWorkbenchData(client: WorkerApiClient, project: RemotePr
     : createLocalWorkbenchSection<ProjectFilePreview>("unavailable", null);
   const git = toLocalWorkbenchSection(gitResult);
   const search = createLocalWorkbenchSection<ProjectSearchResult>("unavailable", null);
-  const mcp = toLocalWorkbenchSection(mcpResult);
+  const mcp = mcpResult.status === "fulfilled" && mcpResult.value === null
+    ? createLocalWorkbenchSection<McpServerSummary>("failed", null)
+    : toLocalWorkbenchSection(mcpResult as PromiseSettledResult<McpServerSummary>);
   const extensions = toLocalWorkbenchSection(extensionsResult);
   const sections = [files, preview, git, search, mcp, extensions];
   const failed = summaryResult.status === "rejected" || sections.some((section) => section.status === "failed");
@@ -631,6 +639,28 @@ async function settle<TData>(run: () => Promise<TData>): Promise<PromiseSettledR
     return { status: "fulfilled", value: await run() };
   } catch (reason: unknown) {
     return { status: "rejected", reason };
+  }
+}
+
+async function withFallbackTimeout<TData>(
+  promise: Promise<TData>,
+  fallback: TData | null,
+  timeoutMs: number,
+): Promise<TData | null> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.catch(() => fallback),
+      new Promise<TData | null>((resolve) => {
+        timeout = setTimeout(() => {
+          resolve(fallback);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }
 

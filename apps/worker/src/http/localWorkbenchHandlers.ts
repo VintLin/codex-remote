@@ -31,6 +31,7 @@ const maxDirectoryEntries = 200;
 const maxPreviewBytes = 64_000;
 const maxPreviewChars = 20_000;
 const maxSearchResults = 100;
+const extensionInventoryTimeoutMs = 1_000;
 
 export interface WorkerLocalWorkbenchAppServerClient extends WorkerReadOnlyAppServerClient {
   gitDiffToRemote(params: { cwd: string }): Promise<GitDiffToRemoteResponse>;
@@ -52,12 +53,12 @@ export async function getLocalWorkbenchSummary(
   projectId: string,
 ): Promise<LocalWorkbenchSummary> {
   assertProjectId(projectId);
-  const [listing, git, mcp, extensions] = await Promise.all([
+  const [listingResult, gitResult] = await Promise.allSettled([
     listProjectFiles(context, projectId, ""),
     getProjectGitSummary(context, projectId),
-    getMcpServerSummary(context, projectId),
-    getExtensionInventory(context, projectId),
   ]);
+  const listing = listingResult.status === "fulfilled" ? listingResult.value : { entries: [] };
+  const gitStatus = gitResult.status === "fulfilled" ? gitResult.value.status : "unavailable";
 
   return {
     deviceId: context.config.deviceId,
@@ -65,15 +66,10 @@ export async function getLocalWorkbenchSummary(
     projectName: basename(context.config.allowedProjectRoot),
     fileCount: listing.entries.filter((entry) => entry.kind === "file").length,
     directoryCount: listing.entries.filter((entry) => entry.kind === "directory").length,
-    gitStatus: git.status,
+    gitStatus: gitStatus === "detached" ? "unknown" : gitStatus,
     searchResultCount: 0,
-    mcpServerCount: mcp.servers.length,
-    extensionCount:
-      extensions.skills.length +
-      extensions.hooks.length +
-      extensions.plugins.length +
-      extensions.marketplaceEntries.length +
-      extensions.apps.length,
+    mcpServerCount: 0,
+    extensionCount: 0,
     previewAvailable: listing.entries.some((entry) => entry.kind === "file"),
   };
 }
@@ -273,14 +269,24 @@ export async function getExtensionInventory(
 ): Promise<ExtensionInventory> {
   assertProjectId(projectId);
   return await withClient(context, "extensions/list", async (client) => {
-    const [skills, hooks, pluginList, apps] = await Promise.all([
+    const [skillsResult, hooksResult, pluginListResult, appsResult] = await Promise.allSettled([
       client.listSkills({ cwds: [context.config.allowedProjectRoot], forceReload: false }),
       client.listHooks({ cwds: [context.config.allowedProjectRoot] }),
       client.listPlugins({ cwds: [context.config.allowedProjectRoot], marketplaceKinds: null }),
-      client.listApps({ cursor: null, limit: 100, threadId: null, forceRefetch: false }),
+      withFallbackTimeout(
+        client.listApps({ cursor: null, limit: 100, threadId: null, forceRefetch: false }),
+        { data: [], nextCursor: null },
+        extensionInventoryTimeoutMs,
+      ),
     ]);
+    const skills = skillsResult.status === "fulfilled" ? skillsResult.value : { data: [] };
+    const hooks = hooksResult.status === "fulfilled" ? hooksResult.value : { data: [] };
+    const pluginList = pluginListResult.status === "fulfilled"
+      ? pluginListResult.value
+      : { marketplaces: [], marketplaceLoadErrors: [], featuredPluginIds: [] };
+    const apps = appsResult.status === "fulfilled" ? appsResult.value : { data: [], nextCursor: null };
 
-    const pluginDetails = await Promise.all(
+    const pluginDetailResults = await Promise.allSettled(
       pluginList.marketplaces.flatMap((marketplace) =>
         marketplace.plugins.map((plugin) =>
           client.readPlugin({
@@ -291,6 +297,7 @@ export async function getExtensionInventory(
         ),
       ),
     );
+    const pluginDetails = pluginDetailResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
 
     return projectExtensionInventory({
       deviceId: context.config.deviceId,
@@ -302,6 +309,24 @@ export async function getExtensionInventory(
       apps,
     });
   });
+}
+
+async function withFallbackTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.catch(() => fallback),
+      new Promise<T>((resolve) => {
+        timeout = setTimeout(() => {
+          resolve(fallback);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 async function withClient<T>(

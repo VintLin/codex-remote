@@ -39,16 +39,16 @@ Status labels:
 | Task link validation | Supported | Yes | N/A | Codex Remote DB/Control Plane feature. |
 | Real-time output stream | Not supported | No | app-server notifications | Current UI uses snapshots, not a durable live stream. |
 | Model list | Not supported | No | `model/list` | Protocol exists; no public API/Web path. |
-| Filesystem operations | Not supported | No | `fs/*` | Not exposed because it expands local machine access. |
+| Filesystem read-only browser | Supported | Yes | `fs/readFile`, `fs/getMetadata`, `fs/readDirectory` via Worker-local boundary | Stage 12 exposes project-relative directory listing, metadata, and bounded text preview only; writes/watch/copy/remove remain unsupported. |
 | Shell execution | Not supported | No | `command/exec`, `thread/shellCommand` | Not exposed; high-risk permission boundary. |
 | Config management | Not supported | No | `config/*`, `configRequirements/read` | Not exposed; would edit/read local Codex config. |
-| Skills management | Not supported | No | `skills/*` | Not exposed. |
-| Plugin management | Not supported | No | `plugin/*`, `marketplace/*` | Not exposed. |
-| MCP service management | Not supported | No | `mcpServer/*` | Not exposed. |
+| Skills/hooks inventory | Supported | Yes | `skills/list`, `hooks/list` | Stage 12 exposes whitelist-only inventory metadata; config writes and extra roots remain unsupported. |
+| Plugin/app inventory | Supported | Yes | `plugin/list`, `plugin/read`, `app/list` | Stage 12 exposes whitelist-only read metadata; install/uninstall/share/marketplace mutation remains unsupported. |
+| MCP service read-only status | Partial | Partial | `mcpServerStatus/list` | Stage 12 exposes server/tool/resource summary when available; current real stack can degrade with a sanitized 408 and no tool calls are exposed. |
 | Account authentication | Not supported | No | `account/*`, `getAuthStatus` | Not exposed; auth stays on Worker device. |
-| Review | Not supported | No | `review/start` | Not exposed. |
-| Git diff | Not supported | No | `gitDiffToRemote` | Not exposed. |
-| Fuzzy search | Not supported | No | `fuzzyFileSearch` | Not exposed. |
+| Review | Not supported | No | `review/start` | Stage 12 reads Git evidence only; starting review is deferred to controlled-action stages. |
+| Git diff summary | Supported | Yes | `gitDiffToRemote` | Stage 12 exposes file-level project-relative counts/status only and discards raw diff hunk/header/body text. |
+| Fuzzy search | Supported | Yes | `fuzzyFileSearch` | Stage 12 exposes bounded project-relative search matches through Web -> Control Plane -> Worker. |
 | Realtime voice | Not supported | No | realtime notifications only | Generated notifications include realtime audio/transcript events; no client request/product path exists here. |
 
 ## App-Server Client Requests
@@ -75,27 +75,27 @@ Status labels:
 | `thread/loaded/list` | Supported internally | Worker projects loaded/live badges; raw loaded thread list is not exposed directly. |
 | `thread/read` | Supported | Used for timeline and allowlist proof. |
 | `thread/inject_items` | Not supported | Not exposed. |
-| `skills/list` | Not supported | Not exposed. |
+| `skills/list` | Supported | Stage 12 exposes read-only skills inventory metadata. |
 | `skills/extraRoots/set` | Not supported | Not exposed. |
-| `hooks/list` | Not supported | Not exposed. |
+| `hooks/list` | Supported | Stage 12 exposes read-only hooks inventory metadata without commands. |
 | `marketplace/add` | Not supported | Not exposed. |
 | `marketplace/remove` | Not supported | Not exposed. |
 | `marketplace/upgrade` | Not supported | Not exposed. |
-| `plugin/list` | Not supported | Not exposed. |
+| `plugin/list` | Supported | Stage 12 exposes read-only plugin summaries. |
 | `plugin/installed` | Not supported | Not exposed. |
-| `plugin/read` | Not supported | Not exposed. |
+| `plugin/read` | Supported | Stage 12 reads plugin details for whitelist-only metadata. |
 | `plugin/skill/read` | Not supported | Not exposed. |
 | `plugin/share/save` | Not supported | Not exposed. |
 | `plugin/share/updateTargets` | Not supported | Not exposed. |
 | `plugin/share/list` | Not supported | Not exposed. |
 | `plugin/share/checkout` | Not supported | Not exposed. |
 | `plugin/share/delete` | Not supported | Not exposed. |
-| `app/list` | Not supported | Not exposed. |
-| `fs/readFile` | Not supported | Filesystem access is not exposed. |
+| `app/list` | Supported | Stage 12 exposes read-only app inventory with timeout fallback. |
+| `fs/readFile` | Supported | Stage 12 exposes bounded text preview inside the selected project only. |
 | `fs/writeFile` | Not supported | Filesystem access is not exposed. |
 | `fs/createDirectory` | Not supported | Filesystem access is not exposed. |
-| `fs/getMetadata` | Not supported | Filesystem access is not exposed. |
-| `fs/readDirectory` | Not supported | Filesystem access is not exposed. |
+| `fs/getMetadata` | Supported | Stage 12 exposes sanitized metadata inside the selected project only. |
+| `fs/readDirectory` | Supported | Stage 12 exposes bounded project-relative directory entries. |
 | `fs/remove` | Not supported | Filesystem access is not exposed. |
 | `fs/copy` | Not supported | Filesystem access is not exposed. |
 | `fs/watch` | Not supported | Filesystem access is not exposed. |
@@ -114,7 +114,7 @@ Status labels:
 | `experimentalFeature/enablement/set` | Not supported | Not exposed. |
 | `mcpServer/oauth/login` | Not supported | Not exposed. |
 | `config/mcpServer/reload` | Not supported | Not exposed. |
-| `mcpServerStatus/list` | Not supported | Not exposed. |
+| `mcpServerStatus/list` | Partial | Stage 12 exposes sanitized server/tool/resource summary when available; degraded 408 is allowed in the current real stack. |
 | `mcpServer/resource/read` | Not supported | Not exposed. |
 | `mcpServer/tool/call` | Not supported | Not exposed. |
 | `windowsSandbox/setupStart` | Not supported | Not exposed. |
@@ -138,9 +138,9 @@ Status labels:
 | `configRequirements/read` | Not supported | Not exposed. |
 | `account/read` | Not supported | Not exposed. |
 | `getConversationSummary` | Not supported | Not exposed. |
-| `gitDiffToRemote` | Not supported | Not exposed. |
+| `gitDiffToRemote` | Supported | Stage 12 exposes parsed file-level Git summary, not raw diff text. |
 | `getAuthStatus` | Not supported | Not exposed. |
-| `fuzzyFileSearch` | Not supported | Not exposed. |
+| `fuzzyFileSearch` | Supported | Stage 12 exposes bounded project-relative search matches. |
 
 ## App-Server Server Requests
 
@@ -235,8 +235,8 @@ Codex Remote currently does not expose app-server notifications as a durable pro
 Codex Remote should not try to expose all app-server methods at once. Q29-Q33 research confirms that the next plan should prioritize product capability surfaces, not protocol coverage percentage:
 
 1. Stage 11 conversation workbench parity is closed after UI repair and durable queue repair. Composer-centered start/follow-up/interrupt/steer/queue, app-like timeline content, Settings -> 已归档对话, request cards in the timeline, protocol-derived permission placeholders, and assistant message action rows passed full verification and Web smoke; approval decision remains the known real-gap from Stage 10/isolated fixture.
-2. Stage 12 should expose local work tools read-only next: file preview/metadata, Git/review summaries, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps inventory. Command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
-3. Controlled write actions come after read-only surfaces: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
+2. Stage 12 local work tools read-only is complete: file preview/metadata, Git summary, fuzzy search, MCP status summary with degraded fallback, and skills/hooks/plugins/apps inventory. Command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
+3. Stage 13 controlled write actions come next: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
 4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell.
 5. Keep approval as a major gap inside the conversation/request lifecycle, but do not let approval alone define the roadmap.
 

@@ -220,12 +220,14 @@ export function createControlPlaneHttpApp(params: {
   app.get("/v1/devices/:deviceId/projects/:projectId/local-workbench/search", async (c) => {
     const device = requireDevice(registry, c.req.param("deviceId"));
     const projectId = c.req.param("projectId");
+    const path = c.req.query("path");
+    const limit = c.req.query("limit");
     return c.json(
       await runForDevice(device, "local-workbench/search", () =>
         params.workerClient.searchProjectFiles(device, projectId, {
           query: getRequiredQuery(c, "query"),
-          ...(c.req.query("path") === undefined ? {} : { path: c.req.query("path") }),
-          ...(c.req.query("limit") === undefined ? {} : { limit: parsePositiveIntegerQuery(c.req.query("limit"), "limit") }),
+          ...(path === undefined ? {} : { path }),
+          ...(limit === undefined ? {} : { limit: parsePositiveIntegerQuery(limit, "limit") }),
         }),
       ),
     );

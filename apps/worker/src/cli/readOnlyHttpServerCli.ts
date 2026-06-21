@@ -3,6 +3,10 @@ import { serve } from "@hono/node-server";
 import { openWorkerAppServerSession, type WorkerAppServerSession } from "../app-server/readOnlyAppServerSession.ts";
 import { createWorkerApprovalRegistry } from "../http/approvalRegistry.ts";
 import type { WorkerControlAppServerClient, WorkerControlHandlerContext } from "../http/controlHandlers.ts";
+import type {
+  WorkerLocalWorkbenchAppServerClient,
+  WorkerLocalWorkbenchHandlerContext,
+} from "../http/localWorkbenchHandlers.ts";
 import { createWorkerHttpApp } from "../http/workerHttpApp.ts";
 import { loadWorkerHttpConfig, type WorkerHttpConfig } from "../http/workerHttpConfig.ts";
 import {
@@ -48,7 +52,7 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
 function createDefaultWorkerHandlerContext(
   config: WorkerHttpConfig,
   openWorkerSession = openWorkerAppServerSession,
-): WorkerControlHandlerContext {
+): WorkerControlHandlerContext & WorkerLocalWorkbenchHandlerContext {
   const approvalRegistry = createWorkerApprovalRegistry();
   let sharedSession: Promise<WorkerAppServerSession> | null = null;
 
@@ -88,7 +92,7 @@ function createDefaultWorkerHandlerContext(
 function createSessionClient(
   client: AppServerWorkerClient,
   closeSession: () => void,
-): WorkerControlAppServerClient {
+): WorkerControlAppServerClient & WorkerLocalWorkbenchAppServerClient {
   return {
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
@@ -105,6 +109,14 @@ function createSessionClient(
     listLoadedThreads: (params) => client.listLoadedThreads(params),
     interruptTurn: (params) => client.interruptTurn(params),
     steerTurn: (params) => client.steerTurn(params),
+    gitDiffToRemote: (params) => client.gitDiffToRemote(params),
+    fuzzyFileSearch: (params) => client.fuzzyFileSearch(params),
+    listMcpServerStatus: (params) => client.listMcpServerStatus(params),
+    listSkills: (params) => client.listSkills(params),
+    listHooks: (params) => client.listHooks(params),
+    listPlugins: (params) => client.listPlugins(params),
+    readPlugin: (params) => client.readPlugin(params),
+    listApps: (params) => client.listApps(params),
     sendApprovalResponse: (params) => client.sendApprovalResponse(params),
     close: () => closeSession(),
   };

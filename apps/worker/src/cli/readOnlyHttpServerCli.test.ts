@@ -105,6 +105,50 @@ test("read-only http server cli should keep one Worker session open for approval
   assert.equal(closeCount, 0);
 });
 
+test("read-only http server cli when local workbench route is requested, should forward stage 12 app-server methods", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
+  const writes = createWritable();
+  const captured: { fetch?: (request: Request) => Promise<Response> | Response } = {};
+  const methods: string[] = [];
+
+  const exitCode = await startReadOnlyHttpServer({
+    env: {
+      CODEX_REMOTE_WORKER_TOKEN: "example-token",
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: projectRoot,
+      CODEX_REMOTE_ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+      CODEX_APP_SERVER_URL: "ws://127.0.0.1:4321",
+    },
+    stdout: writes.stdout,
+    stderr: writes.stderr,
+    openWorkerSession: async () => ({
+      client: createFakeWorkerClient({
+        gitDiffToRemote: async () => {
+          methods.push("gitDiffToRemote");
+          return { sha: "abc123" as never, diff: "## main\n" };
+        },
+      }),
+      startedByWorker: false,
+      close: () => {},
+    }),
+    serveHttp: (options) => {
+      captured.fetch = (request) => options.fetch(request, undefined as never) as Promise<Response> | Response;
+      return undefined as never;
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  if (!captured.fetch) {
+    throw new Error("fetch app was not captured");
+  }
+
+  const response: Response = await captured.fetch(new Request("http://127.0.0.1:8787/v1/projects/local-project/local-workbench/git", {
+    headers: { authorization: "Bearer example-token" },
+  }));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(methods, ["gitDiffToRemote"]);
+});
+
 test("read-only http server cli when server binding fails, should print sanitized internal error", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
   const writes = createWritable();
@@ -159,7 +203,7 @@ function createWritable(): {
   };
 }
 
-function createFakeWorkerClient(): AppServerWorkerClient {
+function createFakeWorkerClient(overrides: Partial<AppServerWorkerClient> = {}): AppServerWorkerClient {
   return {
     readyz: async () => {},
     initialize: async () => {},
@@ -179,7 +223,18 @@ function createFakeWorkerClient(): AppServerWorkerClient {
     },
     interruptTurn: async () => ({}),
     steerTurn: async () => ({ turnId: "turn-1" }),
+    gitDiffToRemote: async () => ({ sha: "abc123" as never, diff: "## main\n" }),
+    fuzzyFileSearch: async () => ({ files: [] }),
+    listMcpServerStatus: async () => ({ data: [], nextCursor: null }),
+    listSkills: async () => ({ data: [] }),
+    listHooks: async () => ({ data: [] }),
+    listPlugins: async () => ({ marketplaces: [], marketplaceLoadErrors: [], featuredPluginIds: [] }),
+    readPlugin: async () => {
+      throw new Error("unexpected_read_plugin");
+    },
+    listApps: async () => ({ data: [], nextCursor: null }),
     sendApprovalResponse: async () => {},
     close: () => {},
+    ...overrides,
   } as unknown as AppServerWorkerClient;
 }

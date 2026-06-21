@@ -1,4 +1,11 @@
-import type { InitializeResponse, v2 } from "@codex-remote/codex-protocol";
+import type {
+  FuzzyFileSearchParams,
+  FuzzyFileSearchResponse,
+  GitDiffToRemoteParams,
+  GitDiffToRemoteResponse,
+  InitializeResponse,
+  v2,
+} from "@codex-remote/codex-protocol";
 
 import { AppServerRpcClient } from "../app-server/appServerRpcClient.ts";
 import { isPathInsideRootRealpath } from "../security/workerSecurity.ts";
@@ -262,6 +269,38 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
 
   async setThreadName(params: v2.ThreadSetNameParams): Promise<v2.ThreadSetNameResponse> {
     return (await this.rpc.request("thread/name/set", params)) as v2.ThreadSetNameResponse;
+  }
+
+  async gitDiffToRemote(params: GitDiffToRemoteParams): Promise<GitDiffToRemoteResponse> {
+    return (await this.rpc.request("gitDiffToRemote", params)) as GitDiffToRemoteResponse;
+  }
+
+  async fuzzyFileSearch(params: FuzzyFileSearchParams): Promise<FuzzyFileSearchResponse> {
+    return (await this.rpc.request("fuzzyFileSearch", params)) as FuzzyFileSearchResponse;
+  }
+
+  async listMcpServerStatus(params: v2.ListMcpServerStatusParams): Promise<v2.ListMcpServerStatusResponse> {
+    return (await this.rpc.request("mcpServerStatus/list", params)) as v2.ListMcpServerStatusResponse;
+  }
+
+  async listSkills(params: v2.SkillsListParams): Promise<v2.SkillsListResponse> {
+    return (await this.rpc.request("skills/list", params)) as v2.SkillsListResponse;
+  }
+
+  async listHooks(params: v2.HooksListParams): Promise<v2.HooksListResponse> {
+    return (await this.rpc.request("hooks/list", params)) as v2.HooksListResponse;
+  }
+
+  async listPlugins(params: v2.PluginListParams): Promise<v2.PluginListResponse> {
+    return (await this.rpc.request("plugin/list", params)) as v2.PluginListResponse;
+  }
+
+  async readPlugin(params: v2.PluginReadParams): Promise<v2.PluginReadResponse> {
+    return (await this.rpc.request("plugin/read", params)) as v2.PluginReadResponse;
+  }
+
+  async listApps(params: v2.AppsListParams): Promise<v2.AppsListResponse> {
+    return (await this.rpc.request("app/list", params)) as v2.AppsListResponse;
   }
 
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {

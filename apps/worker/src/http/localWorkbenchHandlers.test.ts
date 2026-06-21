@@ -195,17 +195,26 @@ test("local workbench handlers when reading git search mcp and extensions, shoul
               localVersion: "1.0.0",
               name: "Safe Plugin",
               shareContext: null,
-              source: "local",
+              source: { type: "local", path: join(paths.projectRoot, "plugins/safe-plugin") },
               installed: true,
               enabled: true,
-              installPolicy: "allowed",
-              authPolicy: "notRequired",
-              availability: "available",
+              installPolicy: "AVAILABLE",
+              authPolicy: "ON_USE",
+              availability: "AVAILABLE",
               interface: null,
               keywords: [],
             },
             description: "Plugin description",
-            skills: [{ name: "safe-skill", description: "Skill description", path: join(paths.projectRoot, "SKILL.md"), scope: "project", enabled: true }],
+            skills: [
+              {
+                name: "safe-skill",
+                description: "Skill description",
+                shortDescription: null,
+                interface: null,
+                path: join(paths.projectRoot, "SKILL.md"),
+                enabled: true,
+              },
+            ],
             hooks: [{ key: "post-tool", eventName: "postToolUse" }],
             apps: [{ id: "app-1", name: "Safe App", description: "App description", installUrl: "https://example.com", needsAuth: false }],
             appTemplates: [],
@@ -226,12 +235,12 @@ test("local workbench handlers when reading git search mcp and extensions, shoul
                 localVersion: "1.0.0",
                 name: "Safe Plugin",
                 shareContext: null,
-                source: "local",
+                source: { type: "local", path: join(paths.projectRoot, "plugins/safe-plugin") },
                 installed: true,
                 enabled: true,
-                installPolicy: "allowed",
-                authPolicy: "notRequired",
-                availability: "available",
+                installPolicy: "AVAILABLE",
+                authPolicy: "ON_USE",
+                availability: "AVAILABLE",
                 interface: null,
                 keywords: [],
               },
@@ -250,10 +259,8 @@ test("local workbench handlers when reading git search mcp and extensions, shoul
                 name: "safe-skill",
                 description: "Skill description",
                 shortDescription: "Short description",
-                interface: undefined,
-                dependencies: undefined,
                 path: join(paths.projectRoot, "SKILL.md"),
-                scope: "project",
+                scope: "repo",
                 enabled: true,
               },
             ],
@@ -281,6 +288,67 @@ test("local workbench handlers when reading git search mcp and extensions, shoul
   assert.equal(mcp.servers[0]?.name, "filesystem");
   assert.equal(extensions.plugins[0]?.skillCount, 1);
   assert.doesNotMatch(JSON.stringify({ summary, git, search, mcp, extensions }), /PRIVATE_COMMAND|marketplacePath|sourcePath/);
+});
+
+test("local workbench handlers when extension subrequests fail, should return available inventory without failing the whole endpoint", async () => {
+  const paths = await createTempProject();
+  const context = createContext(
+    paths.allowedRoot,
+    new FakeClient({
+      skillsResponse: {
+        data: [
+          {
+            cwd: paths.projectRoot,
+            skills: [
+              {
+                name: "safe-skill",
+                description: "Skill description",
+                path: join(paths.projectRoot, "SKILL.md"),
+                scope: "repo",
+                enabled: true,
+              },
+            ],
+            errors: [],
+          },
+        ],
+      },
+    }, {
+      failHooks: true,
+      failPlugins: true,
+      failApps: true,
+    }),
+  );
+
+  const extensions = await getExtensionInventory(context, "local-project");
+
+  assert.deepEqual(extensions.skills, [
+    { name: "safe-skill", enabled: true, description: "Skill description", status: "installed" },
+  ]);
+  assert.deepEqual(extensions.hooks, []);
+  assert.deepEqual(extensions.plugins, []);
+  assert.deepEqual(extensions.apps, []);
+});
+
+test("local workbench handlers when summary dependencies fail, should return unavailable counts instead of failing", async () => {
+  const paths = await createTempProject();
+  await writeFile(join(paths.projectRoot, "README.md"), "# Local Workbench\n", "utf8");
+  const context = createContext(
+    paths.allowedRoot,
+    new FakeClient({}, {
+      failGit: true,
+      failMcp: true,
+      failPlugins: true,
+      failApps: true,
+    }),
+  );
+
+  const summary = await getLocalWorkbenchSummary(context, "local-project");
+
+  assert.equal(summary.gitStatus, "unavailable");
+  assert.equal(summary.fileCount, 1);
+  assert.equal(summary.mcpServerCount, 0);
+  assert.equal(summary.extensionCount, 0);
+  assert.equal(summary.previewAvailable, true);
 });
 
 test("local workbench handlers when search results include sibling-prefix paths, should keep only in-root matches", async () => {
@@ -524,6 +592,11 @@ test("local workbench handlers when routes are mounted, should expose get-only l
 
 class FakeClient implements WorkerLocalWorkbenchAppServerClient {
   readonly appsResponse: v2.AppsListResponse;
+  readonly failApps: boolean;
+  readonly failGit: boolean;
+  readonly failHooks: boolean;
+  readonly failMcp: boolean;
+  readonly failPlugins: boolean;
   readonly fuzzyResponse: FuzzyFileSearchResponse;
   readonly gitResponse: GitDiffToRemoteResponse;
   readonly hooksResponse: v2.HooksListResponse;
@@ -541,11 +614,22 @@ class FakeClient implements WorkerLocalWorkbenchAppServerClient {
     pluginDetails: Record<string, v2.PluginReadResponse>;
     pluginListResponse: v2.PluginListResponse;
     skillsResponse: v2.SkillsListResponse;
+  }> = {}, failures: Partial<{
+    failApps: boolean;
+    failGit: boolean;
+    failHooks: boolean;
+    failMcp: boolean;
+    failPlugins: boolean;
   }> = {}) {
     this.appsResponse = options.appsResponse ?? { data: [], nextCursor: null };
+    this.failApps = failures.failApps ?? false;
+    this.failGit = failures.failGit ?? false;
+    this.failHooks = failures.failHooks ?? false;
+    this.failMcp = failures.failMcp ?? false;
+    this.failPlugins = failures.failPlugins ?? false;
     this.fuzzyResponse = options.fuzzyResponse ?? { files: [] };
     this.gitResponse = options.gitResponse ?? { sha: "sha" as never, diff: "## main...origin/main\n" };
-    this.hooksResponse = options.hooksResponse ?? { data: [], errors: [] as never };
+    this.hooksResponse = options.hooksResponse ?? { data: [] };
     this.mcpResponse = options.mcpResponse ?? { data: [], nextCursor: null };
     this.pluginDetails = options.pluginDetails ?? {};
     this.pluginListResponse = options.pluginListResponse ?? { marketplaces: [], marketplaceLoadErrors: [], featuredPluginIds: [] };
@@ -565,21 +649,33 @@ class FakeClient implements WorkerLocalWorkbenchAppServerClient {
     return { data: [], nextCursor: null };
   }
   async gitDiffToRemote(): Promise<GitDiffToRemoteResponse> {
+    if (this.failGit) {
+      throw new Error("git_failed");
+    }
     return this.gitResponse;
   }
   async fuzzyFileSearch(): Promise<FuzzyFileSearchResponse> {
     return this.fuzzyResponse;
   }
   async listMcpServerStatus(): Promise<v2.ListMcpServerStatusResponse> {
+    if (this.failMcp) {
+      throw new Error("mcp_failed");
+    }
     return this.mcpResponse;
   }
   async listSkills(): Promise<v2.SkillsListResponse> {
     return this.skillsResponse;
   }
   async listHooks(): Promise<v2.HooksListResponse> {
+    if (this.failHooks) {
+      throw new Error("hooks_failed");
+    }
     return this.hooksResponse;
   }
   async listPlugins(): Promise<v2.PluginListResponse> {
+    if (this.failPlugins) {
+      throw new Error("plugins_failed");
+    }
     return this.pluginListResponse;
   }
   async readPlugin(params: v2.PluginReadParams): Promise<v2.PluginReadResponse> {
@@ -589,6 +685,9 @@ class FakeClient implements WorkerLocalWorkbenchAppServerClient {
     return response;
   }
   async listApps(): Promise<v2.AppsListResponse> {
+    if (this.failApps) {
+      throw new Error("apps_failed");
+    }
     return this.appsResponse;
   }
   close(): void {}
@@ -615,13 +714,13 @@ function createContext(
 function createControlContext(
   allowedProjectRoot: string,
   client: WorkerLocalWorkbenchAppServerClient,
-): WorkerControlHandlerContext {
+): WorkerControlHandlerContext & WorkerLocalWorkbenchHandlerContext {
   const ticks = ["2026-06-21T10:00:00.000Z", "2026-06-21T10:00:01.000Z"];
 
   return {
     config: createConfig(allowedProjectRoot),
     now: () => ticks.shift() ?? "2026-06-21T10:00:01.000Z",
-    openClient: async () => client,
+    openClient: async () => client as never,
     approvalRegistry: createWorkerApprovalRegistry(),
     writeState: createWorkerWriteHandlerState(),
   };

@@ -73,7 +73,11 @@ export function projectGitDiffToSummary(
 
     const branchMatch = /^##\s+([^\s.]+)(?:\.\.\.[^\s]+)?(?:\s+\[(.+)\])?$/.exec(line);
     if (branchMatch) {
-      branch = branchMatch[1] === "HEAD" ? "detached" : branchMatch[1];
+      const rawBranch = branchMatch[1];
+      if (!rawBranch) {
+        continue;
+      }
+      branch = rawBranch === "HEAD" ? "detached" : rawBranch;
       const counts = branchMatch[2] ?? "";
       aheadCount = parseBracketCount(counts, "ahead");
       behindCount = parseBracketCount(counts, "behind");
@@ -82,7 +86,11 @@ export function projectGitDiffToSummary(
 
     const untrackedMatch = /^\?\?\s+(.+)$/.exec(line);
     if (untrackedMatch) {
-      const path = sanitizeGitPath(untrackedMatch[1], allowedProjectRoot);
+      const rawPath = untrackedMatch[1];
+      if (!rawPath) {
+        continue;
+      }
+      const path = sanitizeGitPath(rawPath, allowedProjectRoot);
       if (path) {
         untrackedCount += 1;
         changedFiles.push({
@@ -102,7 +110,14 @@ export function projectGitDiffToSummary(
 
     const indexStatus = statusMatch[1];
     const worktreeStatus = statusMatch[2];
-    const path = sanitizeGitPath(statusMatch[3], allowedProjectRoot);
+    const rawPath = statusMatch[3];
+    if (!indexStatus || !worktreeStatus || !rawPath) {
+      continue;
+    }
+    if (indexStatus === " " && worktreeStatus === " ") {
+      continue;
+    }
+    const path = sanitizeGitPath(rawPath, allowedProjectRoot);
     if (!path) {
       continue;
     }
@@ -154,7 +169,9 @@ export function projectMcpServerSummary(input: {
       name: fallbackName(server.name, "mcp-server"),
       status: server.serverInfo || Object.keys(server.tools).length > 0 ? "connected" : "unknown",
       description: sanitizePublicText(server.serverInfo?.description ?? null),
-      tools: Object.values(server.tools).map((tool) => fallbackName(tool.name, "tool")).slice(0, 50),
+      tools: Object.values(server.tools)
+        .flatMap((tool) => (tool ? [fallbackName(tool.name, "tool")] : []))
+        .slice(0, 50),
       resources: server.resources.map((resource) => fallbackName(resource.name, "resource")).slice(0, 50),
       resourceTemplates: server.resourceTemplates
         .map((template) => fallbackName(template.name, "resource-template"))

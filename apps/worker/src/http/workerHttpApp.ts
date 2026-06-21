@@ -29,6 +29,7 @@ import {
   getProjectGitSummary,
   listProjectFiles,
   searchProjectFiles,
+  type WorkerLocalWorkbenchHandlerContext,
 } from "./localWorkbenchHandlers.ts";
 import {
   followUpConversation,
@@ -59,6 +60,7 @@ const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
 
 export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<WorkerHonoEnv> {
+  const localWorkbenchContext = context as unknown as WorkerLocalWorkbenchHandlerContext;
   const app = new Hono<WorkerHonoEnv>();
 
   app.onError((error, c) => {
@@ -96,21 +98,21 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
   app.get("/v1/worker/probe", async (c) => c.json(await runProbe(context)));
   app.get("/v1/projects", (c) => c.json(listProjects(context)));
   app.get("/v1/projects/:projectId/local-workbench/summary", async (c) =>
-    c.json(await getLocalWorkbenchSummary(context, c.req.param("projectId"))),
+    c.json(await getLocalWorkbenchSummary(localWorkbenchContext, c.req.param("projectId"))),
   );
   app.get("/v1/projects/:projectId/local-workbench/files", async (c) =>
-    c.json(await listProjectFiles(context, c.req.param("projectId"), c.req.query("path"))),
+    c.json(await listProjectFiles(localWorkbenchContext, c.req.param("projectId"), c.req.query("path"))),
   );
   app.get("/v1/projects/:projectId/local-workbench/file-preview", async (c) =>
-    c.json(await getProjectFilePreview(context, c.req.param("projectId"), getRequiredQuery(c, "path"))),
+    c.json(await getProjectFilePreview(localWorkbenchContext, c.req.param("projectId"), getRequiredQuery(c, "path"))),
   );
   app.get("/v1/projects/:projectId/local-workbench/git", async (c) =>
-    c.json(await getProjectGitSummary(context, c.req.param("projectId"))),
+    c.json(await getProjectGitSummary(localWorkbenchContext, c.req.param("projectId"))),
   );
   app.get("/v1/projects/:projectId/local-workbench/search", async (c) =>
     c.json(
       await searchProjectFiles(
-        context,
+        localWorkbenchContext,
         c.req.param("projectId"),
         getRequiredQuery(c, "query"),
         c.req.query("path"),
@@ -119,10 +121,10 @@ export function createWorkerHttpApp(context: WorkerControlHandlerContext): Hono<
     ),
   );
   app.get("/v1/projects/:projectId/local-workbench/mcp", async (c) =>
-    c.json(await getMcpServerSummary(context, c.req.param("projectId"))),
+    c.json(await getMcpServerSummary(localWorkbenchContext, c.req.param("projectId"))),
   );
   app.get("/v1/projects/:projectId/local-workbench/extensions", async (c) =>
-    c.json(await getExtensionInventory(context, c.req.param("projectId"))),
+    c.json(await getExtensionInventory(localWorkbenchContext, c.req.param("projectId"))),
   );
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
   app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));

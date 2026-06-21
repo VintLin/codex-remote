@@ -60,14 +60,14 @@ Rules:
 | Approval and input | Capture app-server requests, show user decisions, send responses, show resolved state | Approval capture is partial; decision remains real-gap; user input/MCP elicitation/tool calls are not exposed | Need request/response lifecycle parity |
 | Models and runtime | Model list, provider capabilities, reroute and verification status | Not exposed | Need model/runtime surface |
 | Config and experiments | Read/write config, requirements, experimental features | Not exposed | Need config surface derived from app-server protocol and public API |
-| Filesystem | Read, write, create, remove, copy, metadata, directory, watch | Not exposed | Need file browser/editor/watch surface through Worker |
+| Filesystem | Read, write, create, remove, copy, metadata, directory, watch | Stage 12 exposes project-relative directory, metadata, and bounded text preview | Writes, copy/remove, watch, and editor surface remain future |
 | Shell and commands | Execute, write stdin, resize, terminate, show process output | Not exposed | Need terminal-like command surface through Worker |
-| Git and review | Diff to remote, review start, diff updates | Not exposed | Need Git/review surface |
-| Search | Fuzzy file search sessions and results | Not exposed | Need project search surface |
-| Skills and hooks | List skills, extra roots, config, hooks, change notifications | Not exposed | Need skills/hooks management surface |
-| Plugins and marketplace | List/read/install/uninstall/share/update marketplace packages | Not exposed | Need plugin and marketplace surface |
-| MCP | Server status, OAuth, reload, resources, tool calls, progress, elicitation | Not exposed | Need MCP management and interaction surface |
-| Apps | App list and app list updates | Not exposed | Need app surface if app-server remains the source |
+| Git and review | Diff to remote, review start, diff updates | Stage 12 exposes parsed Git file summary | Review start and diff updates remain controlled-action/live-stream work |
+| Search | Fuzzy file search sessions and results | Stage 12 exposes bounded project-relative fuzzy search matches | Session lifecycle/live updates remain future |
+| Skills and hooks | List skills, extra roots, config, hooks, change notifications | Stage 12 exposes read-only skills/hooks inventory | Config writes, extra roots, and change notifications remain future |
+| Plugins and marketplace | List/read/install/uninstall/share/update marketplace packages | Stage 12 exposes read-only plugin metadata | Install/uninstall/share/marketplace mutation remains future |
+| MCP | Server status, OAuth, reload, resources, tool calls, progress, elicitation | Stage 12 exposes read-only MCP status summary when available; degraded 408 is allowed in current real stack | OAuth, reload, resource reads, tool calls, progress, and elicitation remain future |
+| Apps | App list and app list updates | Stage 12 exposes read-only app inventory | App list updates and actions remain future |
 | Account | Login/logout/read/auth status, rate limits, usage, account updates | Not exposed | Need account state surface without moving secrets into Control Plane |
 | Realtime voice | Realtime thread, transcript, audio, SDP, errors, close | Not exposed | Need voice experience only after protocol path is proven |
 | Windows sandbox | Setup, readiness, warnings | Not exposed | Need platform-specific surface when Windows is in scope |
@@ -78,8 +78,8 @@ Rules:
 Future stages should be split by product capability area, not by raw app-server method.
 
 1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Stage 11 closure gates passed; approval decision remains the known real-gap from the isolated approval fixture.
-2. Local work tools read-only: filesystem preview/metadata, Git/review summaries, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps inventory. Command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
-3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
+2. Local work tools read-only: filesystem preview/metadata, Git summary, fuzzy search, MCP status/tools/resources summary, plugin read, skills/hooks/apps inventory. Stage 12 closure gates passed; command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
+3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation. This is the next stage.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.
 5. Advanced realtime and platform watchlist: realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations.
 6. Remote-specific hardening: devices, project binding, task association, self-hosted evidence, future pairing/reverse connection.

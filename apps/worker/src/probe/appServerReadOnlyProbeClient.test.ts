@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { AppServerReadOnlyProbeClient } from "./appServerReadOnlyProbeClient.ts";
+import { AppServerReadOnlyProbeClient, AppServerWorkerClient } from "./appServerReadOnlyProbeClient.ts";
 
 test("when readyz hangs, should abort with a safe timeout error", async () => {
   const originalFetch = globalThis.fetch;
@@ -124,5 +124,85 @@ test("when probing thread list, should follow cursors until completion and repor
   assert.deepEqual(requests.map((request) => ({ method: request.method, cursor: request.params.cursor })), [
     { method: "thread/list", cursor: null },
     { method: "thread/list", cursor: "cursor-2" },
+  ]);
+});
+
+test("when sending stage 12 local workbench requests, should serialize generated app-server methods", async () => {
+  const requests: Array<{ method: string; params: unknown }> = [];
+  const client = new AppServerWorkerClient(
+    {
+      close() {},
+      notify() {},
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        if (method === "gitDiffToRemote") {
+          return { sha: "abc123", diff: "## main\n" };
+        }
+        if (method === "fuzzyFileSearch") {
+          return { files: [] };
+        }
+        if (method === "mcpServerStatus/list") {
+          return { data: [], nextCursor: null };
+        }
+        if (method === "plugin/list") {
+          return { marketplaces: [], marketplaceLoadErrors: [], featuredPluginIds: [] };
+        }
+        if (method === "plugin/read") {
+          return {
+            plugin: {
+              marketplaceName: "local",
+              marketplacePath: null,
+              summary: {
+                id: "plugin-1",
+                remotePluginId: null,
+                localVersion: null,
+                name: "Plugin",
+                shareContext: null,
+                source: { type: "remote" },
+                installed: true,
+                enabled: true,
+                installPolicy: "AVAILABLE",
+                authPolicy: "ON_USE",
+                availability: "AVAILABLE",
+                interface: null,
+                keywords: [],
+              },
+              description: null,
+              skills: [],
+              hooks: [],
+              apps: [],
+              appTemplates: [],
+              mcpServers: [],
+            },
+          };
+        }
+        if (method === "app/list") {
+          return { data: [], nextCursor: null };
+        }
+        return { data: [] };
+      },
+    } as never,
+    "",
+    "/repo/project",
+  );
+
+  await client.gitDiffToRemote({ cwd: "/repo/project" });
+  await client.fuzzyFileSearch({ query: "package", roots: ["/repo/project"], cancellationToken: null });
+  await client.listMcpServerStatus({ cursor: null, limit: 50, detail: "full" as never, threadId: null });
+  await client.listSkills({ cwds: ["/repo/project"], forceReload: false });
+  await client.listHooks({ cwds: ["/repo/project"] });
+  await client.listPlugins({ cwds: ["/repo/project"], marketplaceKinds: null });
+  await client.readPlugin({ pluginName: "Plugin", remoteMarketplaceName: null });
+  await client.listApps({ cursor: null, limit: 100, threadId: null, forceRefetch: false });
+
+  assert.deepEqual(requests.map((request) => request.method), [
+    "gitDiffToRemote",
+    "fuzzyFileSearch",
+    "mcpServerStatus/list",
+    "skills/list",
+    "hooks/list",
+    "plugin/list",
+    "plugin/read",
+    "app/list",
   ]);
 });
