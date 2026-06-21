@@ -380,6 +380,77 @@ test("local workbench handlers when search results include Windows absolute path
   assert.doesNotMatch(JSON.stringify(search), /C:[\\/]|private(?:-backslash)?\.ts/);
 });
 
+test("local workbench handlers when search results include unsafe in-root filenames and paths, should keep only safe public text", async () => {
+  const paths = await createTempProject();
+  await mkdir(join(paths.projectRoot, "src"), { recursive: true });
+  await writeFile(join(paths.projectRoot, "src", "index.ts"), "export const value = 1;\n", "utf8");
+
+  const search = await searchProjectFiles(
+    createContext(
+      paths.allowedRoot,
+      new FakeClient({
+        fuzzyResponse: {
+          files: [
+            {
+              root: paths.projectRoot,
+              path: "src/index.ts",
+              match_type: "file",
+              file_name: "index.ts",
+              score: 0.95,
+              indices: [0, 1],
+            },
+            {
+              root: paths.projectRoot,
+              path: "src/sk-test-secret-token.txt",
+              match_type: "file",
+              file_name: "sk-test-secret-token.txt",
+              score: 0.9,
+              indices: [0, 1],
+            },
+            {
+              root: paths.projectRoot,
+              path: "src/PROMPT_reply.txt",
+              match_type: "file",
+              file_name: "PROMPT_reply.txt",
+              score: 0.8,
+              indices: [0, 1],
+            },
+            {
+              root: paths.projectRoot,
+              path: "src/command output.log",
+              match_type: "file",
+              file_name: "command output.log",
+              score: 0.7,
+              indices: [0, 1],
+            },
+            {
+              root: paths.projectRoot,
+              path: "src/diff --git.txt",
+              match_type: "file",
+              file_name: "diff --git.txt",
+              score: 0.6,
+              indices: [0, 1],
+            },
+          ],
+        },
+      }),
+    ),
+    "local-project",
+    "index",
+    "",
+    20,
+  );
+
+  assert.deepEqual(search, {
+    query: "index",
+    matches: [{ path: "src/index.ts", lineNumber: 1, columnNumber: null, match: "index.ts", snippet: null, score: 0.95 }],
+  });
+  assert.doesNotMatch(
+    JSON.stringify(search),
+    /sk-test-secret-token|PROMPT_reply|command output|diff --git/,
+  );
+});
+
 test("local workbench handlers when searching inside a subdirectory, should reject project-root matches outside the requested path", async () => {
   const paths = await createTempProject();
   await mkdir(join(paths.projectRoot, "src"), { recursive: true });

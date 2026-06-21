@@ -23,6 +23,7 @@ import {
   projectExtensionInventory,
   projectGitDiffToSummary,
   projectMcpServerSummary,
+  sanitizePublicText,
   resolveProjectPath,
 } from "./localWorkbenchProjections.ts";
 
@@ -229,11 +230,17 @@ export async function searchProjectFiles(
         }
       }
 
+      const safePath = sanitizePublicText(projectRelativePath, 240);
+      const safeMatch = sanitizePublicText(match.file_name, 240);
+      if (!safePath || !safeMatch) {
+        continue;
+      }
+
       matches.push({
-        path: projectRelativePath,
+        path: safePath,
         lineNumber: 1,
         columnNumber: null,
-        match: match.file_name.slice(0, 240),
+        match: safeMatch,
         snippet: null,
         score: match.score,
       });

@@ -15,7 +15,7 @@ const unsafeTextPatterns = [
   /sk-[A-Za-z0-9_-]{8,}/i,
   /\bsecret\b/i,
   /\btoken\b/i,
-  /\bprompt\b/i,
+  /prompt/i,
   /\bdiff --git\b/i,
   /^@@ /m,
   /\bjsonrpc\b/i,
