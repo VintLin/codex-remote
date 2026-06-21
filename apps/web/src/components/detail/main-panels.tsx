@@ -96,6 +96,7 @@ interface TaskBoardPageProps {
 }
 
 interface LocalWorkbenchPageProps {
+  canStartReview: boolean;
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -103,7 +104,10 @@ interface LocalWorkbenchPageProps {
   onBack?: () => void;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
+  onSubmitReviewStart: (confirmationText: string) => Promise<void>;
   onSearchLocalFiles: (query: string) => Promise<ProjectSearchResult | null>;
+  reviewStartError: string | null;
+  reviewStartStatus: "accepted" | "failed" | "idle" | "submitting";
   source: WorkbenchData["source"];
 }
 
@@ -695,6 +699,7 @@ export function TaskBoardPage({
 }
 
 export function LocalWorkbenchPage({
+  canStartReview,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -702,12 +707,17 @@ export function LocalWorkbenchPage({
   onBack,
   onExpandDetail,
   onExpandSidebar,
+  onSubmitReviewStart,
   onSearchLocalFiles,
+  reviewStartError,
+  reviewStartStatus,
   source,
 }: LocalWorkbenchPageProps) {
+  const [reviewConfirmation, setReviewConfirmation] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchStatus, setSearchStatus] = useState<"failed" | "idle" | "submitting">("idle");
   const datasourceStatus = localWorkbench.status === "degraded" ? "degraded" : source.reason;
+  const reviewDisabled = !canStartReview || reviewConfirmation !== "START REVIEW" || reviewStartStatus === "submitting";
 
   return (
     <main className="main-pane local-workbench-page">
@@ -781,6 +791,37 @@ export function LocalWorkbenchPage({
                         <code>{file.status}</code>
                       </div>
                     ))}
+                    <form
+                      aria-label="Start review for uncommitted changes"
+                      className="local-review-action"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        if (reviewDisabled) {
+                          return;
+                        }
+                        void onSubmitReviewStart(reviewConfirmation);
+                      }}
+                    >
+                      <label>
+                        <span>Type START REVIEW to request a local review.</span>
+                        <input
+                          aria-label="Review confirmation text"
+                          disabled={reviewStartStatus === "submitting"}
+                          onChange={(event) => setReviewConfirmation(event.target.value)}
+                          placeholder="START REVIEW"
+                          value={reviewConfirmation}
+                        />
+                      </label>
+                      <button disabled={!canStartReview || reviewConfirmation !== "START REVIEW" || reviewStartStatus === "submitting"} type="submit">
+                        Start review
+                      </button>
+                      {reviewStartStatus === "accepted" ? (
+                        <p className="local-review-action-status" data-state="accepted">Review request accepted.</p>
+                      ) : null}
+                      {reviewStartStatus === "failed" && reviewStartError ? (
+                        <p className="local-review-action-status" data-state="failed">{reviewStartError}</p>
+                      ) : null}
+                    </form>
                   </div>
                 ) : <p className="empty-state">暂无 Git 摘要</p>}
               </LocalWorkbenchCard>

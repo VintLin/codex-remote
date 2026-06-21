@@ -26,6 +26,7 @@ import type {
   RenameConversationInput,
   SendQueuedConversationMessageInput,
   StartConversationInput,
+  StartReviewInput,
   SteerTurnInput,
   TaskConversationLink,
   WorkerCapabilities,
@@ -54,6 +55,7 @@ export interface WorkerApiClientLike {
   unarchiveConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
   renameConversation(deviceId: string, conversationId: string, input: RenameConversationInput): Promise<OpenConversationResult>;
   startConversation(deviceId: string, input: StartConversationInput): Promise<CommandAccepted>;
+  startReview(deviceId: string, conversationId: string, input: StartReviewInput): Promise<CommandAccepted>;
   followUpConversation(deviceId: string, conversationId: string, input: FollowUpInput): Promise<CommandAccepted>;
   listQueuedMessages(deviceId: string, conversationId: string): Promise<ConversationQueuedMessage[]>;
   queueConversationMessage(deviceId: string, conversationId: string, input: QueueConversationMessageInput): Promise<ConversationQueuedMessage>;
@@ -186,6 +188,16 @@ export class WorkerApiClient implements WorkerApiClientLike {
       method: "POST",
     });
     return response;
+  }
+
+  public async startReview(deviceId: string, conversationId: string, input: StartReviewInput): Promise<CommandAccepted> {
+    return this.request<CommandAccepted>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/conversations/${encodeURIComponent(conversationId)}/local-actions/review-start`,
+      {
+        body: input,
+        method: "POST",
+      },
+    );
   }
 
   public async openConversation(deviceId: string, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult> {

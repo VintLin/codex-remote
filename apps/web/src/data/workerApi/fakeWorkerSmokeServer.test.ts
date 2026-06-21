@@ -206,6 +206,35 @@ test("fake Worker smoke server when approval is decided, should remove pending a
   }
 });
 
+test("fake Worker smoke server when review-start is accepted, should return command accepted without output", async () => {
+  const { baseUrl, close } = await startFakeServer();
+  try {
+    const response = await fetch(`${baseUrl}/v1/conversations/smoke-thread-1/local-actions/review-start`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: "smoke-project",
+        expectedConversationId: "smoke-thread-1",
+        clientRequestId: "client-review-1",
+        confirmationText: "START REVIEW",
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    const accepted = (await response.json()) as CommandAccepted;
+    assert.equal(accepted.id, "review-start:smoke-thread-1:client-review-1");
+    assert.equal(accepted.conversationId, "smoke-thread-1");
+    assert.equal(accepted.status, "accepted");
+    assert.equal(accepted.turnId, null);
+    assert.doesNotMatch(JSON.stringify(accepted), /command output|full diff|review\/start|127\.0\.0\.1|example-token/i);
+  } finally {
+    await close();
+  }
+});
+
 test("fake Worker smoke server when write body violates contract, should reject invalid request", async () => {
   const { baseUrl, close } = await startFakeServer();
   try {
@@ -273,6 +302,46 @@ test("fake Worker smoke server when write body violates contract, should reject 
         rawJsonRpc: "{}",
       }),
     });
+    const reviewExtraResponse = await fetch(`${baseUrl}/v1/conversations/smoke-thread-1/local-actions/review-start`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: "smoke-project",
+        expectedConversationId: "smoke-thread-1",
+        clientRequestId: "client-review-extra",
+        confirmationText: "START REVIEW",
+        target: { type: "baseBranch", baseBranch: "main" },
+      }),
+    });
+    const reviewConflictResponse = await fetch(`${baseUrl}/v1/conversations/smoke-thread-1/local-actions/review-start`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: "smoke-project",
+        expectedConversationId: "other-thread",
+        clientRequestId: "client-review-conflict",
+        confirmationText: "START REVIEW",
+      }),
+    });
+    const reviewConfirmationResponse = await fetch(`${baseUrl}/v1/conversations/smoke-thread-1/local-actions/review-start`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: "smoke-project",
+        expectedConversationId: "smoke-thread-1",
+        clientRequestId: "client-review-confirm",
+        confirmationText: "review",
+      }),
+    });
 
     assert.equal(followUpExtraResponse.status, 400);
     assert.equal(((await followUpExtraResponse.json()) as ErrorEnvelope).code, "invalid_request");
@@ -284,6 +353,12 @@ test("fake Worker smoke server when write body violates contract, should reject 
     assert.equal(((await steerConflictResponse.json()) as ErrorEnvelope).code, "conflict");
     assert.equal(decisionExtraResponse.status, 400);
     assert.equal(((await decisionExtraResponse.json()) as ErrorEnvelope).code, "invalid_request");
+    assert.equal(reviewExtraResponse.status, 400);
+    assert.equal(((await reviewExtraResponse.json()) as ErrorEnvelope).code, "invalid_request");
+    assert.equal(reviewConflictResponse.status, 409);
+    assert.equal(((await reviewConflictResponse.json()) as ErrorEnvelope).code, "conflict");
+    assert.equal(reviewConfirmationResponse.status, 400);
+    assert.equal(((await reviewConfirmationResponse.json()) as ErrorEnvelope).code, "invalid_request");
   } finally {
     await close();
   }

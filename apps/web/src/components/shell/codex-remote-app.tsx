@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
-import { WorkerApiClient } from "../../data/workerApi/client";
+import { WorkerApiClient, WorkerApiRequestError } from "../../data/workerApi/client";
 import type { BoardTask, ConversationQueuedMessage, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
@@ -68,6 +68,8 @@ export function CodexRemoteApp() {
   const [startStatus, setStartStatus] = useState<StartConversationSubmitStatus>("idle");
   const [controlStatus, setControlStatus] = useState<ControlSubmitStatus>("idle");
   const [taskStatus, setTaskStatus] = useState<"failed" | "idle" | "submitting">("idle");
+  const [reviewStartStatus, setReviewStartStatus] = useState<"accepted" | "failed" | "idle" | "submitting">("idle");
+  const [reviewStartError, setReviewStartError] = useState<string | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
@@ -97,6 +99,7 @@ export function CodexRemoteApp() {
   );
   const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(controlPlaneToken);
   const canStartConversation = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null;
+  const canStartReview = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null && conversation !== null;
   const activeTurnId = getActiveTurnId(assistantThread);
   const workerClient = useMemo(() => new WorkerApiClient({
     baseUrl: controlPlaneBaseUrl,
@@ -354,6 +357,31 @@ export function CodexRemoteApp() {
     }
   }, [localWorkbench.deviceId, localWorkbench.projectId, source.reason, workerClient]);
 
+  const submitReviewStart = useCallback(async (confirmationText: string) => {
+    if (!conversation || !selectedProject || source.reason !== "loaded" || !controlPlaneToken) {
+      setReviewStartStatus("failed");
+      setReviewStartError("Missing selected device, project, or conversation.");
+      return;
+    }
+
+    setReviewStartStatus("submitting");
+    setReviewStartError(null);
+    try {
+      await workerClient.startReview(conversation.deviceId, conversation.id, {
+        projectId: selectedProject.id,
+        expectedConversationId: conversation.id,
+        clientRequestId: crypto.randomUUID(),
+        confirmationText,
+      });
+      await refreshWorkbenchData(createConversationKey(conversation));
+      setReviewStartStatus("accepted");
+    } catch (error) {
+      setReviewStartStatus("failed");
+      setReviewStartError(error instanceof WorkerApiRequestError ? error.envelope.message : "Worker request failed.");
+      await refreshWorkbenchData(createConversationKey(conversation));
+    }
+  }, [conversation, refreshWorkbenchData, selectedProject, source.reason, workerClient]);
+
   const openConversation = useCallback(async (conversationKey: string) => {
     const targetConversation = findConversationByKey(conversations, conversationKey);
     if (!targetConversation || source.reason !== "loaded" || !controlPlaneToken) {
@@ -537,11 +565,18 @@ export function CodexRemoteApp() {
     setStartStatus("idle");
     setControlStatus("idle");
     setTaskStatus("idle");
+    setReviewStartStatus("idle");
+    setReviewStartError(null);
   }, [selectedConversationKey]);
 
   useEffect(() => {
     setStartStatus("idle");
   }, [selectedDeviceId, selectedProject?.id]);
+
+  useEffect(() => {
+    setReviewStartStatus("idle");
+    setReviewStartError(null);
+  }, [selectedConversationKey, selectedDeviceId, selectedProject?.id]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -692,6 +727,7 @@ export function CodexRemoteApp() {
         ),
         main: (
           <LocalWorkbenchPage
+            canStartReview={canStartReview}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -699,7 +735,10 @@ export function CodexRemoteApp() {
             onBack={() => setMobilePane("sidebar")}
             onExpandDetail={() => setIsDetailCollapsed(false)}
             onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onSubmitReviewStart={submitReviewStart}
             onSearchLocalFiles={searchLocalFiles}
+            reviewStartError={reviewStartError}
+            reviewStartStatus={reviewStartStatus}
             source={source}
           />
         ),

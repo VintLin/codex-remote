@@ -1,171 +1,91 @@
-# Task 4 Report: Minimal Start Conversation UI
+# Task 4 Report: Stage 13 Web API And Minimal UI
 
 ## 结果
 
-- 新增 `startConversationSubmitController.ts`，Web 通过 Control Plane-shaped `WorkerApiClient.startConversation` 提交新对话。
-- 新增 controller TDD 测试，覆盖 accepted 路径、opaque `local-project`、`clientRequestId`、状态顺序和刷新到 `deviceId\u001fconversationId`。
-- `CodexRemoteApp` 从 `WorkbenchData.projects` 选择 `selectedProject`，只在 `source.reason === "loaded"`、有 token、且有 project 时启用 start UI。
-- `ConversationMain` 增加最小 start form，复用现有 `conversation-control-strip/row` 样式；draft 只在 accepted 后清空。
-- 更新 write flow source test，确认 start conversation 已 wired，且 shell 使用 `selectedProject`。
+- `WorkerApiClient` 新增 `startReview(deviceId, conversationId, input)`，只调用 Control Plane-shaped `POST /v1/devices/{deviceId}/conversations/{conversationId}/local-actions/review-start`。
+- request body 使用 public contract `StartReviewInput`：`projectId`、`expectedConversationId`、`clientRequestId`、`confirmationText`。
+- fake Worker smoke server 新增 `/v1/conversations/{conversationId}/local-actions/review-start`，接受 fixed confirmation，并拒绝 unknown fields、conversation guard mismatch、project mismatch、bad confirmation。
+- Local Tools 的 Git/Review section 新增最小 review-start UI：确认文本、按钮、pending disabled、accepted 状态、sanitized error message。
+- Web 成功或失败后都会 refresh 当前 selected conversation key 的 workbench data，成功后显示 accepted。
+- Web source-boundary tests 覆盖不导入 `@codex-remote/codex-protocol`，不暴露 `ReviewTarget`、`baseBranch`、`thread/shellCommand`、`command/exec`、`shellCommand` 等第一切片禁用能力。
 
 ## TDD 记录
 
 ### RED
 
-先创建 `apps/web/src/components/shell/startConversationSubmitController.test.ts`。
-
-首次运行：
+先写失败测试：
 
 ```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit"
+pnpm --filter @codex-remote/web test -- src/data/workerApi/client.test.ts src/data/workerApi/fakeWorkerSmokeServer.test.ts src/components/shell/codexRemoteAppWriteFlow.test.ts src/components/shell/localWorkbenchBoundary.test.ts
 ```
 
-结果按预期失败：`ERR_MODULE_NOT_FOUND`，缺少 `startConversationSubmitController.ts`。
+首次有效 RED 结果：exit code 1，31 pass / 6 fail。
+
+失败点符合预期：
+
+- `client.startReview is not a function`
+- fake Worker review-start route 返回 404
+- UI/source tests 缺少 `reviewStartStatus`、`confirmationText`、`StartReviewInput`、disabled guard 等 wiring
 
 ### GREEN
 
-实现最小 controller：
+实现最小代码后 focused tests 通过：
 
-- trim message。
-- 缺 `deviceId`、`projectId` 或空 message 时 fail closed。
-- 成功时设置 `submitting -> accepted`，调用 `startConversation(deviceId, { projectId, message, clientRequestId })`。
-- 成功后刷新 `${deviceId}\u001f${conversationId}`。
-- catch 中只设置 `failed`，不外抛 raw error。
+```bash
+pnpm --filter @codex-remote/web test -- src/data/workerApi/client.test.ts src/data/workerApi/fakeWorkerSmokeServer.test.ts src/components/shell/codexRemoteAppWriteFlow.test.ts src/components/shell/localWorkbenchBoundary.test.ts
+```
 
-之后 focused test 通过。
+结果：exit code 0，37 tests pass。
 
 ## 关键决策
 
 ### 1. 结论
 
-public project id 只从 `WorkbenchData.projects` 获取。
+Web 只新增 `startReview` public-client 方法，不创建 shell/command/exec 泛化入口。
 
 ### 原因
 
-Stage 9 要求 public project id 是 opaque id，示例/测试使用 `local-project`，不能用 repo basename 或路径推导。
+Stage 13 first slice 只允许 fixed-target review start；泛化 action API 会把 deferred shell-like 能力提前带进 Web。
 
 ### 风险
 
-当前只有最小选择策略：当前设备的第一个 project，否则第一个 project。复杂项目选择器不在 Task 4 范围。
+当前 UI 只支持 `START REVIEW` 固定确认文本；后续如 Worker confirmation 文案变化，需要同步 public contract/Worker/Web。
 
 ### 下一步
 
-后续如果需要多项目选择，再在 Web datasource/project UI 层增加明确选择，不在 start controller 内推导。
+后续能力继续从 `packages/api-contract/openapi.yaml` 开始，不在 Web 平行定义 DTO。
 
 ### 2. 结论
 
-start UI 与 follow-up/control 分离为独立 controller 和独立状态。
+Local Tools Git/Review card 内直接承载最小 action UI。
 
 ### 原因
 
-start conversation 没有 existing conversation id，和 follow-up/steer/interrupt 的 guard 不同；独立状态避免复用 follow-up 状态导致 UI 误清空或误禁用。
+brief 要求最小 UI，现有 Git/Review section 已是本地工作工具上下文；新增 feature 目录或复杂 controller 会超出切片。
 
 ### 风险
 
-当前 UI 只显示简洁状态字符串，没有 toast 或错误详情。
+当前 source tests 验证 wiring 和 boundary，不等同真实浏览器交互测试。
 
 ### 下一步
 
-如需产品化错误提示，只展示 sanitized short status，不引入 raw prompt、token、URL、stack/cause 或 private path。
-
-### 3. 结论
-
-未新增 CSS。
-
-### 原因
-
-现有 `conversation-control-strip` 和 `conversation-control-row` 已满足紧凑控制行需求。
-
-### 风险
-
-start form 与 control strip 视觉相近，后续可根据真实使用频率再调整信息层次。
-
-### 下一步
-
-等 real browser smoke 或用户反馈证明需要时，再做小范围 UI polish。
+如果后续要求 Chrome smoke，再用 fake Worker/Control Plane 验证 disabled、accepted、failed 状态。
 
 ## 范围外
 
-- 未做 `real:check`。
-- 未做 runtime scripts。
-- 未改 Worker protocol。
-- 未做 streaming。
-- 未做 project picker、大 redesign 或浏览器 smoke。
+- 未实现 `shell-command`、`thread/shellCommand`、`command/exec`、terminal stream。
+- 未实现 base branch、commit、custom review target。
+- 未改 Worker、Control Plane、OpenAPI contract、DB 或 protocol package。
+- 未做 browser smoke。
 
 ## 验证
 
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit"`：先失败，确认为缺 controller。
-- `pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit|startConversation|write flow"`：exit code 0，18 tests pass。
-- `pnpm --filter @codex-remote/web test`：exit code 0，96 tests pass。
+- `pnpm --filter @codex-remote/web test -- src/data/workerApi/client.test.ts src/data/workerApi/fakeWorkerSmokeServer.test.ts src/components/shell/codexRemoteAppWriteFlow.test.ts src/components/shell/localWorkbenchBoundary.test.ts`：RED exit code 1，31 pass / 6 fail；GREEN exit code 0，37 tests pass。
+- `pnpm --filter @codex-remote/web test`：exit code 0，125 tests pass。
 - `pnpm --filter @codex-remote/web typecheck`：exit code 0。
+- `pnpm --filter @codex-remote/web lint`：exit code 0；当前脚本执行 `tsc --noEmit --pretty false`。
 
 ## Concerns
 
-- 未 push，符合用户要求。
-- 工作树存在其他人的文档改动；提交时只 stage Task 4 指定文件和本报告。
-
-## Review Fix: Device-scoped Start Guard
-
-### Scope
-
-- 只修 Important findings 和 cheap minor status reset。
-- 未改 Worker、contract、UI redesign 或无关文档。
-- 未回滚既有工作树文档改动。
-
-### RED
-
-新增 controller 负路径测试：
-
-- 缺 `deviceId`：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
-- 缺 `projectId`：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
-- trim 后空 message：返回 `failed`，只设置 `status:failed`，不调用 Worker，不 refresh。
-- Worker reject：返回 `failed`，状态顺序 `submitting -> failed`，不暴露 raw error。
-
-新增 write-flow source guard：
-
-- `selectedProject` 必须只来自 `selectedDeviceId` 对应 project，不允许 fallback 到 `projects[0]`。
-- 没有 selected-device project 时，`submitStart` 必须传 `null` device/project 让 controller fail closed。
-- selected device/project 变化时重置 `startStatus`。
-
-首次有效 RED：
-
-```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit|startConversation|write flow"
-```
-
-结果：exit code 1，2 tests failed：
-
-- `write flow: when selected device has no project, should not fall back to another device project`
-- `write flow: when selected device or project changes, should reset start status`
-
-### GREEN
-
-实现：
-
-- `selectedProject = projects.find((project) => project.deviceId === selectedDeviceId) ?? null`
-- `submitStart.deviceId = selectedProject?.deviceId ?? null`
-- 新增 `[selectedDeviceId, selectedProject?.id]` effect，将 `startStatus` 重置为 `idle`
-
-Focused GREEN：
-
-```bash
-pnpm --filter @codex-remote/web test -- --test-name-pattern "start conversation submit|startConversation|write flow"
-```
-
-结果：exit code 0，23 tests pass。
-
-Final verification：
-
-```bash
-pnpm --filter @codex-remote/web test
-pnpm --filter @codex-remote/web typecheck
-```
-
-结果：
-
-- `pnpm --filter @codex-remote/web test`：exit code 0，102 tests pass。
-- `pnpm --filter @codex-remote/web typecheck`：exit code 0。
-
-### Commit
-
-- `fix: keep start conversation device scoped`
+- 未运行全仓 `pnpm test` / `pnpm build`；brief 明确要求 Web package test，本切片额外跑了 Web typecheck/lint。
+- 未做 Chrome/browser smoke。

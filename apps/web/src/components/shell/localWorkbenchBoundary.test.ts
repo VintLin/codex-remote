@@ -19,6 +19,29 @@ test("local workbench Web source when rendered should stay on public API boundar
   assert.deepEqual(offenders, []);
 });
 
+test("review-start Web source when rendered should stay on public contract and avoid raw protocol actions", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const clientSource = readWebSource("data/workerApi/client.ts");
+  const combined = `${shellSource}\n${mainPanelsSource}\n${clientSource}`;
+  const forbiddenMarkers = [
+    "@codex-remote/codex-protocol",
+    "ReviewTarget",
+    "baseBranch",
+    "commitReview",
+    "customInstructions",
+    "thread/shellCommand",
+    "command/exec",
+    "shellCommand",
+  ];
+  const offenders = forbiddenMarkers.filter((marker) => combined.includes(marker));
+
+  assert.deepEqual(offenders, []);
+  assert.match(clientSource, /StartReviewInput/);
+  assert.match(clientSource, /local-actions\/review-start/);
+  assert.doesNotMatch(mainPanelsSource, /review\/start/);
+});
+
 test("local workbench Web source when rendered should not reference raw leak marker fields", () => {
   const forbiddenMarkers = [
     "absolutePath",
@@ -76,7 +99,6 @@ test("local workbench UI source should expose compact read-only local tools with
   ];
   const missing = expectedUiMarkers.filter((marker) => !`${sidebarSource}\n${mainPanelsSource}\n${shellSource}`.includes(marker));
   const unsupportedActionMarkers = [
-    "review/start",
     "mcpServer/tool/call",
     "plugin install",
     "shell command",

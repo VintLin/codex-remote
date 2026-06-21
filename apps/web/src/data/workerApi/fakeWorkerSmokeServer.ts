@@ -13,6 +13,7 @@ import type {
   InterruptTurnInput,
   PendingApproval,
   StartConversationInput,
+  StartReviewInput,
   SteerTurnInput,
   WorkerCapabilities,
   WorkerHealth,
@@ -31,6 +32,7 @@ const defaultProjectName = "stage3-smoke";
 const allowedOrigin = "http://127.0.0.1:5173";
 const clientRequestIdMaxLength = 128;
 const messageMaxLength = 20_000;
+const localReviewConfirmationText = "START REVIEW";
 
 export interface FakeWorkerSmokeServerOptions {
   conversationIds?: {
@@ -109,6 +111,7 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
           return commandSequence;
         },
         path,
+        projectId: seed.projectId,
         request,
         response,
       });
@@ -271,6 +274,7 @@ async function handleWriteRequest(params: {
   timelines: Record<string, ConversationTimeline>;
   nextSequence: () => number;
   path: string;
+  projectId: string;
   request: IncomingMessage;
   response: ServerResponse;
 }): Promise<void> {
@@ -305,6 +309,12 @@ async function handleWriteRequest(params: {
     params.conversations.unshift(conversation);
     params.timelines[conversationId] = createStartedTimeline(params.deviceId, conversationId, input.projectId, turnId, acceptedAt);
     writeJson(params.response, 202, createAcceptedCommand("start", conversationId, input.clientRequestId, turnId, acceptedAt));
+    return;
+  }
+
+  const reviewStartConversationId = params.path.match(/^\/v1\/conversations\/([^/]+)\/local-actions\/review-start$/)?.[1];
+  if (reviewStartConversationId) {
+    await handleReviewStartRequest({ ...params, conversationId: reviewStartConversationId });
     return;
   }
 
@@ -380,6 +390,52 @@ async function handleWriteRequest(params: {
   conversation.updatedAt = acceptedAt;
   conversation.summary = "Accepted fake Worker follow-up";
   writeJson(params.response, 202, createAcceptedCommand("follow-up", followUpConversationId, input.clientRequestId, turnId, acceptedAt));
+}
+
+async function handleReviewStartRequest(params: {
+  conversationId: string;
+  conversations: CodexConversation[];
+  nextSequence: () => number;
+  projectId: string;
+  request: IncomingMessage;
+  response: ServerResponse;
+  timelines: Record<string, ConversationTimeline>;
+}): Promise<void> {
+  const input = await readStartReviewInput(params.request);
+  const conversation = params.conversations.find((item) => item.id === params.conversationId);
+  const timeline = params.timelines[params.conversationId];
+  if (!input) {
+    writeError(params.response, 400, "invalid_request", "Request validation failed.");
+    return;
+  }
+
+  if (!conversation || !timeline) {
+    writeError(params.response, 404, "conversation_not_found", "Conversation was not found.");
+    return;
+  }
+
+  if (input.expectedConversationId !== params.conversationId) {
+    writeError(params.response, 409, "conflict", "Conversation guard did not match.");
+    return;
+  }
+
+  if (input.projectId !== params.projectId || input.projectId !== conversation.projectId) {
+    writeError(params.response, 403, "project_forbidden", "Requested project is outside the allowed root.");
+    return;
+  }
+
+  if (input.confirmationText !== localReviewConfirmationText) {
+    writeError(params.response, 400, "invalid_request", "Request validation failed.");
+    return;
+  }
+
+  const sequence = params.nextSequence();
+  const acceptedAt = createAcceptedAt(sequence);
+  timeline.readCompletedAt = acceptedAt;
+  timeline.snapshotRevision = `${params.conversationId}:${acceptedAt}`;
+  conversation.updatedAt = acceptedAt;
+  conversation.summary = "Accepted fake Worker review start";
+  writeJson(params.response, 202, createAcceptedCommand("review-start", params.conversationId, input.clientRequestId, null, acceptedAt));
 }
 
 async function handleInterruptRequest(params: {
@@ -541,10 +597,10 @@ function createStartedTimeline(
 }
 
 function createAcceptedCommand(
-  operation: "approval-accept" | "approval-cancel" | "approval-decline" | "follow-up" | "interrupt" | "start" | "steer",
+  operation: "approval-accept" | "approval-cancel" | "approval-decline" | "follow-up" | "interrupt" | "review-start" | "start" | "steer",
   conversationId: string,
   clientRequestId: string,
-  turnId: string,
+  turnId: string | null,
   acceptedAt: string,
 ): CommandAccepted {
   return {
@@ -574,6 +630,23 @@ async function readStartInput(request: IncomingMessage): Promise<StartConversati
   }
 
   return { projectId, message, clientRequestId };
+}
+
+async function readStartReviewInput(request: IncomingMessage): Promise<StartReviewInput | null> {
+  const body = await readJsonObject(request);
+  if (!body || hasUnknownFields(body, ["projectId", "expectedConversationId", "clientRequestId", "confirmationText"])) {
+    return null;
+  }
+
+  const projectId = readRequiredStringField(body, "projectId");
+  const expectedConversationId = readRequiredStringField(body, "expectedConversationId");
+  const clientRequestId = readRequiredStringField(body, "clientRequestId", clientRequestIdMaxLength);
+  const confirmationText = readRequiredStringField(body, "confirmationText", 200);
+  if (projectId === null || expectedConversationId === null || clientRequestId === null || confirmationText === null) {
+    return null;
+  }
+
+  return { projectId, expectedConversationId, clientRequestId, confirmationText };
 }
 
 async function readFollowUpInput(request: IncomingMessage): Promise<FollowUpInput | null> {

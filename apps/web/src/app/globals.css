@@ -314,6 +314,33 @@ body {
   padding: 6px 8px;
 }
 
+.local-review-action {
+  display: grid;
+  gap: 6px;
+  border-top: var(--cr-stroke);
+  padding-top: 8px;
+}
+
+.local-review-action label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  letter-spacing: 0;
+}
+
+.local-review-action input {
+  min-width: 0;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-bg);
+  color: var(--cr-ink);
+  font: inherit;
+  letter-spacing: 0;
+  padding: 6px 8px;
+}
+
 .local-workbench-search button {
   min-height: 30px;
   border: var(--cr-stroke);
@@ -324,6 +351,29 @@ body {
   font-weight: var(--cr-weight-emphasis);
   letter-spacing: 0;
   padding: 0 10px;
+}
+
+.local-review-action button {
+  min-height: 30px;
+  justify-self: start;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+  color: var(--cr-ink);
+  font-size: var(--cr-text-compact);
+  font-weight: var(--cr-weight-emphasis);
+  letter-spacing: 0;
+  padding: 0 10px;
+}
+
+.local-review-action-status {
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  letter-spacing: 0;
+}
+
+.local-review-action-status[data-state="failed"] {
+  color: var(--cr-danger);
 }
 
 .local-workbench-extension-group {

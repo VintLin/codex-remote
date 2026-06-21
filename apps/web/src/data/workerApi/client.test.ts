@@ -188,6 +188,52 @@ test("WorkerApiClient control methods when called, should use versioned control 
   assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
 });
 
+test("WorkerApiClient review-start when called, should POST confirmation body to device conversation local action route", async () => {
+  const accepted: CommandAccepted = {
+    id: "review-start:thread-1:client-review-1",
+    status: "accepted",
+    conversationId: "thread-1",
+    turnId: null,
+    acceptedAt: "2026-06-22T00:00:00.000Z",
+  };
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(accepted), {
+      headers: { "content-type": "application/json" },
+      status: 202,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  const response = await client.startReview("device-a", "thread-1", {
+    projectId: "project-a",
+    expectedConversationId: "thread-1",
+    clientRequestId: "client-review-1",
+    confirmationText: "START REVIEW",
+  });
+
+  assert.deepEqual(response, accepted);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.url, "http://127.0.0.1:8787/v1/devices/device-a/conversations/thread-1/local-actions/review-start");
+  assert.equal(requests[0]?.init.method, "POST");
+  assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+  assert.equal((requests[0]?.init.headers as Headers).get("content-type"), "application/json");
+  assert.equal(
+    requests[0]?.init.body,
+    JSON.stringify({
+      projectId: "project-a",
+      expectedConversationId: "thread-1",
+      clientRequestId: "client-review-1",
+      confirmationText: "START REVIEW",
+    }),
+  );
+});
+
 test("WorkerApiClient task methods when called, should use task board routes", async () => {
   const task: BoardTask = {
     id: "task-1",

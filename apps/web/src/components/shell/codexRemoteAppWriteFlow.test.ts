@@ -20,6 +20,37 @@ test("codex remote app when follow-up submit is wired, should call Worker API an
   assert.match(shellSource, /selectedProject/);
 });
 
+test("codex remote app when review-start is wired, should call local action API and refresh selected conversation", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+
+  assert.match(shellSource, /reviewStartStatus/);
+  assert.match(shellSource, /reviewStartError/);
+  assert.match(shellSource, /startReview\(/);
+  assert.match(shellSource, /confirmationText/);
+  assert.match(shellSource, /expectedConversationId: conversation\.id/);
+  assert.match(shellSource, /projectId: selectedProject\.id/);
+  assert.match(shellSource, /await refreshWorkbenchData\(createConversationKey\(conversation\)\)/);
+  assert.match(mainPanelsSource, /aria-label="Review confirmation text"/);
+  assert.match(mainPanelsSource, /START REVIEW/);
+  assert.match(mainPanelsSource, /Start review/);
+  assert.match(mainPanelsSource, /reviewStartStatus === "submitting"/);
+  assert.match(mainPanelsSource, /disabled=\{!canStartReview \|\| reviewConfirmation !== "START REVIEW"/);
+  assert.match(mainPanelsSource, /Review request accepted/);
+  assert.match(mainPanelsSource, /reviewStartError/);
+});
+
+test("codex remote app when review-start prerequisites are missing, should keep action disabled", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+
+  assert.match(shellSource, /const canStartReview = source\.reason === "loaded" && Boolean\(controlPlaneToken\) && selectedProject !== null && conversation !== null;/);
+  assert.match(shellSource, /setReviewStartStatus\("idle"\);/);
+  assert.match(shellSource, /\}, \[selectedConversationKey, selectedDeviceId, selectedProject\?\.id\]\);/);
+  assert.match(mainPanelsSource, /canStartReview/);
+  assert.match(mainPanelsSource, /reviewConfirmation !== "START REVIEW"/);
+});
+
 test("write flow: when selected device has no project, should not fall back to another device project", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
 
