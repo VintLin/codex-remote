@@ -572,8 +572,16 @@ function getRequiredQuery(c: Context<ControlPlaneHonoEnv>, field: string): strin
 }
 
 function parsePositiveIntegerQuery(value: string, field: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    throw new ControlPlaneHttpError(400, "invalid_request", "Request body was invalid.", {
+      field,
+      operation: "request/validate",
+      retryable: false,
+    });
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed > 100) {
     throw new ControlPlaneHttpError(400, "invalid_request", "Request body was invalid.", {
       field,
       operation: "request/validate",

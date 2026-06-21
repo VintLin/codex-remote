@@ -700,6 +700,19 @@ test("control plane http app when local workbench routes use an unknown device o
   assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|project-a/);
 });
 
+test("control plane http app when local workbench search limit is invalid, should reject before worker call", async () => {
+  for (const limit of ["101", "1abc"]) {
+    const client = new FakeWorkerClient();
+    const app = createApp(client);
+
+    const response = await request(app, `/v1/devices/device-a/projects/project-a/local-workbench/search?query=needle&limit=${limit}`);
+
+    assert.equal(response.status, 400);
+    assert.equal((await response.json() as { code: string }).code, "invalid_request");
+    assert.deepEqual(client.calls, []);
+  }
+});
+
 function nowFixed(): string {
   return "2026-06-20T00:00:00.000Z";
 }
