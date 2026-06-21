@@ -199,8 +199,16 @@ const stage12ExtensionInventoryAllowedTopLevelProperties = [
   "marketplaceEntries",
   "apps",
 ] as const;
+const stage12ExtensionInventoryAllowedNestedItemProperties = [
+  ["skills", ["name", "enabled", "description", "status"]],
+  ["hooks", ["name", "enabled", "description", "event"]],
+  ["plugins", ["id", "name", "enabled", "description", "skillCount", "appCount", "mcpServerCount"]],
+  ["marketplaceEntries", ["name", "installStatus", "description"]],
+  ["apps", ["id", "name", "enabled", "description"]],
+] as const;
 const stage12ExtensionInventoryForbiddenNestedFields = [
   "absolutePath",
+  "path",
   "sourcePath",
   "marketplacePath",
   "command",
@@ -319,8 +327,13 @@ function expectSchemaDisallowsAdditionalProperties(source: string, schemaName: s
 }
 
 function extractPropertyNames(schemaBlockLines: string[]): string[] {
+  return extractPropertyNamesAtIndent(schemaBlockLines, 8);
+}
+
+function extractPropertyNamesAtIndent(schemaBlockLines: string[], indent: number): string[] {
+  const propertyLinePattern = new RegExp(`^${" ".repeat(indent)}([A-Za-z0-9_-]+):\\s*$`);
   return schemaBlockLines.flatMap((line) => {
-    const propertyMatch = line.match(/^        ([A-Za-z0-9_-]+):\s*$/);
+    const propertyMatch = line.match(propertyLinePattern);
     return propertyMatch ? [expectCapturedGroup(propertyMatch, "property name should exist")] : [];
   });
 }
@@ -996,6 +1009,22 @@ test("when extension inventory schemas are maintained, public fields should stay
   const propertyNames = extractPropertyNames(extensionInventoryBlock);
 
   assert.deepEqual(new Set(propertyNames), new Set(stage12ExtensionInventoryAllowedTopLevelProperties));
+
+  for (const [nestedPropertyName, expectedPropertyNames] of stage12ExtensionInventoryAllowedNestedItemProperties) {
+    const nestedPropertyBlock = extractPropertyBlock(extensionInventoryBlock, nestedPropertyName);
+    assert.equal(nestedPropertyBlock.length > 0, true, `${nestedPropertyName} should exist`);
+
+    const nestedItemPropertiesBlock = extractBlockLines(nestedPropertyBlock.join("\n"), /^            properties:\s*$/);
+    assert.equal(nestedItemPropertiesBlock.length > 0, true, `${nestedPropertyName} item properties should exist`);
+    assert.deepEqual(
+      new Set(extractPropertyNamesAtIndent(nestedItemPropertiesBlock, 14)),
+      new Set(expectedPropertyNames),
+    );
+
+    for (const forbiddenField of stage12ExtensionInventoryForbiddenNestedFields) {
+      assert.doesNotMatch(nestedItemPropertiesBlock.join("\n"), new RegExp(`\\b${escapeRegExp(forbiddenField)}\\b`));
+    }
+  }
 
   for (const forbiddenField of stage12ExtensionInventoryForbiddenNestedFields) {
     assert.doesNotMatch(extensionInventoryBlock.join("\n"), new RegExp(`\\b${escapeRegExp(forbiddenField)}\\b`));
