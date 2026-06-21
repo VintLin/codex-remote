@@ -165,10 +165,16 @@ Stage 13 non-goals：
 
 ## Active Stage 14
 
+Active docs:
+
+- `docs/superpowers/specs/2026-06-22-runtime-settings-parity-design.md`
+- `docs/superpowers/plans/2026-06-22-runtime-settings-parity.md`
+
 Stage 14 下一步方向：
 
-- Runtime And Settings Parity：model/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、richer skills/plugins/MCP/apps management。
-- Stage 14 开始前先创建/更新 spec 与 plan，并按惯例执行架构 subagent 审核。
+- Runtime And Settings Parity：先做 project-scoped read-only runtime/settings summary，覆盖 model catalog、provider capability、sanitized account/auth、config posture、permission profiles、experimental features。
+- 架构审核已完成并收窄：runtime/settings route 必须同时带 `deviceId` + `projectId`，`config/read` 与 `permissionProfile/list` 的 `cwd` 只能由 Worker 验证后的 project root 派生；no-leak 验证必须包含 fake Worker smoke server 和 serialized response-body value scans。
+- 下一步执行 Stage 14 implementation slices；仍禁止 model switch、config write、login/logout、token refresh、usage/rate/credits、MCP OAuth、experimental enablement。
 
 ## Stage 11+ Draft Roadmap
 
@@ -219,4 +225,4 @@ Stage 14 下一步方向：
 
 ## 下一步
 
-下一步执行 Stage 14 spec/plan：围绕 runtime/settings parity 明确 model/profile、sanitized account/read、device platform/sandbox/auth projection、config read-only、skills/plugins/MCP/apps 管理范围，并在计划后执行架构 subagent 审核。
+下一步执行 Stage 14 implementation slices：先改 OpenAPI public contract，再实现 Worker projection、Control Plane route、Web Settings read-only panel，最后跑 focused/full/real/browser verification。
