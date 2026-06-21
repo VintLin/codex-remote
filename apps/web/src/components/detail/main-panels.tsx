@@ -88,6 +88,17 @@ interface TaskBoardPageProps {
   tasks: BoardTask[];
 }
 
+interface SettingsPageProps {
+  conversations: CodexConversation[];
+  isDetailCollapsed: boolean;
+  isMobile?: boolean;
+  isSidebarCollapsed: boolean;
+  onBack?: () => void;
+  onExpandDetail: () => void;
+  onExpandSidebar: () => void;
+  onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
+}
+
 interface SearchDialogProps {
   onClose: () => void;
   onSelectConversation: (conversationKey: string) => void;
@@ -246,28 +257,79 @@ export function ConversationMain({
             <span>当前显示示例数据 · {datasourceStatus.join(" · ")}</span>
           </section>
         ) : null}
-        <StartConversationStrip
-          canStart={canStartConversation}
-          onSubmitStart={onSubmitStart}
-          startStatus={startStatus}
-        />
-        <ConversationControlStrip
-          activeTurnId={activeTurnId}
-          canControl={canSubmitFollowUp}
-          controlStatus={controlStatus}
-          onSubmitApprovalDecision={onSubmitApprovalDecision}
-          onSubmitInterrupt={onSubmitInterrupt}
-          onSubmitSteer={onSubmitSteer}
-          approvalCards={approvalCards}
-          pendingApprovals={pendingApprovals}
-        />
         <CodexAssistantThread
+          activeTurnId={activeTurnId}
+          approvalCards={approvalCards}
+          canStartConversation={canStartConversation}
           canSubmitFollowUp={canSubmitFollowUp}
+          controlStatus={controlStatus}
           followUpStatus={followUpStatus}
           onOpenDetail={onOpenDetail}
+          onSubmitApprovalDecision={onSubmitApprovalDecision}
           onSubmitFollowUp={onSubmitFollowUp}
+          onSubmitInterrupt={onSubmitInterrupt}
+          onSubmitStart={onSubmitStart}
+          onSubmitSteer={onSubmitSteer}
+          startStatus={startStatus}
+          pendingApprovals={pendingApprovals}
           thread={assistantThread}
         />
+      </div>
+    </main>
+  );
+}
+
+export function SettingsPage({
+  conversations,
+  isDetailCollapsed,
+  isMobile = false,
+  isSidebarCollapsed,
+  onBack,
+  onExpandDetail,
+  onExpandSidebar,
+  onRestoreConversation,
+}: SettingsPageProps) {
+  const archivedConversations = conversations.filter((conversation) => conversation.archived === true);
+
+  return (
+    <main className="main-pane settings-page">
+      <header className="topbar">
+        <div className="topbar-leading">
+          {isMobile && onBack ? <HeaderBackButton label="返回导航" onClick={onBack} /> : null}
+          {!isMobile && isSidebarCollapsed ? (
+            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+          ) : null}
+          <div className="workspace-title">
+            <h1>设置</h1>
+          </div>
+        </div>
+        <div className="toolbar">
+          {!isMobile && isDetailCollapsed ? (
+            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+          ) : null}
+        </div>
+      </header>
+      <div className="content-scroll settings-content">
+        <section aria-label="已归档对话" className="settings-section">
+          <h2>已归档对话</h2>
+          {archivedConversations.length === 0 ? (
+            <p className="empty-state">暂无已归档对话</p>
+          ) : (
+            <div className="settings-list">
+              {archivedConversations.map((conversation) => (
+                <article className="settings-row" key={`${conversation.deviceId}:${conversation.id}`}>
+                  <span>
+                    <strong>{conversation.title}</strong>
+                    <span>{conversation.projectName} · {conversation.updatedAt}</span>
+                  </span>
+                  <button className="button secondary" onClick={() => void onRestoreConversation(conversation)} type="button">
+                    恢复
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
@@ -284,140 +346,6 @@ function ConversationStatusBadges(props: { conversation: CodexConversation | nul
       {props.conversation.live ? <span className="conversation-state-badge">Live</span> : null}
       {props.conversation.archived ? <span className="conversation-state-badge">Archived</span> : null}
     </span>
-  );
-}
-
-function StartConversationStrip({
-  canStart,
-  onSubmitStart,
-  startStatus,
-}: {
-  canStart: boolean;
-  onSubmitStart: (message: string) => Promise<"accepted" | "failed">;
-  startStatus: "accepted" | "failed" | "idle" | "submitting";
-}) {
-  const [draft, setDraft] = useState("");
-  const disabled = !canStart || startStatus === "submitting";
-
-  return (
-    <form
-      aria-label="Start conversation"
-      className="conversation-control-strip"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const message = draft.trim();
-        if (!message || disabled) {
-          return;
-        }
-        void (async () => {
-          if (await onSubmitStart(message) === "accepted") {
-            setDraft("");
-          }
-        })();
-      }}
-    >
-      <div className="conversation-control-row">
-        <input
-          aria-label="Start new conversation"
-          className="conversation-control-input"
-          disabled={disabled}
-          onChange={(event) => setDraft(event.target.value)}
-          value={draft}
-        />
-        <button className="button secondary conversation-control-button" disabled={disabled || !draft.trim()} type="submit">
-          Start
-        </button>
-        <span className="conversation-control-meta">{startStatus}</span>
-      </div>
-    </form>
-  );
-}
-
-function ConversationControlStrip({
-  activeTurnId,
-  canControl,
-  controlStatus,
-  onSubmitApprovalDecision,
-  onSubmitInterrupt,
-  onSubmitSteer,
-  approvalCards,
-  pendingApprovals,
-}: {
-  activeTurnId: string | null;
-  canControl: boolean;
-  controlStatus: "accepted" | "failed" | "idle" | "submitting";
-  onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
-  onSubmitInterrupt: () => Promise<void>;
-  onSubmitSteer: (message: string) => Promise<"accepted" | "failed">;
-  approvalCards: ConversationApprovalCard[];
-  pendingApprovals: PendingApproval[];
-}) {
-  const [steerDraft, setSteerDraft] = useState("");
-  const disabled = !canControl || !activeTurnId || controlStatus === "submitting";
-
-  return (
-    <section aria-label="Conversation control" className="conversation-control-strip">
-      <div className="conversation-control-row">
-        <span className="conversation-control-meta">
-          {activeTurnId ? `turn ${activeTurnId}` : "no active turn"} · {controlStatus}
-        </span>
-        <button className="button secondary conversation-control-button" disabled={disabled} onClick={onSubmitInterrupt} type="button">
-          Interrupt
-        </button>
-      </div>
-      <form
-        className="conversation-control-row"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const draft = steerDraft.trim();
-          if (!draft || disabled) {
-            return;
-          }
-          void (async () => {
-            if (await onSubmitSteer(draft) === "accepted") {
-              setSteerDraft("");
-            }
-          })();
-        }}
-      >
-        <input
-          aria-label="Steer active turn"
-          className="conversation-control-input"
-          disabled={disabled}
-          onChange={(event) => setSteerDraft(event.target.value)}
-          value={steerDraft}
-        />
-        <button className="button secondary conversation-control-button" disabled={disabled || !steerDraft.trim()} type="submit">
-          Steer
-        </button>
-      </form>
-      {pendingApprovals.map((approval) => (
-        <div className="conversation-control-row" key={approval.id}>
-          <span className="conversation-control-meta">
-            {approval.kind} · {approval.risk} · {approval.summary}
-          </span>
-          {(["accept", "decline", "cancel"] as const).map((decision) => (
-            <button
-              className="button secondary conversation-control-button"
-              disabled={!canControl || controlStatus === "submitting"}
-              key={decision}
-              onClick={() => void onSubmitApprovalDecision(approval, decision)}
-              type="button"
-            >
-              {decision}
-            </button>
-          ))}
-        </div>
-      ))}
-      {approvalCards.map((card) => (
-        <div className="conversation-approval-card" data-state={card.status} key={card.id}>
-          <span className="conversation-control-meta">
-            {card.status === "resolved" ? "resolved" : "pending"} · {card.risk} · {card.title}
-          </span>
-          <span className="conversation-approval-summary">{card.summary}</span>
-        </div>
-      ))}
-    </section>
   );
 }
 

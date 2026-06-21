@@ -128,15 +128,15 @@ Task 0 result:
 - Consumes public Control Plane-shaped APIs only.
 - Produces the app-like browser workbench.
 
-- [ ] Add failing tests proving selecting a conversation opens and displays its content without pressing a separate Start button.
-- [ ] Add failing tests proving start/follow-up share the composer.
-- [ ] Add failing tests proving running composer exposes interrupt plus steer-now/queue-later choice.
-- [ ] Add failing tests proving archived rows disappear from the normal sidebar and appear under Settings -> 已归档对话.
-- [ ] Add failing tests proving request cards render in the timeline/workbench flow.
-- [ ] Add failing tests proving assistant messages show copy, thumbs up, thumbs down, fork, hooks, and timestamp action row; only copy/timestamp are enabled unless public routes exist.
-- [ ] Add failing tests proving permission menu UI remains present but does not send unconfirmed approval/sandbox behavior.
-- [ ] Implement UI repair from the tests, preserving confirmed placeholders.
-- [ ] Run `pnpm --filter @codex-remote/web test`.
+- [x] Add failing tests proving selecting a conversation opens and displays its content without pressing a separate Start button.
+- [x] Add failing tests proving start/follow-up share the composer.
+- [x] Add failing tests proving running composer exposes interrupt plus steer-now/queue-later choice.
+- [x] Add failing tests proving archived rows disappear from the normal sidebar and appear under Settings -> 已归档对话.
+- [x] Add failing tests proving request cards render in the timeline/workbench flow.
+- [x] Add failing tests proving assistant messages show copy, thumbs up, thumbs down, fork, hooks, and timestamp action row; only copy/timestamp are enabled unless public routes exist.
+- [x] Add failing tests proving permission menu UI remains present but does not send unconfirmed approval/sandbox behavior.
+- [x] Implement UI repair from the tests, preserving confirmed placeholders.
+- [x] Run `pnpm --filter @codex-remote/web test`.
 
 ## Task 5: Protocol-Derived Permission Menu Spec Detail
 
@@ -174,7 +174,7 @@ pnpm --filter @codex-remote/control-plane test
 pnpm --filter @codex-remote/web test
 ```
 
-- [ ] Run full checks:
+- [x] Run full checks:
 
 ```bash
 pnpm product:check
@@ -184,7 +184,7 @@ pnpm test
 pnpm build
 ```
 
-- [ ] Run real stack checks:
+- [x] Run real stack checks:
 
 ```bash
 pnpm real:start
@@ -193,8 +193,8 @@ pnpm real:check
 pnpm web:e2e:smoke
 ```
 
-- [ ] Use Chrome to verify every Stage 11 feature, boundary state, degraded state, and no-sensitive-leak condition from the spec.
-- [ ] Update `PLAN.md`, `FEATURE_SUPPORT.md`, and `CODEX_APP_PARITY.md` with real results.
+- [x] Use Chrome to verify every Stage 11 feature, boundary state, degraded state, and no-sensitive-leak condition from the spec.
+- [x] Update `PLAN.md`, `FEATURE_SUPPORT.md`, and `CODEX_APP_PARITY.md` with real results.
 - [ ] Archive the completed spec/plan only after all automated and Chrome verification gates pass.
 
 ## Current Stage Status
@@ -207,8 +207,32 @@ pnpm web:e2e:smoke
   - Public tool node `kind` includes neutral/non-file variants so Web no longer maps unknown tools into file-change UI.
   - Worker projection now exposes safe user/assistant text and neutral tool/request summaries while redacting raw command, cwd, output, diff, MCP arguments/results, collab prompt, image path, raw reasoning, tokens, JSON-RPC, and app-server URLs.
   - Control Plane parser now validates/pass-through timeline nodes instead of dropping them.
-- Current dirty code changes still need UI repair for composer controls, archived Settings, message action row, and permission placeholders.
-- Stage 11 completion is blocked on UI repair, focused/full verification, real-stack checks, and Chrome verification.
+- Current dirty code changes have completed the first UI repair pass for composer controls, archived Settings, message action row, and permission placeholders.
+- Stage 11 completion is blocked on final review and optional archival.
+- UI repair pass after subagent REQUEST CHANGES:
+  - Web no longer falls back from Control Plane env vars to Worker env vars.
+  - Normal sidebar filters archived conversations; Settings -> 已归档对话 lists archived conversations and calls restore.
+  - Composer owns start/follow-up/interrupt/steer, with queue-later implemented as a local queue; durable Control Plane queue state is deferred.
+  - Permission menu remains visible but options are disabled TODO placeholders.
+  - Assistant messages render action rows with copy enabled and feedback/fork/hooks placeholders disabled.
+  - Web carries `itemsView` into `AssistantTimelineTurn`.
+  - Focused web tests and typecheck pass.
+- Real stack evidence after UI repair:
+  - `pnpm real:status` shows Worker, Control Plane, and Web listening on `127.0.0.1:8787`, `127.0.0.1:8786`, and `127.0.0.1:5173`.
+  - `pnpm real:check` reports `real-pass=18`, `real-gap=1`; the remaining gap is approval decision because the safe fixture has no pending request.
+  - `pnpm web:e2e:smoke` passes against the real local stack, loads real Control Plane data, starts a conversation from the composer, and sends follow-up through the composer.
+  - Web projection now tolerates real timeline turns that omit `nodes` / `itemsView` and keeps the datasource loaded.
+- Full verification after UI repair:
+  - `pnpm product:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build`
+- Browser verification after UI repair:
+  - Desktop workbench, Settings archived list, and mobile sidebar were checked with Chromium.
+  - No non-loopback browser requests were observed.
+  - Screenshots: `logs/stage11-browser-check/desktop-workbench.png`, `logs/stage11-browser-check/settings-archived.png`, `logs/stage11-browser-check/mobile-workbench.png`.
+  - Note: local Next dev overlay appears in screenshots and is not app UI.
 
 Focused verification for Stage 11A contract/projection cleanup:
 

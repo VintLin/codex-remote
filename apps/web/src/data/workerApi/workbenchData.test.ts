@@ -568,6 +568,69 @@ test("workbench datasource when timeline loads should create metadata-only nodes
   assert.deepEqual(labels.includes(""), false);
 });
 
+test("workbench datasource when real timeline turn omits optional item fields, should keep loaded source", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        {
+          id: "w-real",
+          icon: "laptop",
+          name: "Real worker",
+          status: "Connected",
+          ip: "local",
+          lastOnlineAt: "2026-06-21T00:00:00.000Z",
+          currentProject: "real",
+          model: "Codex",
+        },
+      ]),
+      "/v1/conversations": jsonResponse([
+        {
+          id: "real-thread",
+          title: "Real thread",
+          deviceId: "w-real",
+          projectId: "p-real",
+          projectName: "real",
+          status: "unknown",
+          updatedAt: "2026-06-21T00:00:00.000Z",
+          summary: "",
+          sandbox: "unknown",
+          approval: "unknown",
+          archived: false,
+          loaded: true,
+          live: false,
+        },
+      ]),
+      "/v1/projects": jsonResponse([project("p-real", "real", "w-real")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/w-real/conversations/real-thread/timeline": jsonResponse({
+        deviceId: "w-real",
+        conversationId: "real-thread",
+        readStartedAt: "2026-06-21T00:00:00.000Z",
+        readCompletedAt: "2026-06-21T00:00:01.000Z",
+        snapshotRevision: "r-real",
+        runtimeStatus: "idle",
+        latestTurnStatus: "completed",
+        turns: [
+          {
+            id: "turn-real",
+            status: "completed",
+            startedAt: 1,
+            completedAt: 2,
+            durationMs: 3,
+          },
+        ],
+        events: [],
+      }),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.assistantThreads[0]?.timeline.turns[0]?.itemsView, "unknown");
+  assert.equal(data.assistantThreads[0]?.timeline.turns[0]?.nodes[0]?.type, "contextCompaction");
+});
+
 test("workbench datasource when timeline includes duplicate approval events, should project latest approval card state per approval id", async () => {
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",

@@ -117,6 +117,7 @@ function createMetadataOnlyAssistantThreads(conversations: readonly CodexConvers
 
 function createMetadataOnlyAssistantTurn(turn: ConversationTimelineTurn): AssistantTimelineTurn {
   const label = `turn ${turn.status}`;
+  const nodes = turn.nodes ?? [];
 
   return {
     id: turn.id,
@@ -124,7 +125,8 @@ function createMetadataOnlyAssistantTurn(turn: ConversationTimelineTurn): Assist
     startedAt: turn.startedAt,
     completedAt: turn.completedAt,
     durationMs: turn.durationMs,
-    nodes: turn.nodes.length > 0 ? turn.nodes.map((node) => projectTimelineNode(turn.id, node)) : [
+    itemsView: turn.itemsView ?? "unknown",
+    nodes: nodes.length > 0 ? nodes.map((node) => projectTimelineNode(turn.id, node)) : [
       {
         type: "contextCompaction",
         id: `${turn.id}-metadata`,

@@ -25,6 +25,7 @@ export interface AssistantTimelineTurn {
   startedAt: number | null;
   completedAt: number | null;
   durationMs: number | null;
+  itemsView: "full" | "partial" | "unknown";
   nodes: AssistantTimelineNode[];
 }
 

@@ -32,6 +32,7 @@ import {
   DeviceDetailPane,
   DevicesPage,
   SearchDialog,
+  SettingsPage,
   TaskBoardPage,
   TaskDetailPane,
 } from "../detail/main-panels";
@@ -40,13 +41,9 @@ import { type AppView, Sidebar, type SidebarPressedItem } from "../sidebar/sideb
 type SidebarFocusTarget = { kind: "project" | "conversation"; id: string } | null;
 type MobileWorkspacePane = "detail" | "main" | "sidebar";
 const controlPlaneBaseUrl =
-  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ??
-  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL ??
-  "http://127.0.0.1:8786";
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? "http://127.0.0.1:8786";
 const controlPlaneToken =
-  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ??
-  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN ??
-  "";
+  process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "example-token");
 
 export function CodexRemoteApp() {
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
@@ -579,6 +576,33 @@ export function CodexRemoteApp() {
             taskLoadState={taskSource.status}
             taskStatus={taskStatus}
             tasks={tasks}
+          />
+        ),
+      };
+    }
+
+    if (activeView === "settings") {
+      return {
+        detail: (
+          <ConversationDetailPane
+            conversationTitle="设置"
+            isCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            onBack={() => setMobilePane("main")}
+            onCollapse={() => setIsDetailCollapsed(true)}
+            target={selectedDetailTarget}
+          />
+        ),
+        main: (
+          <SettingsPage
+            conversations={conversations}
+            isDetailCollapsed={isDetailCollapsed}
+            isMobile={isMobileViewport}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onBack={() => setMobilePane("sidebar")}
+            onExpandDetail={() => setIsDetailCollapsed(false)}
+            onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onRestoreConversation={unarchiveConversation}
           />
         ),
       };

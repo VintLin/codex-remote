@@ -89,6 +89,7 @@ test("codex remote app when conversation is selected, should open conversation b
 test("conversation workbench UI when lifecycle state exists, should expose badges and lifecycle actions", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const assistantThreadSource = readWebSource("components/conversation/codex-assistant-thread.tsx");
   const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
   const actionMenuSource = readWebSource("components/sidebar/action-menu.tsx");
 
@@ -97,7 +98,7 @@ test("conversation workbench UI when lifecycle state exists, should expose badge
   assert.match(sidebarSource, /conversation\.archived/);
   assert.match(mainPanelsSource, /Loaded|Live|Archived/);
   assert.match(mainPanelsSource, /approvalCards/);
-  assert.match(mainPanelsSource, /status === "resolved"/);
+  assert.match(assistantThreadSource, /status === "resolved"/);
   assert.match(actionMenuSource, /onRename/);
   assert.match(actionMenuSource, /onArchive/);
   assert.match(actionMenuSource, /onRestore/);
@@ -109,4 +110,57 @@ test("conversation workbench UI when lifecycle state exists, should expose badge
   assert.match(shellSource, /archiveConversation/);
   assert.match(shellSource, /unarchiveConversation/);
   assert.doesNotMatch(shellSource, /window\.prompt/);
+});
+
+test("conversation workbench UI when composing messages, should keep start follow-up interrupt and steer in the composer", () => {
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const assistantThreadSource = readWebSource("components/conversation/codex-assistant-thread.tsx");
+
+  assert.doesNotMatch(mainPanelsSource, /<StartConversationStrip/);
+  assert.doesNotMatch(mainPanelsSource, /<ConversationControlStrip/);
+  assert.doesNotMatch(mainPanelsSource, /function StartConversationStrip/);
+  assert.doesNotMatch(mainPanelsSource, /function ConversationControlStrip/);
+  assert.match(mainPanelsSource, /canStartConversation=\{canStartConversation\}/);
+  assert.match(mainPanelsSource, /onSubmitStart=\{onSubmitStart\}/);
+  assert.match(mainPanelsSource, /onSubmitSteer=\{onSubmitSteer\}/);
+  assert.match(assistantThreadSource, /composerMode/);
+  assert.match(assistantThreadSource, /onSubmitStart/);
+  assert.match(assistantThreadSource, /onSubmitSteer/);
+  assert.match(assistantThreadSource, /新对话/);
+  assert.match(assistantThreadSource, /排队发送/);
+  assert.match(assistantThreadSource, /ponytail: local queue/);
+});
+
+test("conversation workbench UI when enforcing Stage 11 boundaries, should avoid Worker fallback and route archived rows through settings", () => {
+  const nextConfigSource = readWebSource("../next.config.ts");
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const sidebarModelSource = readWebSource("domain/sidebar/sidebarModel.ts");
+  const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+
+  assert.ok(!nextConfigSource.includes("NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL"));
+  assert.ok(!nextConfigSource.includes("NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN"));
+  assert.ok(!shellSource.includes("NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ??\n  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_BASE_URL"));
+  assert.ok(!shellSource.includes("NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ??\n  process.env.NEXT_PUBLIC_CODEX_REMOTE_WORKER_TOKEN"));
+  assert.match(sidebarModelSource, /visibleConversations = params\.conversations\.filter/);
+  assert.match(sidebarModelSource, /conversation\.archived !== true/);
+  assert.match(sidebarSource, /AppView = "conversation" \| "devices" \| "settings" \| "tasks"/);
+  assert.match(sidebarSource, /onSelectView\("settings"\)/);
+  assert.match(mainPanelsSource, /SettingsPage/);
+  assert.match(mainPanelsSource, /已归档对话/);
+  assert.match(mainPanelsSource, /onRestoreConversation/);
+});
+
+test("conversation workbench UI when rendering app-like conversation content, should keep safe placeholders and partial state", () => {
+  const assistantThreadSource = readWebSource("components/conversation/codex-assistant-thread.tsx");
+  const assistantTimelineSource = readWebSource("domain/assistant/assistantTimeline.ts");
+  const workbenchDataSource = readWebSource("data/workerApi/workbenchData.ts");
+
+  assert.match(assistantThreadSource, /disabled[\s\S]+TODO: review required/);
+  assert.match(assistantThreadSource, /AssistantMessageActions/);
+  assert.match(assistantThreadSource, /navigator\.clipboard/);
+  assert.match(assistantThreadSource, /aria-label="派生"[\s\S]+disabled/);
+  assert.match(assistantThreadSource, /aria-label="Hooks"[\s\S]+disabled/);
+  assert.match(assistantTimelineSource, /itemsView: "full" \| "partial" \| "unknown"/);
+  assert.match(workbenchDataSource, /itemsView: turn\.itemsView/);
 });

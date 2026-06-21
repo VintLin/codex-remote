@@ -5,6 +5,7 @@ const controlPlaneBaseUrl = withoutTrailingSlash(
 );
 const controlPlaneToken =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? process.env.CODEX_REMOTE_LOCAL_TOKEN ?? "example-token";
+const preflightTimeoutMs = 10_000;
 
 test("real local stack smoke: should load real Control Plane data and submit through the UI", async ({ page, request }) => {
   const realState = await readRealState(request);
@@ -20,30 +21,37 @@ test("real local stack smoke: should load real Control Plane data and submit thr
 
   await page.goto("/");
 
+  await expect(page.locator(".datasource-status").first()).toContainText("loaded", { timeout: 15_000 });
   await expect(page.getByText("未连接真实 Control Plane")).toHaveCount(0);
   await expect(page.getByText(/示例数据|示例任务数据/)).toHaveCount(0);
-  await expect(page.locator(".datasource-status").first()).toContainText("loaded");
 
   const main = page.getByTestId("main");
-  const startInput = main.getByRole("textbox", { name: "Start new conversation" });
-  await expect(startInput).toBeVisible();
-  await startInput.fill("codex-remote-calibration web smoke: reply briefly.");
+  const composer = main.getByRole("textbox", { name: "Follow-up message" });
+  await expect(composer).toBeVisible();
+
+  const newConversationMode = main.getByRole("button", { name: "新对话" });
+  if ((await newConversationMode.count()) > 0) {
+    await newConversationMode.click();
+  }
+  await composer.fill("codex-remote-calibration web smoke: reply briefly.");
 
   const startResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/v1/devices/") && response.url().endsWith("/conversations") && response.status() === 202,
   );
-  await main.getByRole("button", { name: "Start" }).click();
+  await main.getByRole("button", { name: "发送", exact: true }).click();
   await startResponsePromise;
-  await expect(page.getByText("accepted").first()).toBeVisible();
+  if ((await newConversationMode.count()) > 0) {
+    await expect(newConversationMode).toHaveAttribute("aria-pressed", "false", { timeout: 10_000 });
+  }
 
-  const composer = page.locator('[contenteditable="true"]').first();
-  if ((await composer.count()) > 0) {
-    const sendButton = main.getByRole("button", { name: "发送" }).first();
+  const followUpComposer = page.locator('[contenteditable="true"]').first();
+  if ((await followUpComposer.count()) > 0) {
+    const sendButton = main.getByRole("button", { name: "发送", exact: true }).first();
     if ((await sendButton.count()) > 0 && await sendButton.isEnabled()) {
-      await composer.fill("codex-remote-calibration web follow-up: acknowledge briefly.");
+      await followUpComposer.fill("codex-remote-calibration web follow-up: acknowledge briefly.");
       const followUpResponsePromise = page.waitForResponse(
         (response) => response.url().includes("/follow-up") && response.status() === 202,
-        { timeout: 10_000 },
+        { timeout: 20_000 },
       );
       await sendButton.click();
       await followUpResponsePromise;
@@ -56,12 +64,12 @@ test("real local stack smoke: should load real Control Plane data and submit thr
 async function readRealState(request) {
   const headers = { authorization: `Bearer ${controlPlaneToken}` };
   try {
-    const controlPlaneHealth = await request.get(`${controlPlaneBaseUrl}/v1/control-plane/health`, { headers, timeout: 3_000 });
+    const controlPlaneHealth = await request.get(`${controlPlaneBaseUrl}/v1/control-plane/health`, { headers, timeout: preflightTimeoutMs });
     if (!controlPlaneHealth.ok()) {
       return { status: "gap", reason: `real-gap: control-plane health returned ${controlPlaneHealth.status()}` };
     }
 
-    const devicesResponse = await request.get(`${controlPlaneBaseUrl}/v1/devices`, { headers, timeout: 3_000 });
+    const devicesResponse = await request.get(`${controlPlaneBaseUrl}/v1/devices`, { headers, timeout: preflightTimeoutMs });
     if (!devicesResponse.ok()) {
       return { status: "gap", reason: `real-gap: devices returned ${devicesResponse.status()}` };
     }
@@ -73,14 +81,14 @@ async function readRealState(request) {
 
     const healthResponse = await request.get(
       `${controlPlaneBaseUrl}/v1/devices/${encodeURIComponent(deviceId)}/worker/health`,
-      { headers, timeout: 3_000 },
+      { headers, timeout: preflightTimeoutMs },
     );
     if (!healthResponse.ok()) {
       return { status: "gap", reason: `real-gap: worker health returned ${healthResponse.status()}` };
     }
     const capabilitiesResponse = await request.get(
       `${controlPlaneBaseUrl}/v1/devices/${encodeURIComponent(deviceId)}/worker/capabilities`,
-      { headers, timeout: 3_000 },
+      { headers, timeout: preflightTimeoutMs },
     );
     if (!capabilitiesResponse.ok()) {
       return { status: "gap", reason: `real-gap: worker capabilities returned ${capabilitiesResponse.status()}` };
@@ -94,8 +102,8 @@ async function readRealState(request) {
     }
 
     return { status: "ready", reason: "ready" };
-  } catch {
-    return { status: "gap", reason: "real-gap: local Control Plane is unavailable" };
+  } catch (error) {
+    return { status: "gap", reason: `real-gap: ${error instanceof Error ? error.message : "local preflight failed"}` };
   }
 }
 

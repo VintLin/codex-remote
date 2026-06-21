@@ -20,18 +20,18 @@ Status labels:
 
 | Feature | Product status | Real evidence | App-server capability | Notes |
 | --- | --- | --- | --- | --- |
-| Interrupt | Partial | API yes; UI parity no | `turn/interrupt` | Real-check records interrupt as `real-pass`, but the app-like UI must move interrupt into the running composer. |
-| Steer | Partial | API yes; UI parity no | `turn/steer` | Requires public active-turn proof. Product UI is running-send "引导当前执行", not a separate debug strip and not fork/派生. |
-| Follow-up | Partial | API yes; UI parity partial | `turn/start` | Existing conversation follow-up is supported, but start/follow-up must be unified in the composer. |
+| Interrupt | Supported | Yes | `turn/interrupt` | Real-check records interrupt as `real-pass`; Web exposes interrupt in the running composer. |
+| Steer | Supported | Yes | `turn/steer` | Real-check records steer as `real-pass`; Web exposes running-send "引导当前执行". |
+| Follow-up | Supported | Yes | `turn/start` | Real smoke sends follow-up through the shared composer. |
 | Approval capture | Partial | Partial | `item/*/requestApproval`, legacy approval requests | Worker registry captures supported pending approvals, but safe real fixture did not produce a pending approval. |
 | Approval decision | Partial | No | server request response path | Public route exists, but no safe real pending approval was available to decline/cancel. |
 | Approval auto cleanup | Partial | No | `serverRequest/resolved` | Process-local cleanup exists; no durable/product-ready approval lifecycle. |
-| Start conversation | Partial | API yes; UI parity no | `thread/start`, `turn/start` | Real-check records start as `real-pass`, but the Start strip is a debug-looking UI and must become the composer start state. |
-| Open/resume conversation | Partial | API yes; UI parity no | `thread/resume` | Stage 11 lifecycle API evidence passed, but selected conversations must display content without requiring a separate Start action. |
-| Archive/unarchive conversation | Partial | API yes; UI parity no | `thread/archive`, `thread/unarchive` | Stage 11 lifecycle API evidence passed. Product UI must remove archived rows from the normal sidebar and restore them from Settings -> 已归档对话. |
+| Start conversation | Supported | Yes | `thread/start`, `turn/start` | Real smoke starts a conversation from the shared composer. |
+| Open/resume conversation | Supported | Yes | `thread/resume` | Selected conversations open/display content without requiring a separate Start action. |
+| Archive/unarchive conversation | Supported | Yes | `thread/archive`, `thread/unarchive` | Archived rows are filtered from the normal sidebar and restored from Settings -> 已归档对话. |
 | Rename conversation | Supported | Yes | `thread/name/set` | Stage 11 real lifecycle API evidence passed; public `title` remains the single display title. |
 | Loaded/live badges | Supported | Yes | `thread/loaded/list`, `thread/read` | Web displays Loaded/Live state from public contract fields. Archived state belongs in archive-specific surfaces, not the normal sidebar badge. |
-| Timeline read | Partial | API yes; UI parity no | `thread/read` | Stage 11 must display safe app-like conversation content, not metadata-only rows. |
+| Timeline read | Supported | Yes | `thread/read` | Web renders public safe timeline nodes and safe metadata fallback for partial real snapshots. |
 | Snapshot workbench events | Partial | Partial | Worker projection | Stage 11 projects lifecycle and approval card events from snapshots/Worker registry; not a durable live replay stream. |
 | Conversation list pagination | Supported internally | Yes | `thread/list` | Worker drains app-server cursors; Web does not expose pagination controls. |
 | Conversation directory isolation | Supported | Yes | `thread/list`, `thread/read` | Worker uses cwd and realpath checks; local paths stay Worker-private. |
@@ -56,17 +56,17 @@ Status labels:
 | Method | Product status | Notes |
 | --- | --- | --- |
 | `initialize` | Partial | Worker uses app-server session initialization internally. |
-| `thread/start` | Partial | API path exists; app-like composer start UI still needs repair. |
+| `thread/start` | Supported | API path exists and app-like composer start UI passed real smoke. |
 | `thread/resume` | Partial | API path exists; app-like open/display behavior still needs repair. |
 | `thread/fork` | Not supported | No fork UI/API. |
-| `thread/archive` | Partial | API path exists; archived rows must be removed from the normal sidebar and moved to Settings. |
+| `thread/archive` | Supported | API path exists; archived rows are removed from the normal sidebar and moved to Settings. |
 | `thread/unsubscribe` | Partial | Worker session lifecycle uses connection management internally, not product UI. |
 | `thread/name/set` | Supported | Used by Stage 11 rename route and Web action. |
 | `thread/goal/set` | Not supported | No goal UI/API. |
 | `thread/goal/get` | Not supported | No goal UI/API. |
 | `thread/goal/clear` | Not supported | No goal UI/API. |
 | `thread/metadata/update` | Not supported | No metadata edit UI/API. |
-| `thread/unarchive` | Partial | API path exists; restore must be exposed from Settings -> 已归档对话. |
+| `thread/unarchive` | Supported | API path exists; restore is exposed from Settings -> 已归档对话. |
 | `thread/compact/start` | Not supported | No compact UI/API. |
 | `thread/shellCommand` | Not supported | High-risk shell path; not exposed. |
 | `thread/approveGuardianDeniedAction` | Not supported | No guardian approval UI/API. |
@@ -103,9 +103,9 @@ Status labels:
 | `skills/config/write` | Not supported | Not exposed. |
 | `plugin/install` | Not supported | Not exposed. |
 | `plugin/uninstall` | Not supported | Not exposed. |
-| `turn/start` | Partial | API path exists; start/follow-up composer UX still needs repair. |
-| `turn/steer` | Partial | API path exists; UI must present steer as running-send "引导当前执行". |
-| `turn/interrupt` | Partial | API path exists; UI must move interrupt into the running composer. |
+| `turn/start` | Supported | API path exists; start/follow-up composer UX passed real smoke. |
+| `turn/steer` | Supported | API path exists; UI presents steer as running-send "引导当前执行". |
+| `turn/interrupt` | Supported | API path exists; UI exposes interrupt in the running composer. |
 | `review/start` | Not supported | Not exposed. |
 | `model/list` | Not supported | Not exposed. |
 | `modelProvider/capabilities/read` | Not supported | Not exposed. |

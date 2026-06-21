@@ -54,9 +54,9 @@ Rules:
 
 | Capability area | Codex App-like target | Current Codex Remote state | Gap |
 | --- | --- | --- | --- |
-| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Start/list/read and parts of the lifecycle API exist, but the 2026-06-21 UI parity review reopened Stage 11 | Need app-like sidebar/settings/archive flow, running composer controls, message actions, and Chrome verification before Stage 11 archival |
-| Turn control | Start, follow-up, steer, interrupt | Protocol/API paths exist, but current UI placement is wrong for app-like parity | Need composer-centered start/follow-up/interrupt plus steer-now versus queue-later running-send mode |
-| Timeline | Live agent output, reasoning, plan, item state, tool state, diffs, warnings, completion | Snapshot/timeline read is supported; current UI is not yet proven as app-like content display | Need safe content projection, Worker-projected event stream, and Web reconciliation |
+| Conversation lifecycle | Start, resume, fork, archive, unarchive, rename, goals, compact, rollback | Stage 11 UI repair now covers start/resume/archive/unarchive/rename, Settings archive restore, badges, and message action placeholders | Need final full verification/Chrome check before Stage 11 archival; fork/goals/compact/rollback remain future |
+| Turn control | Start, follow-up, steer, interrupt | Stage 11 composer-centered start/follow-up/interrupt/steer is implemented; queue-later is local-only | Need durable Control Plane queue state in a later stage if queue must survive refresh/device handoff |
+| Timeline | Live agent output, reasoning, plan, item state, tool state, diffs, warnings, completion | Snapshot/timeline read renders public safe nodes and safe metadata fallback for partial snapshots | Need durable live stream and richer item states in later stages |
 | Approval and input | Capture app-server requests, show user decisions, send responses, show resolved state | Approval capture is partial; decision remains real-gap; user input/MCP elicitation/tool calls are not exposed | Need request/response lifecycle parity |
 | Models and runtime | Model list, provider capabilities, reroute and verification status | Not exposed | Need model/runtime surface |
 | Config and experiments | Read/write config, requirements, experimental features | Not exposed | Need config surface derived from app-server protocol and public API |
@@ -77,7 +77,7 @@ Rules:
 
 Future stages should be split by product capability area, not by raw app-server method.
 
-1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Current implementation was reopened after UI parity review and must be corrected before archival.
+1. Conversation workbench parity: open/resume, archive/unarchive, rename, loaded/live status, snapshot-first timeline content, projected live/request events, request cards, approval pending/resolved state, composer-centered start/follow-up/interrupt/steer/queue, Settings -> 已归档对话, protocol-derived permission menu placeholders, and assistant message action rows. Current implementation has passed focused Web checks and real smoke; final archival waits on full verification and Chrome visual path check.
 2. Local work tools read-only: filesystem preview/metadata, command output, Git diff, review findings, fuzzy search, MCP status/resources/tools list, plugin/marketplace read, skills/hooks/apps list.
 3. Controlled local actions: explicit user shell command, allowlisted project actions, review start, stage/unstage/revert hunk/file, enable/disable skill, OAuth or connector login only with local confirmation.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management.

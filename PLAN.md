@@ -56,7 +56,7 @@ flowchart LR
 | 8. 产品化与扩展 | self-hosted readiness、运行手册、安全检查、iOS API guardrails | 已完成 |
 | 9. 真实本机 Codex 闭环校准 | 用真实 Codex app-server 验证 Stage 3-8 能力 | 已完成；approval decision 留安全 real-gap |
 | 10. Isolated Approval Fixture | 隔离验证 approval decision decline/cancel | 已实现 fixture；blocked 于 app-server 未产生 safe pending approval |
-| 11. Conversation Workbench Parity | Codex App-like browser workbench | 已重新打开；按新 spec/plan 修正 UI 与验证 |
+| 11. Conversation Workbench Parity | Codex App-like browser workbench | UI repair 已完成并通过 Web/real smoke；待最终全量验证与归档 |
 
 ```mermaid
 flowchart TB
@@ -80,8 +80,8 @@ flowchart TB
 
 - Web -> Control Plane -> Worker -> Codex app-server 的本机主链已有 real evidence。
 - Approval decision 仍没有稳定真实 pending approval，不能宣称 product-ready。
-- Stage 11 已因 UI parity review 重新打开。旧实现证据只能作为协议/API 参考，不能作为 UI parity 完成证据。
-- Stage 11A app-server output calibration 已完成只读设计核对；当前 dirty draft 的实现处理仍未开始。
+- Stage 11 已按 UI parity review 完成第一轮修复：composer-centered start/follow-up/interrupt/steer/queue、Settings archived restore、request cards、assistant actions、permission placeholders。
+- Stage 11A app-server output calibration 与 Web projection cleanup 已完成；真实 timeline 缺失 `nodes` / `itemsView` 时 Web 保持 loaded 而不 fallback。
 
 ## Active Stage 11
 
@@ -94,12 +94,12 @@ Active docs:
 
 Stage 11 当前方向：
 
-- Start/follow-up/interrupt/steer/queue 收敛到 composer。
-- Archive 立即从正常侧边栏消失，恢复入口在 Settings -> 已归档对话。
-- Timeline 显示安全的 app-like conversation content，不以 metadata-only 作为最终 UX。
-- Request cards 进入 timeline/workbench flow。
-- Assistant message action row 保留 copy、thumbs up/down、fork/派生、hooks、timestamp，占位必须 disabled/TODO。
-- Permission menu 保留 UI，但必须从 app-server 协议反推，不得添加未确认行为。
+- Start/follow-up/interrupt/steer/queue 已收敛到 composer；当前 queue 是本地队列，刷新/跨设备持久化留给 Control Plane state。
+- Archive 已从正常侧边栏过滤，恢复入口在 Settings -> 已归档对话。
+- Timeline 使用 public safe nodes；真实 metadata-only turn 会显示安全 fallback。
+- Request cards 已进入 timeline/workbench flow。
+- Assistant message action row 保留 copy、thumbs up/down、fork/派生、hooks、timestamp；未有 public route 的行为保持 disabled。
+- Permission menu 保留 UI，选项 disabled/TODO，未添加未确认行为。
 
 Stage 11A reconciliation 结论：
 
@@ -159,4 +159,4 @@ Stage 11 non-goals：
 
 ## 下一步
 
-下一步执行 Stage 11A 的最小实现动作：先修 contract/tests，再按 public model 重写 Worker projection 和 Web rendering。
+下一步执行 Stage 11 closure：跑最终全量验证、Chrome/Playwright 视觉路径检查，确认唯一 real-gap 仍为 approval fixture 无 pending request 后归档 Stage 11 spec/plan。

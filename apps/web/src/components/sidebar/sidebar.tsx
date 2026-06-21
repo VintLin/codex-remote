@@ -14,7 +14,7 @@ import { getStatusClassName } from "../../domain/status/statusPresentation";
 import { ActionMenu, type SidebarActionGroup } from "./action-menu";
 import { iconForDevice } from "../shared/icons";
 
-export type AppView = "conversation" | "devices" | "tasks";
+export type AppView = "conversation" | "devices" | "settings" | "tasks";
 export type SidebarPressedItem = { kind: "project" | "conversation"; id: string } | null;
 
 interface SidebarProps {
@@ -185,7 +185,11 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="sidebar-footer">
-        <button className="nav-button" type="button">
+        <button
+          className={`nav-button${props.activeView === "settings" ? " is-active" : ""}`}
+          onClick={() => props.onSelectView("settings")}
+          type="button"
+        >
           <span className="nav-glyph">
             <Icon name="setting-o" />
           </span>

@@ -130,6 +130,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
           startedAt: 1_781_653_300,
           completedAt: null,
           durationMs: null,
+          itemsView: "full",
           nodes: [
             {
               type: "text",
@@ -183,6 +184,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
           startedAt: 1_781_646_500,
           completedAt: 1_781_647_200,
           durationMs: 700_000,
+          itemsView: "full",
           nodes: [
             {
               type: "text",
@@ -248,6 +250,7 @@ export const assistantThreads: AssistantThreadSnapshot[] = [
           startedAt: 1_781_633_000,
           completedAt: 1_781_633_600,
           durationMs: 600_000,
+          itemsView: "full",
           nodes: [
             {
               type: "text",

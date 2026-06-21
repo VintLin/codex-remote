@@ -49,12 +49,13 @@ export function createProjectKey(project: Pick<RemoteProject, "deviceId" | "id">
 }
 
 export function createSidebarModel(params: CreateSidebarModelParams): SidebarModel {
+  const visibleConversations = params.conversations.filter((conversation) => conversation.archived !== true);
   const projectGroups = params.projects.map((project) => {
     const projectKey = createProjectKey(project);
 
     return {
       ...project,
-      conversations: params.conversations.filter(
+      conversations: visibleConversations.filter(
         (conversation) => conversation.projectId === project.id && conversation.deviceId === project.deviceId,
       ),
       expanded: params.expandedProjectIds.has(projectKey),
@@ -65,7 +66,7 @@ export function createSidebarModel(params: CreateSidebarModelParams): SidebarMod
   return {
     pinnedProjects: projectGroups.filter((project) => project.pinned),
     projects: projectGroups.filter((project) => !project.pinned),
-    freeConversations: params.conversations.filter((conversation) => !conversation.projectId && !conversation.pinned),
+    freeConversations: visibleConversations.filter((conversation) => !conversation.projectId && !conversation.pinned),
   };
 }
 

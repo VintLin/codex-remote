@@ -85,6 +85,18 @@ body {
   padding: 8px 10px;
 }
 
+.conversation-request-cards,
+.conversation-request-actions {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.conversation-request-actions {
+  grid-auto-flow: column;
+  justify-content: start;
+}
+
 .conversation-approval-card[data-state="resolved"] {
   opacity: 0.72;
 }
@@ -98,4 +110,78 @@ body {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.codex-assistant-send-modes,
+.codex-assistant-message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.codex-assistant-mode,
+.codex-assistant-message-action {
+  min-height: 24px;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  font-weight: var(--cr-weight-emphasis);
+  letter-spacing: 0;
+  padding: 0 6px;
+}
+
+.codex-assistant-mode[aria-pressed="true"],
+.codex-assistant-message-action:not(:disabled) {
+  color: var(--cr-ink);
+}
+
+.codex-assistant-message-actions {
+  margin-top: 6px;
+}
+
+.settings-content,
+.settings-section,
+.settings-list,
+.settings-row {
+  display: grid;
+  min-width: 0;
+}
+
+.settings-content {
+  align-content: start;
+  padding: 16px;
+}
+
+.settings-section,
+.settings-list {
+  gap: 8px;
+}
+
+.settings-section h2 {
+  color: var(--cr-ink);
+  font-size: var(--cr-text-body);
+  font-weight: var(--cr-weight-emphasis);
+  letter-spacing: 0;
+}
+
+.settings-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: var(--cr-stroke);
+  border-radius: var(--cr-radius-md);
+  padding: 10px;
+}
+
+.settings-row span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.settings-row span span {
+  color: var(--cr-muted);
+  font-size: var(--cr-text-compact);
 }
