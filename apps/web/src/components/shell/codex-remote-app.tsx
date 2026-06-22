@@ -12,6 +12,8 @@ import {
   shouldPersistSelectedDeviceId,
 } from "../../domain/connection/connectionEntry";
 import type { BoardTask, ConversationQueuedMessage, Device, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
+import type { WebDictionary } from "../../i18n/dictionary";
+import type { Locale } from "../../i18n/locales";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -53,16 +55,18 @@ const controlPlaneBaseUrl =
 const controlPlaneToken =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "example-token");
 const selectedDeviceStorageKey = "codex-remote:selected-device-id";
-const unavailableDevice: Device = {
-  id: "",
-  icon: "laptop",
-  name: "未连接设备",
-  status: "Not connected",
-  ip: "unavailable",
-  lastOnlineAt: "",
-  currentProject: "",
-  model: "",
-};
+function createUnavailableDevice(disconnectedName: string): Device {
+  return {
+    id: "",
+    icon: "laptop",
+    name: disconnectedName,
+    status: "Not connected",
+    ip: "unavailable",
+    lastOnlineAt: "",
+    currentProject: "",
+    model: "",
+  };
+}
 
 function readStoredSelectedDeviceId(): string | null {
   if (typeof window === "undefined") {
@@ -83,7 +87,13 @@ function writeStoredSelectedDeviceId(deviceId: string): void {
   }
 }
 
-export function CodexRemoteApp() {
+interface CodexRemoteAppProps {
+  dictionary: WebDictionary;
+  locale: Locale;
+}
+
+export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
+  void locale;
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(true);
@@ -115,7 +125,7 @@ export function CodexRemoteApp() {
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, runtimeSettings, advancedPlatform, assistantThreads, searchRecents, source, taskSource } = workbenchData;
-  const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0] ?? unavailableDevice;
+  const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0] ?? createUnavailableDevice(dictionary.app.disconnectedDeviceName);
   const selectedConversation = findConversationByKey(conversations, selectedConversationKey);
   const conversation =
     selectedConversation?.deviceId === selectedDeviceId
@@ -1007,6 +1017,7 @@ export function CodexRemoteApp() {
   const connectionEntryModel = createConnectionEntryModel({
     devices: connectionEntryDevices,
     errorCode: source.error?.code ?? null,
+    errorReason: typeof source.error?.details?.reason === "string" ? source.error.details.reason : null,
     isLoading: isWorkbenchLoading,
     selectedDeviceId,
     sourceReason: source.reason,
