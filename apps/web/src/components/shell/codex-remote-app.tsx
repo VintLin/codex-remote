@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
@@ -113,6 +114,21 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
   const [mobilePane, setMobilePane] = useState<MobileWorkspacePane>("sidebar");
   const [pressedItem, setPressedItem] = useState<SidebarPressedItem>(null);
   const [focusTarget, setFocusTarget] = useState<SidebarFocusTarget>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const handleLocaleChange = useCallback((nextLocale: Locale) => {
+    try {
+      window.localStorage.setItem("codex-remote-locale", nextLocale);
+    } catch {
+      // Ignore storage failures; the URL navigation still drives the current session.
+    }
+    const segments = (pathname ?? "").split("/");
+    if (segments.length > 1) {
+      segments[1] = nextLocale;
+    }
+    const target = segments.join("/") || `/${nextLocale}`;
+    router.push(target);
+  }, [pathname, router]);
   const [followUpStatus, setFollowUpStatus] = useState<FollowUpSubmitStatus>("idle");
   const [startStatus, setStartStatus] = useState<StartConversationSubmitStatus>("idle");
   const [controlStatus, setControlStatus] = useState<ControlSubmitStatus>("idle");
@@ -743,6 +759,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       return {
         detail: (
           <DeviceDetailPane
+            copy={dictionary.mainPanels}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -753,6 +770,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         ),
         main: (
           <DevicesPage
+            copy={dictionary.mainPanels}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -776,6 +794,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       return {
         detail: (
           <TaskDetailPane
+            copy={dictionary.mainPanels}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -785,6 +804,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         main: (
           <TaskBoardPage
             conversations={conversations}
+            copy={dictionary.mainPanels}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -808,7 +828,8 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       return {
         detail: (
           <ConversationDetailPane
-            conversationTitle="Local Tools"
+            conversationTitle={dictionary.app.conversationTitle}
+            detailCopy={dictionary.detail}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -819,6 +840,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         main: (
           <LocalWorkbenchPage
             canStartReview={canStartReview}
+            copy={dictionary.mainPanels}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -840,7 +862,8 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       return {
         detail: (
           <ConversationDetailPane
-            conversationTitle="设置"
+            conversationTitle={dictionary.app.settingsTitle}
+            detailCopy={dictionary.detail}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -852,12 +875,15 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
           <SettingsPage
             advancedPlatform={advancedPlatform}
             conversations={conversations}
+            copy={{ detail: dictionary.detail, mainPanels: dictionary.mainPanels, settings: dictionary.settings, status: dictionary.status }}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             isSidebarCollapsed={isSidebarCollapsed}
+            locale={locale}
             onBack={() => setMobilePane("sidebar")}
             onExpandDetail={() => setIsDetailCollapsed(false)}
             onExpandSidebar={() => setIsSidebarCollapsed(false)}
+            onLocaleChange={handleLocaleChange}
             onRestoreConversation={unarchiveConversation}
             runtimeSettings={runtimeSettings}
           />
@@ -869,7 +895,8 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       return {
         detail: (
           <ConversationDetailPane
-            conversationTitle="对话"
+            conversationTitle={dictionary.app.conversationTitle}
+            detailCopy={dictionary.detail}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -879,6 +906,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         ),
         main: (
           <ConversationMain
+            actionsCopy={dictionary.actions}
             assistantThread={null}
             canStartConversation={canStartConversation}
             canSubmitFollowUp={false}
@@ -886,6 +914,8 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
             controlStatus={controlStatus}
             conversation={null}
             conversationCopy={dictionary.conversation}
+            copy={dictionary.mainPanels}
+            detailCopy={dictionary.detail}
             followUpStatus={followUpStatus}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
@@ -934,6 +964,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       detail: (
         <ConversationDetailPane
           conversationTitle={conversation.title}
+          detailCopy={dictionary.detail}
           isCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}
           onBack={() => setMobilePane("main")}
@@ -943,6 +974,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
       ),
       main: (
         <ConversationMain
+          actionsCopy={dictionary.actions}
           assistantThread={assistantThread}
           canStartConversation={canStartConversation}
           canSubmitFollowUp={canSubmitFollowUp}
@@ -950,6 +982,8 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
           controlStatus={controlStatus}
           conversation={conversation}
           conversationCopy={dictionary.conversation}
+          copy={dictionary.mainPanels}
+          detailCopy={dictionary.detail}
           followUpStatus={followUpStatus}
           isDetailCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}
@@ -1058,6 +1092,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         />
       )}
       <SearchDialog
+        copy={dictionary.mainPanels}
         onClose={() => setIsSearchOpen(false)}
         onSelectConversation={selectConversation}
         open={isSearchOpen}

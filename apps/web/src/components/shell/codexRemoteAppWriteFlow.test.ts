@@ -31,7 +31,7 @@ test("codex remote app when review-start is wired, should call local action API 
   assert.match(shellSource, /expectedConversationId: conversation\.id/);
   assert.match(shellSource, /projectId: selectedProject\.id/);
   assert.match(shellSource, /await refreshWorkbenchData\(createConversationKey\(conversation\)\)/);
-  assert.match(mainPanelsSource, /aria-label="Review confirmation text"/);
+  assert.match(mainPanelsSource, /aria-label=\{copy\.localReviewConfirmation\}/);
   assert.match(mainPanelsSource, /START REVIEW/);
   assert.match(mainPanelsSource, /Start review/);
   assert.match(mainPanelsSource, /reviewStartStatus === "submitting"/);
@@ -92,7 +92,7 @@ test("codex remote app when task board is wired, should create tasks and link th
   assert.match(sidebarSource, /label=\{props\.copy\.sidebar\.tasks\}/);
   assert.doesNotMatch(mainPanelsSource, /暂无自动化 mock/);
   assert.match(mainPanelsSource, /TaskBoardPage/);
-  assert.match(mainPanelsSource, /aria-label="Task title"/);
+  assert.match(mainPanelsSource, /aria-label=\{copy\.taskTitle\}/);
   assert.match(mainPanelsSource, /onCreateTask/);
   assert.match(mainPanelsSource, /onLinkSelectedConversation/);
   assert.match(mainPanelsSource, /\$\{title\} · \$\{link\.deviceId\}/);
@@ -142,7 +142,7 @@ test("conversation workbench UI when lifecycle state exists, should expose badge
   assert.match(actionMenuSource, /onRestore/);
   assert.match(shellSource, /renameConversation/);
   assert.match(shellSource, /renamingConversationKey/);
-  assert.match(mainPanelsSource, /aria-label="重命名对话"/);
+  assert.match(mainPanelsSource, /aria-label=\{copy\.renameConversation\}/);
   assert.match(mainPanelsSource, /maxLength=\{120\}/);
   assert.match(mainPanelsSource, /onBeginRenameConversation/);
   assert.match(shellSource, /archiveConversation/);
@@ -188,7 +188,7 @@ test("conversation workbench UI when enforcing Stage 11 boundaries, should avoid
   assert.match(sidebarSource, /AppView = "conversation" \| "devices" \| "localTools" \| "settings" \| "tasks"/);
   assert.match(sidebarSource, /onSelectView\("settings"\)/);
   assert.match(mainPanelsSource, /SettingsPage/);
-  assert.match(mainPanelsSource, /已归档对话/);
+  assert.match(mainPanelsSource, /copy\.mainPanels\.archivedConversations/);
   assert.match(mainPanelsSource, /onRestoreConversation/);
 });
 

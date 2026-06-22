@@ -18,8 +18,8 @@ import type {
   TaskStatus,
 } from "@codex-remote/api-contract";
 import type { AdvancedPlatformData, LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
-import type { WebDictionary } from "../../i18n/dictionary.ts";
-import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
+import type { Locale, WebDictionary } from "../../i18n/dictionary.ts";
+import { getStatusClassName, getStatusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
 import type { SubmitFollowUpDraftResult } from "../conversation/followUpComposerSubmit";
@@ -27,12 +27,15 @@ import { DetailWorkspace } from "./detail-workspace";
 import { iconForDevice } from "../shared/icons";
 
 interface ConversationMainProps {
+  actionsCopy: WebDictionary["actions"];
   assistantThread: AssistantThreadSnapshot | null;
   canStartConversation: boolean;
   canSubmitFollowUp: boolean;
   conversation: CodexConversation | null;
   conversationCopy: WebDictionary["conversation"];
   controlStatus: "accepted" | "failed" | "idle" | "submitting";
+  copy: WebDictionary["mainPanels"];
+  detailCopy: WebDictionary["detail"];
   followUpStatus: "accepted" | "failed" | "idle" | "submitting";
   isDetailCollapsed: boolean;
   isMobile?: boolean;
@@ -67,6 +70,7 @@ interface ConversationMainProps {
 }
 
 interface DevicesPageProps {
+  copy: WebDictionary["mainPanels"];
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -81,6 +85,7 @@ interface DevicesPageProps {
 
 interface TaskBoardPageProps {
   conversations: CodexConversation[];
+  copy: WebDictionary["mainPanels"];
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -99,6 +104,7 @@ interface TaskBoardPageProps {
 
 interface LocalWorkbenchPageProps {
   canStartReview: boolean;
+  copy: WebDictionary["mainPanels"];
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
@@ -115,18 +121,22 @@ interface LocalWorkbenchPageProps {
 
 interface SettingsPageProps {
   conversations: CodexConversation[];
+  copy: Pick<WebDictionary, "detail" | "mainPanels" | "settings" | "status">;
   isDetailCollapsed: boolean;
   isMobile?: boolean;
   isSidebarCollapsed: boolean;
+  locale: Locale;
   onBack?: () => void;
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
+  onLocaleChange: (locale: Locale) => void;
   onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
   advancedPlatform: AdvancedPlatformData;
   runtimeSettings: RuntimeSettingsData;
 }
 
 interface SearchDialogProps {
+  copy: WebDictionary["mainPanels"];
   onClose: () => void;
   onSelectConversation: (conversationKey: string) => void;
   open: boolean;
@@ -134,13 +144,135 @@ interface SearchDialogProps {
   searchRecents: SearchRecent[];
 }
 
+const FALLBACK_MAIN_PANELS: WebDictionary["mainPanels"] = {
+  backToNavigation: "返回导航",
+  expandLeftSidebar: "展开左侧边栏",
+  expandRightSidebar: "展开右侧边栏",
+  settings: "设置",
+  archivedConversations: "已归档对话",
+  noArchivedConversations: "暂无已归档对话",
+  restore: "恢复",
+  save: "保存",
+  cancel: "取消",
+  renameConversation: "重命名对话",
+  conversationTitle: "Conversation title",
+  openConversationMenu: "打开对话操作菜单",
+  layoutList: "布局列表",
+  datasourceStatus: "数据源状态",
+  notConnectedToControlPlane: "未连接真实 Control Plane",
+  showingSampleData: (parts: string) => `当前显示示例数据 · ${parts}`,
+  showingSampleTasks: (parts: string) => `当前显示示例任务数据 · ${parts}`,
+  device: "设备",
+  deviceList: "设备列表",
+  addDevice: "新增设备",
+  editDevice: "编辑设备",
+  deleteDevice: "删除设备",
+  noDeviceData: "暂无设备数据",
+  backToDeviceList: "返回设备列表",
+  deviceIp: (ip: string) => `IP：${ip}`,
+  deviceLastOnline: (timestamp: string) => `最后上线：${timestamp}`,
+  deviceCurrentContext: "当前上下文",
+  deviceProject: (project: string) => `项目：${project}`,
+  deviceModel: (model: string) => `模型：${model}`,
+  deviceEditLater: "真实编辑、删除和新增设备逻辑后续接入 Control Plane API。",
+  deviceStatus: (status: string) => `状态：${status}`,
+  tasks: "任务",
+  taskBoard: "Task board",
+  taskBoardSource: "任务数据源状态",
+  taskTitle: "Task title",
+  cannotLoadTasks: "无法加载任务",
+  retryTasks: "稍后刷新或重试任务操作。",
+  noTasks: "暂无任务",
+  createTaskHint: "创建任务后可链接当前对话。",
+  createTask: "Create",
+  link: "Link",
+  unlink: "Unlink",
+  linksCount: (count: number) => `${count} links`,
+  localTools: "Local Tools",
+  localToolsDegraded: "部分本地工具暂不可用",
+  localToolsDegradedHint: "其余只读数据已继续加载。",
+  localToolsEmpty: "暂无本地工具数据",
+  localToolsEmptyHint: "选择已连接设备上的项目后显示只读 Files、Git/Review、Search、MCP 和 Extensions。",
+  localFiles: "Files",
+  localGitReview: "Git/Review",
+  localSearch: "Search",
+  localMcp: "MCP",
+  localExtensions: "Extensions",
+  noLocalFileEntries: "暂无文件条目",
+  noLocalGitSummary: "暂无 Git 摘要",
+  searchLocalFiles: "搜索本地项目文件",
+  searchButton: "Search",
+  localReviewActionTitle: "Start review for uncommitted changes",
+  localReviewActionHelp: "Type START REVIEW to request a local review.",
+  localReviewStartButton: "Start review",
+  localReviewAccepted: "Review request accepted.",
+  localReviewConfirmation: "Review confirmation text",
+  localReviewPlaceholder: "START REVIEW",
+  backToTaskList: "返回任务列表",
+  taskDetails: "任务详情",
+  advancedPlatform: "Advanced Platform",
+  advancedPlatformEmpty: "选择已连接设备上的项目后显示高级平台只读支持摘要。",
+  advancedPlatformMissing: "高级平台摘要暂不可用",
+  advancedPlatformWithCode: (code: string) => `高级平台摘要暂不可用：${code}`,
+  runtimeSettings: "Runtime & Settings",
+  runtimeSettingsEmpty: "选择已连接设备上的项目后显示运行时与设置摘要。",
+  runtimeSettingsMissing: "运行时摘要暂不可用",
+  runtimeSettingsWithCode: (code: string) => `运行时摘要暂不可用：${code}`,
+  runtimeModels: "Models",
+  runtimeProviderCapabilities: "Provider capabilities",
+  runtimeAccount: "Account",
+  runtimeConfigPosture: "Config posture",
+  runtimePermissionProfiles: "Permission profiles",
+  runtimeExperimentalFeatures: "Experimental features",
+  runtimeSectionStatuses: "section statuses",
+  runtimeDefaultModel: "默认模型",
+  runtimeModelCount: "模型数量",
+  runtimeReasoningStrength: "推理强度",
+  runtimeInputModalities: "输入模态",
+  runtimeServiceTiers: "服务层级",
+  runtimeAccountType: "类型",
+  runtimeAccountPlan: "计划",
+  runtimeAccountEmailDomain: "邮箱域",
+  runtimeAccountRequiresOpenaiAuth: "需要 OpenAI Auth",
+  runtimeConfigModel: "模型",
+  runtimeConfigReviewModel: "Review 模型",
+  runtimeConfigProvider: "Provider",
+  runtimeConfigApproval: "Approval",
+  runtimeConfigReviewer: "Reviewer",
+  runtimeConfigSandbox: "Sandbox",
+  runtimeConfigReasoning: "Reasoning",
+  runtimeConfigServiceTier: "Service tier",
+  runtimeConfigWebSearch: "Web search",
+  runtimeConfigCustomGuidance: "自定义指导已省略",
+  runtimeConfigDeveloperGuidance: "开发者指导已省略",
+  runtimeConfigCompactionGuidance: "压缩指导已省略",
+  runtimeNoPermissionProfiles: "未返回权限 profile",
+  runtimeNoExperimentalFeatures: "未返回实验功能",
+  runtimeNoReadinessSection: "未返回 readiness section",
+  runtimeNoWatchlistItem: "未返回 watchlist item",
+  runtimeExperimentalFeatureState: (stage: string, enabled: boolean, defaultEnabled: boolean) =>
+    `${stage} · ${enabled ? "已启用" : "未启用"} · 默认 ${defaultEnabled ? "开" : "关"}`,
+  runtimeNoDescription: "无描述",
+  advancedPlatformWindowsSandbox: "Windows sandbox",
+  advancedPlatformSupportMatrix: "Support matrix",
+  searchDialogTitle: "搜索对话",
+  searchInputPlaceholder: "搜索对话",
+  recentConversations: "近期对话",
+  missingValue: "未返回",
+  yes: "是",
+  no: "否",
+};
+
 export function ConversationMain({
+  actionsCopy,
   assistantThread,
   canStartConversation,
   canSubmitFollowUp,
   conversation,
   conversationCopy,
   controlStatus,
+  copy = FALLBACK_MAIN_PANELS,
+  detailCopy,
   followUpStatus,
   isDetailCollapsed,
   isMobile = false,
@@ -173,7 +305,7 @@ export function ConversationMain({
   startStatus,
   activeTurnId,
 }: ConversationMainProps) {
-  const conversationTitle = conversation === null ? "对话" : conversation.title;
+  const conversationTitle = conversation === null ? conversationCopy.empty : conversation.title;
   const [renameDraft, setRenameDraft] = useState(conversationTitle);
   const isExampleData = source.reason !== "loaded";
   const datasourceStatus: string[] = [source.reason];
@@ -193,13 +325,13 @@ export function ConversationMain({
       <header className="topbar">
         <div className="topbar-leading conversation-topbar-leading">
           {isMobile && onBack ? (
-            <HeaderBackButton label="返回导航" onClick={onBack} />
+            <HeaderBackButton copy={copy} label={copy.backToNavigation} onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
             <div className="conversation-collapsed-sidebar-controls">
-              <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+              <SidebarToggleButton collapsed copy={copy} direction="left" label={copy.expandLeftSidebar} onClick={onExpandSidebar} />
               <button
-                aria-label="切换到上一条对话"
+                aria-label={copy.expandLeftSidebar}
                 className="icon-button conversation-nav-button"
                 disabled={!previousConversationKey}
                 onClick={() => {
@@ -212,7 +344,7 @@ export function ConversationMain({
                 <Icon name="arrow-left" />
               </button>
               <button
-                aria-label="切换到下一条对话"
+                aria-label={copy.expandLeftSidebar}
                 className="icon-button conversation-nav-button"
                 disabled={!nextConversationKey}
                 onClick={() => {
@@ -229,7 +361,7 @@ export function ConversationMain({
           <div className="workspace-title conversation-title">
             {renaming && conversation ? (
               <form
-                aria-label="重命名对话"
+                aria-label={copy.renameConversation}
                 className="conversation-rename-form"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -237,17 +369,17 @@ export function ConversationMain({
                 }}
               >
                 <input
-                  aria-label="Conversation title"
+                  aria-label={copy.conversationTitle}
                   autoFocus
                   maxLength={120}
                   onChange={(event) => setRenameDraft(event.target.value)}
                   value={renameDraft}
                 />
                 <button disabled={controlStatus === "submitting" || renameDraft.trim() === ""} type="submit">
-                  保存
+                  {copy.save}
                 </button>
                 <button onClick={onCancelRenameConversation} type="button">
-                  取消
+                  {copy.cancel}
                 </button>
               </form>
             ) : (
@@ -256,8 +388,9 @@ export function ConversationMain({
             <ConversationStatusBadges conversation={conversation} />
             {!isMobile ? (
               <ActionMenu
+                {...(actionsCopy ? { copy: actionsCopy } : {})}
                 archived={conversation?.archived === true}
-                ariaLabel="打开对话操作菜单"
+                ariaLabel={copy.openConversationMenu}
                 className="conversation-title-menu"
                 group="conversation"
                 {...(conversation ? { onArchive: () => void onArchiveConversation(conversation) } : {})}
@@ -272,21 +405,21 @@ export function ConversationMain({
             {datasourceStatus.join(" · ")}
           </span>
           {!isMobile ? (
-            <button aria-label="布局列表" className="icon-button conversation-layout-button" type="button">
+            <button aria-label={copy.layoutList} className="icon-button conversation-layout-button" type="button">
               <Icon name="layout-list" />
             </button>
           ) : null}
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+            <SidebarToggleButton collapsed copy={copy} direction="right" label={copy.expandRightSidebar} onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
 
       <div className="content-scroll conversation-content-scroll">
         {isExampleData ? (
-          <section aria-label="数据源状态" className="conversation-source-banner">
-            <strong>未连接真实 Control Plane</strong>
-            <span>当前显示示例数据 · {datasourceStatus.join(" · ")}</span>
+          <section aria-label={copy.datasourceStatus} className="conversation-source-banner">
+            <strong>{copy.notConnectedToControlPlane}</strong>
+            <span>{copy.showingSampleData(datasourceStatus.join(" · "))}</span>
           </section>
         ) : null}
         <CodexAssistantThread
@@ -318,12 +451,15 @@ export function ConversationMain({
 
 export function SettingsPage({
   conversations,
+  copy,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
+  locale,
   onBack,
   onExpandDetail,
   onExpandSidebar,
+  onLocaleChange,
   onRestoreConversation,
   advancedPlatform,
   runtimeSettings,
@@ -334,27 +470,48 @@ export function SettingsPage({
     <main className="main-pane settings-page">
       <header className="topbar">
         <div className="topbar-leading">
-          {isMobile && onBack ? <HeaderBackButton label="返回导航" onClick={onBack} /> : null}
+          {isMobile && onBack ? <HeaderBackButton copy={copy.mainPanels} label={copy.mainPanels.backToNavigation} onClick={onBack} /> : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+            <SidebarToggleButton collapsed copy={copy.mainPanels} direction="left" label={copy.mainPanels.expandLeftSidebar} onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title">
-            <h1>设置</h1>
+            <h1>{copy.mainPanels.settings}</h1>
           </div>
         </div>
         <div className="toolbar">
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+            <SidebarToggleButton collapsed copy={copy.mainPanels} direction="right" label={copy.mainPanels.expandRightSidebar} onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
       <div className="content-scroll settings-content">
-        <RuntimeSettingsPanel runtimeSettings={runtimeSettings} />
-        <AdvancedPlatformPanel advancedPlatform={advancedPlatform} />
-        <section aria-label="已归档对话" className="settings-section">
-          <h2>已归档对话</h2>
+        <section aria-label={copy.settings.languageLabel} className="settings-section">
+          <h2>{copy.settings.languageLabel}</h2>
+          <div className="settings-language-options" role="group" aria-label={copy.settings.languageLabel}>
+            <button
+              aria-pressed={locale === "zh-CN"}
+              className="secondary-button"
+              onClick={() => onLocaleChange("zh-CN")}
+              type="button"
+            >
+              {copy.settings.languageChinese}
+            </button>
+            <button
+              aria-pressed={locale === "en-US"}
+              className="secondary-button"
+              onClick={() => onLocaleChange("en-US")}
+              type="button"
+            >
+              {copy.settings.languageEnglish}
+            </button>
+          </div>
+        </section>
+        <RuntimeSettingsPanel copy={copy.mainPanels} runtimeSettings={runtimeSettings} />
+        <AdvancedPlatformPanel advancedPlatform={advancedPlatform} copy={copy.mainPanels} />
+        <section aria-label={copy.mainPanels.archivedConversations} className="settings-section">
+          <h2>{copy.mainPanels.archivedConversations}</h2>
           {archivedConversations.length === 0 ? (
-            <p className="empty-state">暂无已归档对话</p>
+            <p className="empty-state">{copy.mainPanels.noArchivedConversations}</p>
           ) : (
             <div className="settings-list">
               {archivedConversations.map((conversation) => (
@@ -364,7 +521,7 @@ export function SettingsPage({
                     <span>{conversation.projectName} · {conversation.updatedAt}</span>
                   </span>
                   <button className="button secondary" onClick={() => void onRestoreConversation(conversation)} type="button">
-                    恢复
+                    {copy.mainPanels.restore}
                   </button>
                 </article>
               ))}
@@ -376,21 +533,21 @@ export function SettingsPage({
   );
 }
 
-function AdvancedPlatformPanel({ advancedPlatform }: { advancedPlatform: AdvancedPlatformData }) {
+function AdvancedPlatformPanel({ advancedPlatform, copy }: { advancedPlatform: AdvancedPlatformData; copy: WebDictionary["mainPanels"] }) {
   if (advancedPlatform.status === "empty" || advancedPlatform.status === "unavailable") {
     return (
-      <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
-        <h2>Advanced Platform</h2>
-        <p className="empty-state">选择已连接设备上的项目后显示高级平台只读支持摘要。</p>
+      <section aria-label={copy.advancedPlatform} className="settings-section runtime-settings-panel advanced-platform-panel">
+        <h2>{copy.advancedPlatform}</h2>
+        <p className="empty-state">{copy.advancedPlatformEmpty}</p>
       </section>
     );
   }
 
   if (!advancedPlatform.summary) {
     return (
-      <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
-        <h2>Advanced Platform</h2>
-        <p className="empty-state">高级平台摘要暂不可用{advancedPlatform.error?.code ? `：${advancedPlatform.error.code}` : ""}</p>
+      <section aria-label={copy.advancedPlatform} className="settings-section runtime-settings-panel advanced-platform-panel">
+        <h2>{copy.advancedPlatform}</h2>
+        <p className="empty-state">{advancedPlatform.error?.code ? copy.advancedPlatformWithCode(advancedPlatform.error.code) : copy.advancedPlatformMissing}</p>
       </section>
     );
   }
@@ -398,116 +555,117 @@ function AdvancedPlatformPanel({ advancedPlatform }: { advancedPlatform: Advance
   const summary = advancedPlatform.summary;
 
   return (
-    <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
+    <section aria-label={copy.advancedPlatform} className="settings-section runtime-settings-panel advanced-platform-panel">
       <header className="runtime-settings-header">
-        <h2>Advanced Platform</h2>
+        <h2>{copy.advancedPlatform}</h2>
         <code>{advancedPlatform.status}</code>
       </header>
       <div className="runtime-settings-grid">
-        <RuntimeSettingsCard title="Windows sandbox" status={toRuntimeSettingsCardStatus(advancedPlatform.status)}>
+        <RuntimeSettingsCard title={copy.advancedPlatformWindowsSandbox} status={toRuntimeSettingsCardStatus(advancedPlatform.status)}>
           {summary.readinessSections.length ? summary.readinessSections.map((section) => (
             <RuntimeSettingsRow
               key={section.id}
               label={section.label}
               value={section.error?.code ? `${section.status} · ${section.error.code}` : section.status}
             />
-          )) : <p className="empty-state">未返回 readiness section</p>}
+          )) : <p className="empty-state">{copy.runtimeNoReadinessSection}</p>}
           <RuntimeSettingsRow label="Platform" value={summary.platform} />
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Support matrix" status="loaded">
+        <RuntimeSettingsCard title={copy.advancedPlatformSupportMatrix} status="loaded">
           {summary.watchlistItems.length ? summary.watchlistItems.map((item) => (
             <RuntimeSettingsRow key={item.id} label={item.label} value={item.support} />
-          )) : <p className="empty-state">未返回 watchlist item</p>}
+          )) : <p className="empty-state">{copy.runtimeNoWatchlistItem}</p>}
         </RuntimeSettingsCard>
       </div>
     </section>
   );
 }
 
-function RuntimeSettingsPanel({ runtimeSettings }: { runtimeSettings: RuntimeSettingsData }) {
+function RuntimeSettingsPanel({ copy, runtimeSettings }: { copy: WebDictionary["mainPanels"]; runtimeSettings: RuntimeSettingsData }) {
   if (runtimeSettings.status === "empty" || runtimeSettings.status === "unavailable") {
     return (
-      <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
-        <h2>Runtime & Settings</h2>
-        <p className="empty-state">选择已连接设备上的项目后显示运行时与设置摘要。</p>
+      <section aria-label={copy.runtimeSettings} className="settings-section runtime-settings-panel">
+        <h2>{copy.runtimeSettings}</h2>
+        <p className="empty-state">{copy.runtimeSettingsEmpty}</p>
       </section>
     );
   }
 
   if (!runtimeSettings.summary) {
     return (
-      <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
-        <h2>Runtime & Settings</h2>
-        <p className="empty-state">运行时摘要暂不可用{runtimeSettings.error?.code ? `：${runtimeSettings.error.code}` : ""}</p>
+      <section aria-label={copy.runtimeSettings} className="settings-section runtime-settings-panel">
+        <h2>{copy.runtimeSettings}</h2>
+        <p className="empty-state">{runtimeSettings.error?.code ? copy.runtimeSettingsWithCode(runtimeSettings.error.code) : copy.runtimeSettingsMissing}</p>
       </section>
     );
   }
 
   const summary = runtimeSettings.summary;
   const defaultModel = summary.models.find((model) => model.isDefault) ?? summary.models[0] ?? null;
+  const missing = copy.missingValue;
 
   return (
-    <section aria-label="Runtime & Settings" className="settings-section runtime-settings-panel">
+    <section aria-label={copy.runtimeSettings} className="settings-section runtime-settings-panel">
       <header className="runtime-settings-header">
-        <h2>Runtime & Settings</h2>
+        <h2>{copy.runtimeSettings}</h2>
         <code>{runtimeSettings.status}</code>
       </header>
       <div className="runtime-settings-grid">
-        <RuntimeSettingsCard title="Models" status={findRuntimeSectionStatus(summary, "models")}>
-          <RuntimeSettingsRow label="默认模型" value={defaultModel ? `${defaultModel.displayName} (${defaultModel.id})` : "未返回"} />
-          <RuntimeSettingsRow label="模型数量" value={String(summary.models.length)} />
-          <RuntimeSettingsRow label="推理强度" value={defaultModel?.supportedReasoningEfforts.join(", ") || "未返回"} />
-          <RuntimeSettingsRow label="输入模态" value={defaultModel?.inputModalities.join(", ") || "未返回"} />
-          <RuntimeSettingsRow label="服务层级" value={defaultModel?.serviceTiers.join(", ") || "未返回"} />
+        <RuntimeSettingsCard title={copy.runtimeModels} status={findRuntimeSectionStatus(summary, "models")}>
+          <RuntimeSettingsRow label={copy.runtimeDefaultModel} value={defaultModel ? `${defaultModel.displayName} (${defaultModel.id})` : missing} />
+          <RuntimeSettingsRow label={copy.runtimeModelCount} value={String(summary.models.length)} />
+          <RuntimeSettingsRow label={copy.runtimeReasoningStrength} value={defaultModel?.supportedReasoningEfforts.join(", ") || missing} />
+          <RuntimeSettingsRow label={copy.runtimeInputModalities} value={defaultModel?.inputModalities.join(", ") || missing} />
+          <RuntimeSettingsRow label={copy.runtimeServiceTiers} value={defaultModel?.serviceTiers.join(", ") || missing} />
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Provider capabilities" status={findRuntimeSectionStatus(summary, "providerCapabilities")}>
-          <RuntimeSettingsRow label="Reasoning" value={formatBoolean(summary.providerCapabilities.supportsReasoning)} />
-          <RuntimeSettingsRow label="Images" value={formatBoolean(summary.providerCapabilities.supportsImages)} />
-          <RuntimeSettingsRow label="Web search" value={formatBoolean(summary.providerCapabilities.supportsWebSearch)} />
-          <RuntimeSettingsRow label="Structured output" value={formatBoolean(summary.providerCapabilities.supportsStructuredOutput)} />
+        <RuntimeSettingsCard title={copy.runtimeProviderCapabilities} status={findRuntimeSectionStatus(summary, "providerCapabilities")}>
+          <RuntimeSettingsRow label="Reasoning" value={formatBoolean(copy, summary.providerCapabilities.supportsReasoning)} />
+          <RuntimeSettingsRow label="Images" value={formatBoolean(copy, summary.providerCapabilities.supportsImages)} />
+          <RuntimeSettingsRow label="Web search" value={formatBoolean(copy, summary.providerCapabilities.supportsWebSearch)} />
+          <RuntimeSettingsRow label="Structured output" value={formatBoolean(copy, summary.providerCapabilities.supportsStructuredOutput)} />
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Account" status={findRuntimeSectionStatus(summary, "account")}>
-          <RuntimeSettingsRow label="类型" value={summary.account.type} />
-          <RuntimeSettingsRow label="计划" value={summary.account.planType ?? "未返回"} />
-          <RuntimeSettingsRow label="邮箱域" value={summary.account.emailDomain ?? "未返回"} />
-          <RuntimeSettingsRow label="需要 OpenAI Auth" value={formatBoolean(summary.account.requiresOpenaiAuth)} />
+        <RuntimeSettingsCard title={copy.runtimeAccount} status={findRuntimeSectionStatus(summary, "account")}>
+          <RuntimeSettingsRow label={copy.runtimeAccountType} value={summary.account.type} />
+          <RuntimeSettingsRow label={copy.runtimeAccountPlan} value={summary.account.planType ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeAccountEmailDomain} value={summary.account.emailDomain ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeAccountRequiresOpenaiAuth} value={formatBoolean(copy, summary.account.requiresOpenaiAuth)} />
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Config posture" status={findRuntimeSectionStatus(summary, "config")}>
-          <RuntimeSettingsRow label="模型" value={summary.config.model ?? "未返回"} />
-          <RuntimeSettingsRow label="Review 模型" value={summary.config.reviewModel ?? "未返回"} />
-          <RuntimeSettingsRow label="Provider" value={summary.config.modelProvider ?? "未返回"} />
-          <RuntimeSettingsRow label="Approval" value={summary.config.approvalPolicy ?? "未返回"} />
-          <RuntimeSettingsRow label="Reviewer" value={summary.config.approvalsReviewer ?? "未返回"} />
-          <RuntimeSettingsRow label="Sandbox" value={summary.config.sandboxMode ?? "未返回"} />
-          <RuntimeSettingsRow label="Reasoning" value={summary.config.reasoningEffort ?? "未返回"} />
-          <RuntimeSettingsRow label="Service tier" value={summary.config.serviceTier ?? "未返回"} />
-          <RuntimeSettingsRow label="Web search" value={summary.config.webSearch === null ? "未返回" : formatBoolean(summary.config.webSearch)} />
-          <RuntimeSettingsRow label="自定义指导已省略" value={formatBoolean(summary.config.customGuidanceOmitted)} />
-          <RuntimeSettingsRow label="开发者指导已省略" value={formatBoolean(summary.config.developerGuidanceOmitted)} />
-          <RuntimeSettingsRow label="压缩指导已省略" value={formatBoolean(summary.config.compactionGuidanceOmitted)} />
+        <RuntimeSettingsCard title={copy.runtimeConfigPosture} status={findRuntimeSectionStatus(summary, "config")}>
+          <RuntimeSettingsRow label={copy.runtimeConfigModel} value={summary.config.model ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigReviewModel} value={summary.config.reviewModel ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigProvider} value={summary.config.modelProvider ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigApproval} value={summary.config.approvalPolicy ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigReviewer} value={summary.config.approvalsReviewer ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigSandbox} value={summary.config.sandboxMode ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigReasoning} value={summary.config.reasoningEffort ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigServiceTier} value={summary.config.serviceTier ?? missing} />
+          <RuntimeSettingsRow label={copy.runtimeConfigWebSearch} value={summary.config.webSearch === null ? missing : formatBoolean(copy, summary.config.webSearch)} />
+          <RuntimeSettingsRow label={copy.runtimeConfigCustomGuidance} value={formatBoolean(copy, summary.config.customGuidanceOmitted)} />
+          <RuntimeSettingsRow label={copy.runtimeConfigDeveloperGuidance} value={formatBoolean(copy, summary.config.developerGuidanceOmitted)} />
+          <RuntimeSettingsRow label={copy.runtimeConfigCompactionGuidance} value={formatBoolean(copy, summary.config.compactionGuidanceOmitted)} />
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Permission profiles" status={findRuntimeSectionStatus(summary, "permissionProfiles")}>
+        <RuntimeSettingsCard title={copy.runtimePermissionProfiles} status={findRuntimeSectionStatus(summary, "permissionProfiles")}>
           {summary.permissionProfiles.length ? summary.permissionProfiles.map((profile) => (
-            <RuntimeSettingsRow key={profile.id} label={profile.id} value={profile.description ?? "无描述"} />
-          )) : <p className="empty-state">未返回权限 profile</p>}
+            <RuntimeSettingsRow key={profile.id} label={profile.id} value={profile.description ?? copy.runtimeNoDescription} />
+          )) : <p className="empty-state">{copy.runtimeNoPermissionProfiles}</p>}
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="Experimental features" status={findRuntimeSectionStatus(summary, "experimentalFeatures")}>
+        <RuntimeSettingsCard title={copy.runtimeExperimentalFeatures} status={findRuntimeSectionStatus(summary, "experimentalFeatures")}>
           {summary.experimentalFeatures.length ? summary.experimentalFeatures.map((feature) => (
             <RuntimeSettingsRow
               key={feature.name}
               label={feature.displayName ?? feature.name}
-              value={`${feature.stage} · ${feature.enabled ? "已启用" : "未启用"} · 默认 ${feature.defaultEnabled ? "开" : "关"}`}
+              value={copy.runtimeExperimentalFeatureState(feature.stage, feature.enabled, feature.defaultEnabled)}
             />
-          )) : <p className="empty-state">未返回实验功能</p>}
+          )) : <p className="empty-state">{copy.runtimeNoExperimentalFeatures}</p>}
         </RuntimeSettingsCard>
 
-        <RuntimeSettingsCard title="section statuses" status={runtimeSettings.status}>
+        <RuntimeSettingsCard title={copy.runtimeSectionStatuses} status={runtimeSettings.status}>
           {summary.sections.map((section) => (
             <RuntimeSettingsRow
               key={section.section}
@@ -569,8 +727,8 @@ function findRuntimeSectionStatus(
   return summary.sections.find((item) => item.section === section)?.status ?? "unavailable";
 }
 
-function formatBoolean(value: boolean): string {
-  return value ? "是" : "否";
+function formatBoolean(copy: WebDictionary["mainPanels"], value: boolean): string {
+  return value ? copy.yes : copy.no;
 }
 
 function ConversationStatusBadges(props: { conversation: CodexConversation | null }) {
@@ -589,6 +747,7 @@ function ConversationStatusBadges(props: { conversation: CodexConversation | nul
 
 export function ConversationDetailPane({
   conversationTitle,
+  detailCopy,
   isCollapsed,
   isMobile,
   onBack,
@@ -596,6 +755,7 @@ export function ConversationDetailPane({
   target,
 }: {
   conversationTitle: string;
+  detailCopy: WebDictionary["detail"];
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
@@ -605,6 +765,7 @@ export function ConversationDetailPane({
   return (
     <DetailWorkspace
       conversationTitle={conversationTitle}
+      copy={detailCopy}
       isCollapsed={isCollapsed}
       isMobile={isMobile}
       onBack={onBack}
@@ -615,6 +776,7 @@ export function ConversationDetailPane({
 }
 
 export function DevicesPage({
+  copy = FALLBACK_MAIN_PANELS,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -631,27 +793,27 @@ export function DevicesPage({
       <header className="topbar">
         <div className="topbar-leading">
           {isMobile && onBack ? (
-            <HeaderBackButton label="返回导航" onClick={onBack} />
+            <HeaderBackButton copy={copy} label={copy.backToNavigation} onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+            <SidebarToggleButton collapsed copy={copy} direction="left" label={copy.expandLeftSidebar} onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title devices-title">
-            <h1>设备</h1>
-            <button aria-label="新增设备" className="icon-button devices-add-button" disabled type="button">
+            <h1>{copy.device}</h1>
+            <button aria-label={copy.addDevice} className="icon-button devices-add-button" disabled type="button">
               <Icon name="plus" />
             </button>
           </div>
         </div>
         <div className="toolbar devices-toolbar">
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+            <SidebarToggleButton collapsed copy={copy} direction="right" label={copy.expandRightSidebar} onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
 
       <div className="content-scroll">
-        <section aria-label="Device list" className="device-grid">
+        <section aria-label={copy.deviceList} className="device-grid">
           {devices.map((device) => (
             <article className={`device-card${device.id === selectedDeviceId ? " is-selected" : ""}`} key={device.id}>
               <button
@@ -672,15 +834,15 @@ export function DevicesPage({
                     <StatusBadge status={device.status} />
                   </span>
                   <span className="device-card-meta">
-                    {device.ip} - 最后上线 {device.lastOnlineAt}
+                    {device.ip} - {copy.deviceLastOnline(device.lastOnlineAt)}
                   </span>
                 </span>
               </button>
               <div className="device-card-actions">
-                <button aria-label="编辑设备" className="icon-button device-action-button" disabled type="button">
+                <button aria-label={copy.editDevice} className="icon-button device-action-button" disabled type="button">
                   <Icon name="pencil" />
                 </button>
-                <button aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" disabled type="button">
+                <button aria-label={copy.deleteDevice} className="icon-button device-action-button device-action-button-danger" disabled type="button">
                   <Icon name="delete" />
                 </button>
               </div>
@@ -693,6 +855,7 @@ export function DevicesPage({
 }
 
 export function DeviceDetailPane({
+  copy = FALLBACK_MAIN_PANELS,
   isCollapsed,
   isMobile = false,
   onBack,
@@ -700,6 +863,7 @@ export function DeviceDetailPane({
   selectedDeviceId,
   devices,
 }: {
+  copy?: WebDictionary["mainPanels"];
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
@@ -713,17 +877,17 @@ export function DeviceDetailPane({
     return (
       <RightDetailPane
         ariaLabel="Device detail"
-        backLabel="返回设备列表"
+        backLabel={copy.backToDeviceList}
         className="device-detail-pane"
         isCollapsed={isCollapsed}
         isMobile={isMobile}
         onBack={onBack}
         onCollapse={onCollapse}
-        title="设备详情"
+        title={FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL.deviceDetails}
         titleIcon="laptop"
       >
         <section className="linked-task">
-          <h2>暂无设备数据</h2>
+          <h2>{copy.noDeviceData}</h2>
         </section>
       </RightDetailPane>
     );
@@ -732,33 +896,68 @@ export function DeviceDetailPane({
   return (
     <RightDetailPane
       ariaLabel="Device detail"
-      backLabel="返回设备列表"
+      backLabel={copy.backToDeviceList}
       className="device-detail-pane"
       isCollapsed={isCollapsed}
       isMobile={isMobile}
       onBack={onBack}
       onCollapse={onCollapse}
-      title="设备详情"
+      title={FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL.deviceDetails}
       titleIcon={iconForDevice(selectedDevice)}
     >
-        <section className="linked-task">
-          <h2>{selectedDevice.name}</h2>
-          <p>状态：{statusText[selectedDevice.status]}</p>
-          <p>IP：{selectedDevice.ip}</p>
-          <p>最后上线：{selectedDevice.lastOnlineAt}</p>
-        </section>
-        <section className="linked-task">
-          <h2>当前上下文</h2>
-          <p>项目：{selectedDevice.currentProject}</p>
-          <p>模型：{selectedDevice.model}</p>
-          <p>真实编辑、删除和新增设备逻辑后续接入 Control Plane API。</p>
-        </section>
+      <section className="linked-task">
+        <h2>{selectedDevice.name}</h2>
+        <p>{copy.deviceStatus(getStatusText(FALLBACK_STATUS_DICTIONARY, selectedDevice.status))}</p>
+        <p>{copy.deviceIp(selectedDevice.ip)}</p>
+        <p>{copy.deviceLastOnline(selectedDevice.lastOnlineAt)}</p>
+      </section>
+      <section className="linked-task">
+        <h2>{copy.deviceCurrentContext}</h2>
+        <p>{copy.deviceProject(selectedDevice.currentProject)}</p>
+        <p>{copy.deviceModel(selectedDevice.model)}</p>
+        <p>{copy.deviceEditLater}</p>
+      </section>
     </RightDetailPane>
   );
 }
 
+const FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL: WebDictionary["detail"] = {
+  review: "审查",
+  terminal: "终端",
+  browser: "浏览器",
+  files: "文件",
+  sideChat: "侧边聊天",
+  deviceDetails: "设备详情",
+  taskDetails: "任务详情",
+  collapseRight: "收起右侧边栏",
+  toolMeta: "工具",
+  context: "上下文",
+  fileMeta: "路径与资源",
+  browserMeta: "页面与 tab",
+  reviewMeta: "代码与结果检查",
+  sideChatMeta: "补充沟通",
+  terminalMeta: "命令与日志",
+  workspaceOutput: "工作区输出",
+  inlineOutput: "内联输出",
+  fileChanges: (count: number) => `${count} 个文件变更`,
+  temporaryFileLink: "当前先展示链接目标，后续再接入真实读取。",
+  reviewRequestTitle: "Review request accepted",
+};
+
+const FALLBACK_STATUS_DICTIONARY = {
+  Connected: "Connected",
+  "Not connected": "Not connected",
+  done: "Done",
+  failed: "Failed",
+  in_progress: "In progress",
+  running: "Running",
+  unknown: "Unknown",
+  waiting: "Waiting",
+} as const;
+
 export function TaskBoardPage({
   conversations,
+  copy = FALLBACK_MAIN_PANELS,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -790,27 +989,27 @@ export function TaskBoardPage({
       <header className="topbar">
         <div className="topbar-leading">
           {isMobile && onBack ? (
-            <HeaderBackButton label="返回导航" onClick={onBack} />
+            <HeaderBackButton copy={copy} label={copy.backToNavigation} onClick={onBack} />
           ) : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+            <SidebarToggleButton collapsed copy={copy} direction="left" label={copy.expandLeftSidebar} onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title tasks-title">
-            <h1>任务</h1>
+            <h1>{copy.tasks}</h1>
           </div>
         </div>
         <div className="toolbar tasks-toolbar">
           <span className="datasource-status">{taskStatus}</span>
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+            <SidebarToggleButton collapsed copy={copy} direction="right" label={copy.expandRightSidebar} onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
       <div className="content-scroll">
         {isExampleData ? (
-          <section aria-label="任务数据源状态" className="conversation-source-banner">
-            <strong>未连接真实 Control Plane</strong>
-            <span>当前显示示例任务数据 · {datasourceStatus.join(" · ")}</span>
+          <section aria-label={copy.taskBoardSource} className="conversation-source-banner">
+            <strong>{copy.notConnectedToControlPlane}</strong>
+            <span>{copy.showingSampleTasks(datasourceStatus.join(" · "))}</span>
           </section>
         ) : null}
         <form
@@ -829,27 +1028,27 @@ export function TaskBoardPage({
         >
           <div className="conversation-control-row">
             <input
-              aria-label="Task title"
+              aria-label={copy.taskTitle}
               className="conversation-control-input"
               disabled={disabled}
               onChange={(event) => setTaskTitle(event.target.value)}
               value={taskTitle}
             />
             <button className="button secondary conversation-control-button" disabled={disabled || !taskTitle.trim()} type="submit">
-              Create
+              {copy.createTask}
             </button>
           </div>
         </form>
-        <section aria-label="Task board" className="device-grid">
+        <section aria-label={copy.taskBoard} className="device-grid">
           {taskLoadState === "failed" ? (
             <article className="empty-state">
-              <h2>无法加载任务</h2>
-              <p>稍后刷新或重试任务操作。</p>
+              <h2>{copy.cannotLoadTasks}</h2>
+              <p>{copy.retryTasks}</p>
             </article>
           ) : tasks.length === 0 ? (
             <article className="empty-state">
-              <h2>暂无任务</h2>
-              <p>创建任务后可链接当前对话。</p>
+              <h2>{copy.noTasks}</h2>
+              <p>{copy.createTaskHint}</p>
             </article>
           ) : tasks.map((task) => {
             const selectedLinked = selectedConversation
@@ -866,7 +1065,7 @@ export function TaskBoardPage({
                       <span>{task.title}</span>
                       <StatusBadge status={task.status} />
                     </span>
-                    <span className="device-card-meta">{task.linkedConversations.length} links</span>
+                    <span className="device-card-meta">{copy.linksCount(task.linkedConversations.length)}</span>
                   </span>
                 </div>
                 <div className="device-card-actions">
@@ -876,7 +1075,7 @@ export function TaskBoardPage({
                     onClick={() => void onLinkSelectedConversation(task)}
                     type="button"
                   >
-                    Link
+                    {copy.link}
                   </button>
                 </div>
                 {task.linkedConversations.length > 0 ? (
@@ -890,7 +1089,7 @@ export function TaskBoardPage({
                           onClick={() => void onUnlinkConversation(task, link)}
                           type="button"
                         >
-                          Unlink
+                          {copy.unlink}
                         </button>
                       </div>
                     ))}
@@ -907,6 +1106,7 @@ export function TaskBoardPage({
 
 export function LocalWorkbenchPage({
   canStartReview,
+  copy = FALLBACK_MAIN_PANELS,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -930,44 +1130,44 @@ export function LocalWorkbenchPage({
     <main className="main-pane local-workbench-page">
       <header className="topbar">
         <div className="topbar-leading">
-          {isMobile && onBack ? <HeaderBackButton label="返回导航" onClick={onBack} /> : null}
+          {isMobile && onBack ? <HeaderBackButton copy={copy} label={copy.backToNavigation} onClick={onBack} /> : null}
           {!isMobile && isSidebarCollapsed ? (
-            <SidebarToggleButton collapsed direction="left" label="展开左侧边栏" onClick={onExpandSidebar} />
+            <SidebarToggleButton collapsed copy={copy} direction="left" label={copy.expandLeftSidebar} onClick={onExpandSidebar} />
           ) : null}
           <div className="workspace-title">
-            <h1>Local Tools</h1>
+            <h1>{copy.localTools}</h1>
           </div>
         </div>
         <div className="toolbar">
           <span className="datasource-status">{datasourceStatus}</span>
           {!isMobile && isDetailCollapsed ? (
-            <SidebarToggleButton collapsed direction="right" label="展开右侧边栏" onClick={onExpandDetail} />
+            <SidebarToggleButton collapsed copy={copy} direction="right" label={copy.expandRightSidebar} onClick={onExpandDetail} />
           ) : null}
         </div>
       </header>
       <div className="content-scroll local-workbench-content">
         {localWorkbench.status === "degraded" ? (
           <section aria-label="Local tools degraded" className="conversation-source-banner">
-            <strong>部分本地工具暂不可用</strong>
-            <span>其余只读数据已继续加载。</span>
+            <strong>{copy.localToolsDegraded}</strong>
+            <span>{copy.localToolsDegradedHint}</span>
           </section>
         ) : null}
         {localWorkbench.status === "empty" || localWorkbench.status === "unavailable" ? (
           <section aria-label="Local tools empty" className="empty-state">
-            <h2>暂无本地工具数据</h2>
-            <p>选择已连接设备上的项目后显示只读 Files、Git/Review、Search、MCP 和 Extensions。</p>
+            <h2>{copy.localToolsEmpty}</h2>
+            <p>{copy.localToolsEmptyHint}</p>
           </section>
         ) : (
           <>
             <section aria-label="Local tools summary" className="local-workbench-summary">
-              <MetricPill label="Files" value={localWorkbench.summary ? `${localWorkbench.summary.directoryCount}/${localWorkbench.summary.fileCount}` : "0/0"} />
-              <MetricPill label="Git/Review" value={localWorkbench.summary?.gitStatus ?? "unknown"} />
-              <MetricPill label="Search" value={String(localWorkbench.search.data?.matches.length ?? localWorkbench.summary?.searchResultCount ?? 0)} />
-              <MetricPill label="MCP" value={String(localWorkbench.summary?.mcpServerCount ?? localWorkbench.mcp.data?.servers.length ?? 0)} />
-              <MetricPill label="Extensions" value={String(localWorkbench.summary?.extensionCount ?? 0)} />
+              <MetricPill label={copy.localFiles} value={localWorkbench.summary ? `${localWorkbench.summary.directoryCount}/${localWorkbench.summary.fileCount}` : "0/0"} />
+              <MetricPill label={copy.localGitReview} value={localWorkbench.summary?.gitStatus ?? "unknown"} />
+              <MetricPill label={copy.localSearch} value={String(localWorkbench.search.data?.matches.length ?? localWorkbench.summary?.searchResultCount ?? 0)} />
+              <MetricPill label={copy.localMcp} value={String(localWorkbench.summary?.mcpServerCount ?? localWorkbench.mcp.data?.servers.length ?? 0)} />
+              <MetricPill label={copy.localExtensions} value={String(localWorkbench.summary?.extensionCount ?? 0)} />
             </section>
             <section aria-label="Local tools sections" className="local-workbench-grid">
-              <LocalWorkbenchCard title="Files" status={localWorkbench.files.status}>
+              <LocalWorkbenchCard title={copy.localFiles} status={localWorkbench.files.status}>
                 <div className="local-workbench-list">
                   {localWorkbench.files.data?.entries.length ? localWorkbench.files.data.entries.map((entry) => (
                     <div className="local-workbench-row" key={entry.path}>
@@ -975,7 +1175,7 @@ export function LocalWorkbenchPage({
                       <span>{entry.path}</span>
                       <code>{entry.kind}</code>
                     </div>
-                  )) : <p className="empty-state">暂无文件条目</p>}
+                  )) : <p className="empty-state">{copy.noLocalFileEntries}</p>}
                 </div>
                 {localWorkbench.preview.data ? (
                   <pre className="local-workbench-preview">
@@ -984,7 +1184,7 @@ export function LocalWorkbenchPage({
                 ) : null}
               </LocalWorkbenchCard>
 
-              <LocalWorkbenchCard title="Git/Review" status={localWorkbench.git.status}>
+              <LocalWorkbenchCard title={copy.localGitReview} status={localWorkbench.git.status}>
                 {localWorkbench.git.data ? (
                   <div className="local-workbench-list">
                     <div className="local-workbench-row">
@@ -999,7 +1199,7 @@ export function LocalWorkbenchPage({
                       </div>
                     ))}
                     <form
-                      aria-label="Start review for uncommitted changes"
+                      aria-label={copy.localReviewActionTitle}
                       className="local-review-action"
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -1010,30 +1210,30 @@ export function LocalWorkbenchPage({
                       }}
                     >
                       <label>
-                        <span>Type START REVIEW to request a local review.</span>
+                        <span>{copy.localReviewActionHelp}</span>
                         <input
-                          aria-label="Review confirmation text"
+                          aria-label={copy.localReviewConfirmation}
                           disabled={reviewStartStatus === "submitting"}
                           onChange={(event) => setReviewConfirmation(event.target.value)}
-                          placeholder="START REVIEW"
+                          placeholder={copy.localReviewPlaceholder}
                           value={reviewConfirmation}
                         />
                       </label>
                       <button disabled={!canStartReview || reviewConfirmation !== "START REVIEW" || reviewStartStatus === "submitting"} type="submit">
-                        Start review
+                        {copy.localReviewStartButton}
                       </button>
                       {reviewStartStatus === "accepted" ? (
-                        <p className="local-review-action-status" data-state="accepted">Review request accepted.</p>
+                        <p className="local-review-action-status" data-state="accepted">{copy.localReviewAccepted}</p>
                       ) : null}
                       {reviewStartStatus === "failed" && reviewStartError ? (
                         <p className="local-review-action-status" data-state="failed">{reviewStartError}</p>
                       ) : null}
                     </form>
                   </div>
-                ) : <p className="empty-state">暂无 Git 摘要</p>}
+                ) : <p className="empty-state">{copy.noLocalGitSummary}</p>}
               </LocalWorkbenchCard>
 
-              <LocalWorkbenchCard title="Search" status={localWorkbench.search.status}>
+              <LocalWorkbenchCard title={copy.localSearch} status={localWorkbench.search.status}>
                 <form
                   className="local-workbench-search"
                   onSubmit={(event) => {
@@ -1049,13 +1249,13 @@ export function LocalWorkbenchPage({
                   }}
                 >
                   <input
-                    aria-label="搜索本地项目文件"
+                    aria-label={copy.searchLocalFiles}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="搜索本地项目文件"
+                    placeholder={copy.searchLocalFiles}
                     value={searchQuery}
                   />
                   <button disabled={!searchQuery.trim() || searchStatus === "submitting"} type="submit">
-                    Search
+                    {copy.searchButton}
                   </button>
                 </form>
                 <div className="local-workbench-list">
@@ -1068,7 +1268,7 @@ export function LocalWorkbenchPage({
                 </div>
               </LocalWorkbenchCard>
 
-              <LocalWorkbenchCard title="MCP" status={localWorkbench.mcp.status}>
+              <LocalWorkbenchCard title={copy.localMcp} status={localWorkbench.mcp.status}>
                 <div className="local-workbench-list">
                   {localWorkbench.mcp.data?.servers.map((server) => (
                     <div className="local-workbench-row" key={server.name}>
@@ -1080,7 +1280,7 @@ export function LocalWorkbenchPage({
                 </div>
               </LocalWorkbenchCard>
 
-              <LocalWorkbenchCard title="Extensions" status={localWorkbench.extensions.status}>
+              <LocalWorkbenchCard title={copy.localExtensions} status={localWorkbench.extensions.status}>
                 <ExtensionGroup label="Skills" values={localWorkbench.extensions.data?.skills.map((skill) => skill.name) ?? []} />
                 <ExtensionGroup label="Hooks" values={localWorkbench.extensions.data?.hooks.map((hook) => hook.name) ?? []} />
                 <ExtensionGroup label="Plugins" values={localWorkbench.extensions.data?.plugins.map((plugin) => plugin.name) ?? []} />
@@ -1133,11 +1333,13 @@ function ExtensionGroup({ label, values }: { label: string; values: string[] }) 
 }
 
 export function TaskDetailPane({
+  copy = FALLBACK_MAIN_PANELS,
   isCollapsed,
   isMobile = false,
   onBack,
   onCollapse,
 }: {
+  copy?: WebDictionary["mainPanels"];
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
@@ -1146,13 +1348,13 @@ export function TaskDetailPane({
   return (
     <RightDetailPane
       ariaLabel="Task detail"
-      backLabel="返回任务列表"
+      backLabel={copy.backToTaskList}
       className="device-detail-pane"
       isCollapsed={isCollapsed}
       isMobile={isMobile}
       onBack={onBack}
       onCollapse={onCollapse}
-      title="任务详情"
+      title={copy.taskDetails}
       titleIcon="reload"
     />
   );
@@ -1166,6 +1368,7 @@ function formatTaskLink(link: TaskConversationLink, conversations: CodexConversa
 }
 
 export function SearchDialog({
+  copy = FALLBACK_MAIN_PANELS,
   onClose,
   onSelectConversation,
   open,
@@ -1178,11 +1381,11 @@ export function SearchDialog({
 
   return (
     <div className="search-overlay" data-close-search onClick={(event) => event.target === event.currentTarget && onClose()} role="presentation">
-      <section aria-label="搜索对话" aria-modal="true" className="search-dialog" data-search-dialog role="dialog">
+      <section aria-label={copy.searchDialogTitle} aria-modal="true" className="search-dialog" data-search-dialog role="dialog">
         <div className="search-input-shell">
-          <input aria-label="搜索对话" autoFocus className="search-input" placeholder="搜索对话" />
+          <input aria-label={copy.searchDialogTitle} autoFocus className="search-input" placeholder={copy.searchInputPlaceholder} />
         </div>
-        <div className="search-section-title">近期对话</div>
+        <div className="search-section-title">{copy.recentConversations}</div>
         <div className="search-results">
           {searchRecents.map((item, index) => (
             <button
@@ -1211,16 +1414,17 @@ function StatusBadge(props: { status: DeviceConnectionStatus | CodexConversation
   const isDeviceStatus = props.status === "Connected" || props.status === "Not connected";
   if (isDeviceStatus) {
     return (
-      <UiBadge ariaLabel={statusText[props.status]} className={`badge-device-status ${statusClassName}`}>
+      <UiBadge ariaLabel={FALLBACK_STATUS_DICTIONARY[props.status]} className={`badge-device-status ${statusClassName}`}>
         <StatusDot statusClassName={statusClassName} />
       </UiBadge>
     );
   }
-  return <UiBadge className={statusClassName}>{statusText[props.status]}</UiBadge>;
+  return <UiBadge className={statusClassName}>{FALLBACK_STATUS_DICTIONARY[props.status]}</UiBadge>;
 }
 
 function SidebarToggleButton(props: {
   collapsed?: boolean;
+  copy: WebDictionary["mainPanels"];
   direction: "left" | "right";
   label: string;
   onClick: () => void;
@@ -1244,7 +1448,8 @@ function SidebarToggleButton(props: {
   );
 }
 
-function HeaderBackButton(props: { label: string; onClick: () => void }) {
+function HeaderBackButton(props: { copy: WebDictionary["mainPanels"]; label: string; onClick: () => void }) {
+  void props.copy;
   return (
     <button aria-label={props.label} className="icon-button mobile-back-button" onClick={props.onClick} type="button">
       <Icon className="mobile-back-icon" name="right" />

@@ -81,12 +81,23 @@ test("when visual primitives are standardized, should reuse shared size, icon, a
   assert.match(styles, /\.workspace-title h1\s*\{[^}]*font-weight:\s*var\(--cr-weight-emphasis\);/s);
 });
 
+test("when Settings exposes language selection, should render dictionary-backed buttons and persist the choice", () => {
+  const mainPanelsComponent = readWebSource("components/detail/main-panels.tsx");
+  const shellComponent = readWebSource("components/shell/codex-remote-app.tsx");
+
+  assert.match(mainPanelsComponent, /copy\.settings\.languageLabel/);
+  assert.match(mainPanelsComponent, /onLocaleChange/);
+  assert.match(shellComponent, /localStorage\.setItem\("codex-remote-locale"/);
+  assert.match(shellComponent, /onLocaleChange/);
+  assert.match(shellComponent, /localStorage\.setItem\("codex-remote-locale"/);
+});
+
 test("when the conversation header is simplified, should move collapsed sidebar controls into the main topbar and keep only title menu plus layout action", () => {
   assert.match(mainPanelsComponent, /className="topbar-leading conversation-topbar-leading"/);
   assert.match(mainPanelsComponent, /className="conversation-collapsed-sidebar-controls"/);
   assert.match(mainPanelsComponent, /className="conversation-title-menu"/);
   assert.match(mainPanelsComponent, /group="conversation"/);
-  assert.match(mainPanelsComponent, /aria-label="布局列表"/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.layoutList\}/);
   assert.match(mainPanelsComponent, /<Icon name="layout-list" \/>/);
   assert.doesNotMatch(mainPanelsComponent, /aria-label="运行上下文"/);
   assert.doesNotMatch(mainPanelsComponent, /aria-label="对话概览"/);
@@ -101,7 +112,7 @@ test("when the conversation header is simplified, should move collapsed sidebar 
 
 test("when the devices header is simplified, should keep the add action beside the title and reserve the right edge for sidebar expansion", () => {
   assert.match(mainPanelsComponent, /className="workspace-title devices-title"/);
-  assert.match(mainPanelsComponent, /aria-label="新增设备"/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.addDevice\}/);
   assert.match(mainPanelsComponent, /className="icon-button devices-add-button"/);
   assert.match(mainPanelsComponent, /className="toolbar devices-toolbar"/);
   assert.doesNotMatch(mainPanelsComponent, /管理当前 Control Plane 可见的设备/);
@@ -121,28 +132,28 @@ test("when demo actions are unavailable, should render disabled controls instead
   assert.match(menuComponent, /disabled=\{action\.disabled === true\}/);
   assert.doesNotMatch(actionMenuComponent, /createPortal/);
   assert.doesNotMatch(actionMenuComponent, /useLayoutEffect/);
-  assert.match(mainPanelsComponent, /aria-label="新增设备" className="icon-button devices-add-button" disabled/);
-  assert.match(mainPanelsComponent, /aria-label="编辑设备" className="icon-button device-action-button" disabled/);
-  assert.match(mainPanelsComponent, /aria-label="删除设备" className="icon-button device-action-button device-action-button-danger" disabled/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.addDevice\} className="icon-button devices-add-button" disabled/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.editDevice\} className="icon-button device-action-button" disabled/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.deleteDevice\} className="icon-button device-action-button device-action-button-danger" disabled/);
 });
 
 test("when device rows expose status and actions, should use a status dot plus icon-only edit and delete actions", () => {
   assert.match(mainPanelsComponent, /import \{ Badge as UiBadge, Icon, RightDetailPane, StatusDot \} from "@codex-remote\/ui";/);
-  assert.match(mainPanelsComponent, /import \{ getStatusClassName, statusText \} from "\.\.\/\.\.\/domain\/status\/statusPresentation";/);
+  assert.match(mainPanelsComponent, /import \{ getStatusClassName, getStatusText \} from "\.\.\/\.\.\/domain\/status\/statusPresentation";/);
   assert.match(sidebarComponent, /import \{ getStatusClassName \} from "\.\.\/\.\.\/domain\/status\/statusPresentation";/);
   assert.match(statusPresentation, /export const statusText = \{/);
   assert.match(statusPresentation, /export function getStatusClassName/);
   assert.doesNotMatch(sidebarComponent, /export function statusToClass/);
   assert.match(mainPanelsComponent, /className="device-card-title">\s*<span>\{device\.name\}<\/span>\s*<StatusBadge status=\{device\.status\} \/>/s);
-  assert.match(mainPanelsComponent, /<UiBadge ariaLabel=\{statusText\[props\.status\]\} className=\{`badge-device-status \$\{statusClassName\}`\}>/);
+  assert.match(mainPanelsComponent, /<UiBadge ariaLabel=\{[A-Z_]+\[props\.status\]\} className=\{`badge-device-status \$\{statusClassName\}`\}>/);
   assert.match(mainPanelsComponent, /<StatusDot statusClassName=\{statusClassName\} \/>/);
-  assert.match(mainPanelsComponent, /<UiBadge className=\{statusClassName\}>\{statusText\[props\.status\]\}<\/UiBadge>/);
+  assert.match(mainPanelsComponent, /<UiBadge className=\{statusClassName\}>\{[A-Z_]+\[props\.status\]\}<\/UiBadge>/);
   assert.doesNotMatch(mainPanelsComponent, /function Badge\(/);
   assert.match(badgeComponent, /export function Badge/);
   assert.match(badgeComponent, /export function StatusDot/);
-  assert.match(mainPanelsComponent, /aria-label="编辑设备" className="icon-button device-action-button"/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.editDevice\} className="icon-button device-action-button"/);
   assert.match(mainPanelsComponent, /<Icon name="pencil" \/>/);
-  assert.match(mainPanelsComponent, /aria-label="删除设备" className="icon-button device-action-button device-action-button-danger"/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.deleteDevice\} className="icon-button device-action-button device-action-button-danger"/);
   assert.match(mainPanelsComponent, /<Icon name="delete" \/>/);
   assert.match(styles, /\.device-card-title\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*8px;/s);
   assert.match(
@@ -158,8 +169,8 @@ test("when device rows expose status and actions, should use a status dot plus i
 test("when the task board is aligned with the rest of the workspace, should keep the header minimal and the empty state as plain copy", () => {
   assert.match(mainPanelsComponent, /className="workspace-title tasks-title"/);
   assert.match(mainPanelsComponent, /className="toolbar tasks-toolbar"/);
-  assert.match(mainPanelsComponent, /aria-label="Task board"/);
-  assert.match(mainPanelsComponent, /暂无任务/);
+  assert.match(mainPanelsComponent, /aria-label=\{copy\.taskBoard\}/);
+  assert.match(mainPanelsComponent, /copy\.noTasks/);
   assert.doesNotMatch(mainPanelsComponent, /暂无自动化 mock/);
   assert.match(styles, /\.empty-state\s*\{[^}]*padding:\s*8px 0 0;/s);
   assert.match(styles, /\.empty-state h2\s*\{[^}]*font-size:\s*var\(--cr-text-body\);/s);
@@ -182,8 +193,8 @@ test("when a side panel is collapsed at the drag threshold, should disable its r
   assert.match(shellComponent, /if \(requiredWidth > measurements\.shellWidth && !rightPanel\.isCollapsed\(\)\) \{/);
   assert.match(shellComponent, /const requiredWidth =\s*measurements\.leftWidth \+\s*appPanelLayout\.right\.minSize \+\s*appPanelLayout\.main\.minSize \+\s*appPanelLayout\.resizeHandleWidth \* 2;/s);
   assert.match(shellComponent, /if \(requiredWidth > measurements\.shellWidth && !leftPanel\.isCollapsed\(\)\) \{/);
-  assert.match(mainPanelsComponent, /label="展开左侧边栏"/);
-  assert.match(mainPanelsComponent, /label="展开右侧边栏"/);
+  assert.match(mainPanelsComponent, /label=\{copy\.expandLeftSidebar\}/);
+  assert.match(mainPanelsComponent, /label=\{copy\.expandRightSidebar\}/);
   assert.match(rightDetailPaneComponent, /aria-label="收起右侧边栏"/);
   assert.doesNotMatch(detailWorkspaceComponent, /aria-label="清空详情"/);
   assert.match(styles, /\.sidebar-toggle-button \.sidebar-toggle-icon\s*\{[^}]*width:\s*var\(--cr-nav-icon-size\);[^}]*height:\s*var\(--cr-nav-icon-size\);/s);
@@ -199,12 +210,12 @@ test("when the detail workspace is rendered, should inherit the sidebar backgrou
   assert.match(styles, /\.right-detail-pane\s*\{[^}]*border-left:\s*var\(--cr-pane-stroke-left\);[^}]*background:\s*var\(--cr-bg\);/s);
   assert.match(styles, /\.right-detail-pane \.review-header\s*\{[^}]*border-bottom:\s*0;[^}]*background:\s*var\(--cr-bg\);/s);
   assert.match(styles, /\.right-detail-pane \.review-scroll\s*\{[^}]*background:\s*var\(--cr-bg\);/s);
-  assert.match(detailWorkspaceComponent, /const workspaceTools: WorkspaceToolDefinition\[] = \[/);
-  assert.match(detailWorkspaceComponent, /title: "审查"/);
-  assert.match(detailWorkspaceComponent, /title: "终端"/);
-  assert.match(detailWorkspaceComponent, /title: "浏览器"/);
-  assert.match(detailWorkspaceComponent, /title: "文件"/);
-  assert.match(detailWorkspaceComponent, /title: "侧边聊天"/);
+  assert.match(detailWorkspaceComponent, /function getWorkspaceTools/);
+  assert.match(detailWorkspaceComponent, /title: copy\.review/);
+  assert.match(detailWorkspaceComponent, /title: copy\.terminal/);
+  assert.match(detailWorkspaceComponent, /title: copy\.browser/);
+  assert.match(detailWorkspaceComponent, /title: copy\.files/);
+  assert.match(detailWorkspaceComponent, /title: copy\.sideChat/);
   assert.match(detailWorkspaceComponent, /const showWorkspaceMeta = target !== null;/);
   assert.match(styles, /\.detail-workspace \.detail-tool-item:hover,[^}]*\.detail-workspace \.detail-tool-item\.is-active\s*\{[^}]*background:/s);
   assert.doesNotMatch(detailWorkspaceComponent, /detail-tool-preview/);
@@ -215,8 +226,8 @@ test("when the detail workspace is rendered, should inherit the sidebar backgrou
 test("when device and task detail panes are rendered, should share the same white sidebar shell as conversation detail", () => {
   assert.match(mainPanelsComponent, /<RightDetailPane/);
   assert.match(mainPanelsComponent, /className="device-detail-pane"/);
-  assert.match(mainPanelsComponent, /title="设备详情"/);
-  assert.match(mainPanelsComponent, /title="任务详情"/);
+  assert.match(mainPanelsComponent, /FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL\.deviceDetails/);
+  assert.match(mainPanelsComponent, /copy\.taskDetails/);
   assert.match(styles, /\.right-detail-pane-glyph\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
   assert.match(styles, /\.device-detail-pane \.linked-task,\s*\.device-detail-pane \.diff-panel\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.device-detail-pane \.linked-task h2,[^}]*font-weight:\s*var\(--cr-weight-regular\);/s);

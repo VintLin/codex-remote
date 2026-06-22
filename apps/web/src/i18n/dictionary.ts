@@ -2,6 +2,8 @@ import { enUSDictionary } from "./dictionaries/en-US.ts";
 import { zhCNDictionary } from "./dictionaries/zh-CN.ts";
 import type { Locale } from "./locales.ts";
 
+export type { Locale } from "./locales.ts";
+
 type DeepWiden<T> = T extends (...args: never[]) => unknown
   ? T
   : T extends string

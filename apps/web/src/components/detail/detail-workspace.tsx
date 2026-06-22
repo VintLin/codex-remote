@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Icon, RightDetailPane } from "@codex-remote/ui";
 
 import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface DetailWorkspaceProps {
   conversationTitle: string;
+  copy: WebDictionary["detail"];
   isCollapsed: boolean;
   isMobile?: boolean | undefined;
   onBack?: (() => void) | undefined;
@@ -12,9 +14,33 @@ interface DetailWorkspaceProps {
   target: DetailTarget | LinkReference | null;
 }
 
-export function DetailWorkspace({ conversationTitle, isCollapsed, isMobile = false, onBack, onCollapse, target }: DetailWorkspaceProps) {
+const FALLBACK_DICTIONARY: WebDictionary["detail"] = {
+  review: "审查",
+  terminal: "终端",
+  browser: "浏览器",
+  files: "文件",
+  sideChat: "侧边聊天",
+  deviceDetails: "设备详情",
+  taskDetails: "任务详情",
+  collapseRight: "收起右侧边栏",
+  toolMeta: "工具",
+  context: "上下文",
+  fileMeta: "路径与资源",
+  browserMeta: "页面与 tab",
+  reviewMeta: "代码与结果检查",
+  sideChatMeta: "补充沟通",
+  terminalMeta: "命令与日志",
+  workspaceOutput: "工作区输出",
+  inlineOutput: "内联输出",
+  fileChanges: (count: number) => `${count} 个文件变更`,
+  temporaryFileLink: "当前先展示链接目标，后续再接入真实读取。",
+  reviewRequestTitle: "Review request accepted",
+};
+
+export function DetailWorkspace({ conversationTitle, copy, isCollapsed, isMobile = false, onBack, onCollapse, target }: DetailWorkspaceProps) {
+  const detailCopy = copy ?? FALLBACK_DICTIONARY;
   const [selectedTool, setSelectedTool] = useState<WorkspaceToolKey>("review");
-  const workspaceMeta = getWorkspaceMeta(target);
+  const workspaceMeta = getWorkspaceMeta(detailCopy, target);
   const showWorkspaceMeta = target !== null;
 
   return (
@@ -29,7 +55,7 @@ export function DetailWorkspace({ conversationTitle, isCollapsed, isMobile = fal
       title={showWorkspaceMeta ? workspaceMeta.label : undefined}
       titleIcon={showWorkspaceMeta ? workspaceMeta.icon : undefined}
     >
-      {target ? <DetailContent target={target} /> : <DetailEmptyState selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
+      {target ? <DetailContent copy={detailCopy} target={target} /> : <DetailEmptyState copy={detailCopy} selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
     </RightDetailPane>
   );
 }
@@ -43,50 +69,30 @@ interface WorkspaceToolDefinition {
   title: string;
 }
 
-const workspaceTools: WorkspaceToolDefinition[] = [
-  {
-    key: "review",
-    title: "审查",
-    meta: "代码与结果检查",
-    icon: "layout-list",
-  },
-  {
-    key: "terminal",
-    title: "终端",
-    meta: "命令与日志",
-    icon: "square-terminal",
-  },
-  {
-    key: "browser",
-    title: "浏览器",
-    meta: "页面与 tab",
-    icon: "globe",
-  },
-  {
-    key: "file",
-    title: "文件",
-    meta: "路径与资源",
-    icon: "folder",
-  },
-  {
-    key: "chat",
-    title: "侧边聊天",
-    meta: "补充沟通",
-    icon: "message-circle-plus",
-  },
-];
+function getWorkspaceTools(copy: WebDictionary["detail"]): WorkspaceToolDefinition[] {
+  return [
+    { key: "review", title: copy.review, meta: copy.reviewMeta, icon: "layout-list" },
+    { key: "terminal", title: copy.terminal, meta: copy.terminalMeta, icon: "square-terminal" },
+    { key: "browser", title: copy.browser, meta: copy.browserMeta, icon: "globe" },
+    { key: "file", title: copy.files, meta: copy.fileMeta, icon: "folder" },
+    { key: "chat", title: copy.sideChat, meta: copy.sideChatMeta, icon: "message-circle-plus" },
+  ];
+}
 
 function DetailEmptyState({
+  copy,
   onSelectTool,
   selectedTool,
 }: {
+  copy: WebDictionary["detail"];
   onSelectTool: (tool: WorkspaceToolKey) => void;
   selectedTool: WorkspaceToolKey;
 }) {
+  const tools = getWorkspaceTools(copy);
   return (
     <section className="detail-empty-shell">
       <div className="detail-tool-list" role="list">
-        {workspaceTools.map((tool) => (
+        {tools.map((tool) => (
           <button
             aria-pressed={tool.key === selectedTool}
             className={`detail-tool-item${tool.key === selectedTool ? " is-active" : ""}`}
@@ -113,27 +119,27 @@ function DetailEmptyState({
   );
 }
 
-function DetailContent({ target }: { target: DetailTarget | LinkReference }) {
+function DetailContent({ copy, target }: { copy: WebDictionary["detail"]; target: DetailTarget | LinkReference }) {
   if (isLinkReference(target)) {
-    return <LinkReferenceDetail target={target} />;
+    return <LinkReferenceDetail copy={copy} target={target} />;
   }
 
   if (target.type === "diff") {
-    return <DiffDetail target={target} />;
+    return <DiffDetail copy={copy} target={target} />;
   }
 
   if (target.type === "tool") {
-    return <ToolDetail target={target} />;
+    return <ToolDetail copy={copy} target={target} />;
   }
 
-  return <TargetDetail target={target} />;
+  return <TargetDetail copy={copy} target={target} />;
 }
 
-function LinkReferenceDetail({ target }: { target: LinkReference }) {
+function LinkReferenceDetail({ copy, target }: { copy: WebDictionary["detail"]; target: LinkReference }) {
   if (target.type === "skill" || target.type === "file") {
     return (
       <section className="linked-task detail-module">
-        <div className="detail-section-heading">文件</div>
+        <div className="detail-section-heading">{copy.files}</div>
         <div className="detail-target-row">
           <span className="detail-target-icon">
             <Icon name="folder" />
@@ -143,7 +149,7 @@ function LinkReferenceDetail({ target }: { target: LinkReference }) {
             <p>{target.href}</p>
           </div>
         </div>
-        <p className="detail-empty-note">当前先展示链接目标，后续再接入真实读取。</p>
+        <p className="detail-empty-note">{copy.temporaryFileLink}</p>
       </section>
     );
   }
@@ -151,7 +157,7 @@ function LinkReferenceDetail({ target }: { target: LinkReference }) {
   if (target.type === "image") {
     return (
       <section className="linked-task detail-module">
-        <div className="detail-section-heading">浏览器</div>
+        <div className="detail-section-heading">{copy.browser}</div>
         <div className="detail-target-row">
           <span className="detail-target-icon">
             <Icon name="globe" />
@@ -167,7 +173,7 @@ function LinkReferenceDetail({ target }: { target: LinkReference }) {
 
   return (
     <section className="linked-task detail-module">
-      <div className="detail-section-heading">{target.type === "url" ? "浏览器" : "上下文"}</div>
+      <div className="detail-section-heading">{target.type === "url" ? copy.browser : copy.context}</div>
       <div className="detail-target-row">
         <span className="detail-target-icon">
           <Icon name={target.type === "url" ? "globe" : "information-o"} />
@@ -181,17 +187,17 @@ function LinkReferenceDetail({ target }: { target: LinkReference }) {
   );
 }
 
-function DiffDetail({ target }: { target: Extract<DetailTarget, { type: "diff" }> }) {
+function DiffDetail({ copy, target }: { copy: WebDictionary["detail"]; target: Extract<DetailTarget, { type: "diff" }> }) {
   return (
     <section className="diff-panel detail-module">
-      <div className="detail-section-heading">审查</div>
+      <div className="detail-section-heading">{copy.review}</div>
       <div className="detail-target-row detail-target-row-compact">
         <span className="detail-target-icon">
           <Icon name="layout-list" />
         </span>
         <div className="detail-target-copy">
           <h2>{target.title}</h2>
-          <p>{target.changes.length} 个文件变更</p>
+          <p>{copy.fileChanges(target.changes.length)}</p>
         </div>
       </div>
       {target.changes.map((change) => (
@@ -207,17 +213,17 @@ function DiffDetail({ target }: { target: Extract<DetailTarget, { type: "diff" }
   );
 }
 
-function ToolDetail({ target }: { target: Extract<DetailTarget, { type: "tool" }> }) {
+function ToolDetail({ copy, target }: { copy: WebDictionary["detail"]; target: Extract<DetailTarget, { type: "tool" }> }) {
   return (
     <section className="linked-task detail-module">
-      <div className="detail-section-heading">终端</div>
+      <div className="detail-section-heading">{copy.terminal}</div>
       <div className="detail-target-row">
         <span className="detail-target-icon">
           <Icon name="square-terminal" />
         </span>
         <div className="detail-target-copy">
           <h2>{target.title}</h2>
-          <p>{target.presentation === "workspace" ? "工作区输出" : "内联输出"}</p>
+          <p>{target.presentation === "workspace" ? copy.workspaceOutput : copy.inlineOutput}</p>
         </div>
       </div>
       <pre>
@@ -227,11 +233,11 @@ function ToolDetail({ target }: { target: Extract<DetailTarget, { type: "tool" }
   );
 }
 
-function TargetDetail({ target }: { target: Exclude<DetailTarget, { type: "diff" } | { type: "tool" }> }) {
+function TargetDetail({ copy, target }: { copy: WebDictionary["detail"]; target: Exclude<DetailTarget, { type: "diff" } | { type: "tool" }> }) {
   if (target.type === "file") {
     return (
       <section className="linked-task detail-module">
-        <div className="detail-section-heading">文件</div>
+        <div className="detail-section-heading">{copy.files}</div>
         <div className="detail-target-row">
           <span className="detail-target-icon">
             <Icon name="folder" />
@@ -248,7 +254,7 @@ function TargetDetail({ target }: { target: Exclude<DetailTarget, { type: "diff"
   if (target.type === "unknown") {
     return (
       <section className="linked-task detail-module">
-        <div className="detail-section-heading">上下文</div>
+        <div className="detail-section-heading">{copy.context}</div>
         <h2>{target.title}</h2>
         <pre>
           <code>{target.detail}</code>
@@ -259,7 +265,7 @@ function TargetDetail({ target }: { target: Exclude<DetailTarget, { type: "diff"
 
   return (
     <section className="linked-task detail-module">
-      <div className="detail-section-heading">{target.type === "image" || target.type === "url" ? "浏览器" : "文件"}</div>
+      <div className="detail-section-heading">{target.type === "image" || target.type === "url" ? copy.browser : copy.files}</div>
       <div className="detail-target-row">
         <span className="detail-target-icon">
           <Icon name={target.type === "image" || target.type === "url" ? "globe" : "folder"} />
@@ -273,43 +279,43 @@ function TargetDetail({ target }: { target: Exclude<DetailTarget, { type: "diff"
   );
 }
 
-function getWorkspaceMeta(target: DetailTarget | LinkReference | null): { icon: "folder" | "globe" | "information-o" | "layout-list" | "square-terminal"; label: string } {
+function getWorkspaceMeta(copy: WebDictionary["detail"], target: DetailTarget | LinkReference | null): { icon: "folder" | "globe" | "information-o" | "layout-list" | "square-terminal"; label: string } {
   if (!target) {
     return {
-      label: "工具",
+      label: copy.toolMeta,
       icon: "layout-list",
     };
   }
 
   if (isLinkReference(target)) {
     if (target.type === "file" || target.type === "skill") {
-      return { label: "文件", icon: "folder" };
+      return { label: copy.files, icon: "folder" };
     }
 
     if (target.type === "image" || target.type === "url") {
-      return { label: "浏览器", icon: "globe" };
+      return { label: copy.browser, icon: "globe" };
     }
 
-    return { label: "上下文", icon: "information-o" };
+    return { label: copy.context, icon: "information-o" };
   }
 
   if (target.type === "diff") {
-    return { label: "审查", icon: "layout-list" };
+    return { label: copy.review, icon: "layout-list" };
   }
 
   if (target.type === "tool") {
-    return { label: "终端", icon: "square-terminal" };
+    return { label: copy.terminal, icon: "square-terminal" };
   }
 
   if (target.type === "file" || target.type === "skill") {
-    return { label: "文件", icon: "folder" };
+    return { label: copy.files, icon: "folder" };
   }
 
   if (target.type === "image" || target.type === "url") {
-    return { label: "浏览器", icon: "globe" };
+    return { label: copy.browser, icon: "globe" };
   }
 
-  return { label: "上下文", icon: "information-o" };
+  return { label: copy.context, icon: "information-o" };
 }
 
 function isLinkReference(target: DetailTarget | LinkReference): target is LinkReference {
