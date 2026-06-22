@@ -33,10 +33,11 @@ test("codex remote app when review-start is wired, should call local action API 
   assert.match(shellSource, /await refreshWorkbenchData\(createConversationKey\(conversation\)\)/);
   assert.match(mainPanelsSource, /aria-label=\{copy\.localReviewConfirmation\}/);
   assert.match(mainPanelsSource, /START REVIEW/);
-  assert.match(mainPanelsSource, /Start review/);
+  const enDictionary = readWebSource("i18n/dictionaries/en-US.ts");
+  assert.match(enDictionary, /Start review/);
   assert.match(mainPanelsSource, /reviewStartStatus === "submitting"/);
   assert.match(mainPanelsSource, /disabled=\{!canStartReview \|\| reviewConfirmation !== "START REVIEW"/);
-  assert.match(mainPanelsSource, /Review request accepted/);
+  assert.match(enDictionary, /Review request accepted/);
   assert.match(mainPanelsSource, /reviewStartError/);
 });
 
@@ -108,9 +109,9 @@ test("codex remote app when task loading fails, should render task failure separ
 
   assert.match(shellSource, /taskSource/);
   assert.match(mainPanelsSource, /taskLoadState/);
-  assert.match(mainPanelsSource, /无法加载任务/);
-  assert.match(mainPanelsSource, /稍后刷新或重试任务操作。/);
-  assert.match(mainPanelsSource, /暂无任务/);
+  assert.match(`${mainPanelsSource}\n${readWebSource("i18n/dictionaries/zh-CN.ts")}`, /无法加载任务/);
+  assert.match(`${mainPanelsSource}\n${readWebSource("i18n/dictionaries/zh-CN.ts")}`, /稍后刷新或重试任务操作。/);
+  assert.match(`${mainPanelsSource}\n${readWebSource("i18n/dictionaries/zh-CN.ts")}`, /暂无任务/);
   assert.match(mainPanelsSource, /taskLoadState === "failed"/);
   assert.doesNotMatch(mainPanelsSource, /taskSource\.error|taskLoadError|taskError/);
 });

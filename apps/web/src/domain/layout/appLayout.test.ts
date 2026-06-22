@@ -226,8 +226,8 @@ test("when the detail workspace is rendered, should inherit the sidebar backgrou
 test("when device and task detail panes are rendered, should share the same white sidebar shell as conversation detail", () => {
   assert.match(mainPanelsComponent, /<RightDetailPane/);
   assert.match(mainPanelsComponent, /className="device-detail-pane"/);
-  assert.match(mainPanelsComponent, /FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL\.deviceDetails/);
-  assert.match(mainPanelsComponent, /copy\.taskDetails/);
+  assert.match(mainPanelsComponent, /detailCopy\.deviceDetails/);
+  assert.match(mainPanelsComponent, /detailCopy\.taskDetails/);
   assert.match(styles, /\.right-detail-pane-glyph\s*\{[^}]*color:\s*var\(--cr-muted-strong\);/s);
   assert.match(styles, /\.device-detail-pane \.linked-task,\s*\.device-detail-pane \.diff-panel\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
   assert.match(styles, /\.device-detail-pane \.linked-task h2,[^}]*font-weight:\s*var\(--cr-weight-regular\);/s);

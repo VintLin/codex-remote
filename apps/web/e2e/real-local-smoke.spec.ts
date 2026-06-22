@@ -62,6 +62,25 @@ test("real local stack smoke: should load real Control Plane data and submit thr
   expect([...externalRequests]).toEqual([]);
 });
 
+test("i18n: should default to Chinese and switch to English via Settings", async ({ page, request }) => {
+  const realState = await readRealState(request);
+  test.skip(realState.status !== "ready", realState.reason);
+
+  await page.goto("/zh-CN");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+
+  await page.getByRole("button", { name: "设置", exact: true }).first().click();
+  await page.getByRole("button", { name: "English" }).click();
+
+  await expect(page).toHaveURL(/\/en-US/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+  const storedLocale = await page.evaluate(() => window.localStorage.getItem("codex-remote-locale"));
+  expect(storedLocale).toBe("en-US");
+});
+
 async function readRealState(request) {
   const headers = { authorization: `Bearer ${controlPlaneToken}` };
   try {

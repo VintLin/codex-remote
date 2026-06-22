@@ -11,7 +11,7 @@ test("when the sidebar header is rendered, should use application header semanti
   assert.match(sidebarComponent, /className="sidebar-header"/);
   assert.match(sidebarComponent, /className="sidebar-header-controls"/);
   assert.doesNotMatch(sidebarComponent, /className="sidebar-window-controls"/);
-  assert.match(sidebarComponent, /aria-label=\{props\.isCollapsed \? "展开左侧边栏" : "收起左侧边栏"\}/);
+  assert.match(sidebarComponent, /aria-label=\{props\.isCollapsed \? props\.copy\.sidebar\.expandSidebar : props\.copy\.sidebar\.collapseSidebar\}/);
   assert.match(sidebarComponent, /\{props\.isMobile \? <span \/> : \(/);
   assert.match(sidebarComponent, /className="sidebar-header-control sidebar-header-control-button sidebar-toggle-button"/);
   assert.match(sidebarComponent, /className="sidebar-header-control sidebar-header-control-button"/);
@@ -133,20 +133,20 @@ test("when sidebar panels are collapsed or expanded, should switch to panel-spec
 });
 
 test("conversation main when source is not loaded, should render explicit example data copy", () => {
-  assert.match(mainPanelsComponent, /示例数据/);
-  assert.match(mainPanelsComponent, /未连接真实 Control Plane/);
+  assert.match(mainPanelsComponent, /copy\.showingSampleData\(/);
+  assert.match(mainPanelsComponent, /copy\.notConnectedToControlPlane/);
 });
 
 test("task board when source is not loaded, should render explicit example data copy", () => {
   assert.match(mainPanelsComponent, /source: WorkbenchData\["source"\]/);
   assert.match(mainPanelsComponent, /const isExampleData = source\.reason !== "loaded";/);
-  assert.match(mainPanelsComponent, /<section aria-label="任务数据源状态" className="conversation-source-banner">/);
-  assert.match(mainPanelsComponent, /当前显示示例任务数据/);
+  assert.match(mainPanelsComponent, /<section aria-label=\{copy\.taskBoardSource\} className="conversation-source-banner">/);
+  assert.match(mainPanelsComponent, /copy\.showingSampleTasks\(/);
   assert.match(readWebSource("components/shell/codex-remote-app.tsx"), /source=\{source\}/);
 });
 
 test("conversation composer when future controls are placeholders, should keep them visibly disabled", () => {
-  assert.match(conversationThreadComponent, /aria-label="添加附件"[^>]*disabled/);
+  assert.match(conversationThreadComponent, /aria-label=\{dictionary\.addAttachment\}[^>]*disabled/);
   assert.doesNotMatch(conversationThreadComponent, /aria-label="语音输入"/);
   assert.doesNotMatch(conversationThreadComponent, /className="codex-assistant-model"/);
   assert.match(conversationThreadComponent, /className="codex-assistant-access"/);

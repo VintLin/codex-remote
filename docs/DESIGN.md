@@ -266,6 +266,10 @@ Minimum UI states for every supported capability:
 - Action accepted
 - Action failed with sanitized error
 
+## Language Support
+
+Web UI copy supports `zh-CN` and `en-US` through the app-level dictionary in `apps/web/src/i18n`. Static UI labels, placeholders, button text, accessible labels, page metadata, and empty/error states use the selected locale. User-authored content, assistant/model output, file paths, command names, diffs, device names, project names, conversation titles, runtime values, and API/protocol enum values are rendered as received.
+
 ## Do's and Don'ts
 
 ### Do

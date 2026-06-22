@@ -144,125 +144,6 @@ interface SearchDialogProps {
   searchRecents: SearchRecent[];
 }
 
-const FALLBACK_MAIN_PANELS: WebDictionary["mainPanels"] = {
-  backToNavigation: "返回导航",
-  expandLeftSidebar: "展开左侧边栏",
-  expandRightSidebar: "展开右侧边栏",
-  settings: "设置",
-  archivedConversations: "已归档对话",
-  noArchivedConversations: "暂无已归档对话",
-  restore: "恢复",
-  save: "保存",
-  cancel: "取消",
-  renameConversation: "重命名对话",
-  conversationTitle: "Conversation title",
-  openConversationMenu: "打开对话操作菜单",
-  layoutList: "布局列表",
-  datasourceStatus: "数据源状态",
-  notConnectedToControlPlane: "未连接真实 Control Plane",
-  showingSampleData: (parts: string) => `当前显示示例数据 · ${parts}`,
-  showingSampleTasks: (parts: string) => `当前显示示例任务数据 · ${parts}`,
-  device: "设备",
-  deviceList: "设备列表",
-  addDevice: "新增设备",
-  editDevice: "编辑设备",
-  deleteDevice: "删除设备",
-  noDeviceData: "暂无设备数据",
-  backToDeviceList: "返回设备列表",
-  deviceIp: (ip: string) => `IP：${ip}`,
-  deviceLastOnline: (timestamp: string) => `最后上线：${timestamp}`,
-  deviceCurrentContext: "当前上下文",
-  deviceProject: (project: string) => `项目：${project}`,
-  deviceModel: (model: string) => `模型：${model}`,
-  deviceEditLater: "真实编辑、删除和新增设备逻辑后续接入 Control Plane API。",
-  deviceStatus: (status: string) => `状态：${status}`,
-  tasks: "任务",
-  taskBoard: "Task board",
-  taskBoardSource: "任务数据源状态",
-  taskTitle: "Task title",
-  cannotLoadTasks: "无法加载任务",
-  retryTasks: "稍后刷新或重试任务操作。",
-  noTasks: "暂无任务",
-  createTaskHint: "创建任务后可链接当前对话。",
-  createTask: "Create",
-  link: "Link",
-  unlink: "Unlink",
-  linksCount: (count: number) => `${count} links`,
-  localTools: "Local Tools",
-  localToolsDegraded: "部分本地工具暂不可用",
-  localToolsDegradedHint: "其余只读数据已继续加载。",
-  localToolsEmpty: "暂无本地工具数据",
-  localToolsEmptyHint: "选择已连接设备上的项目后显示只读 Files、Git/Review、Search、MCP 和 Extensions。",
-  localFiles: "Files",
-  localGitReview: "Git/Review",
-  localSearch: "Search",
-  localMcp: "MCP",
-  localExtensions: "Extensions",
-  noLocalFileEntries: "暂无文件条目",
-  noLocalGitSummary: "暂无 Git 摘要",
-  searchLocalFiles: "搜索本地项目文件",
-  searchButton: "Search",
-  localReviewActionTitle: "Start review for uncommitted changes",
-  localReviewActionHelp: "Type START REVIEW to request a local review.",
-  localReviewStartButton: "Start review",
-  localReviewAccepted: "Review request accepted.",
-  localReviewConfirmation: "Review confirmation text",
-  localReviewPlaceholder: "START REVIEW",
-  backToTaskList: "返回任务列表",
-  taskDetails: "任务详情",
-  advancedPlatform: "Advanced Platform",
-  advancedPlatformEmpty: "选择已连接设备上的项目后显示高级平台只读支持摘要。",
-  advancedPlatformMissing: "高级平台摘要暂不可用",
-  advancedPlatformWithCode: (code: string) => `高级平台摘要暂不可用：${code}`,
-  runtimeSettings: "Runtime & Settings",
-  runtimeSettingsEmpty: "选择已连接设备上的项目后显示运行时与设置摘要。",
-  runtimeSettingsMissing: "运行时摘要暂不可用",
-  runtimeSettingsWithCode: (code: string) => `运行时摘要暂不可用：${code}`,
-  runtimeModels: "Models",
-  runtimeProviderCapabilities: "Provider capabilities",
-  runtimeAccount: "Account",
-  runtimeConfigPosture: "Config posture",
-  runtimePermissionProfiles: "Permission profiles",
-  runtimeExperimentalFeatures: "Experimental features",
-  runtimeSectionStatuses: "section statuses",
-  runtimeDefaultModel: "默认模型",
-  runtimeModelCount: "模型数量",
-  runtimeReasoningStrength: "推理强度",
-  runtimeInputModalities: "输入模态",
-  runtimeServiceTiers: "服务层级",
-  runtimeAccountType: "类型",
-  runtimeAccountPlan: "计划",
-  runtimeAccountEmailDomain: "邮箱域",
-  runtimeAccountRequiresOpenaiAuth: "需要 OpenAI Auth",
-  runtimeConfigModel: "模型",
-  runtimeConfigReviewModel: "Review 模型",
-  runtimeConfigProvider: "Provider",
-  runtimeConfigApproval: "Approval",
-  runtimeConfigReviewer: "Reviewer",
-  runtimeConfigSandbox: "Sandbox",
-  runtimeConfigReasoning: "Reasoning",
-  runtimeConfigServiceTier: "Service tier",
-  runtimeConfigWebSearch: "Web search",
-  runtimeConfigCustomGuidance: "自定义指导已省略",
-  runtimeConfigDeveloperGuidance: "开发者指导已省略",
-  runtimeConfigCompactionGuidance: "压缩指导已省略",
-  runtimeNoPermissionProfiles: "未返回权限 profile",
-  runtimeNoExperimentalFeatures: "未返回实验功能",
-  runtimeNoReadinessSection: "未返回 readiness section",
-  runtimeNoWatchlistItem: "未返回 watchlist item",
-  runtimeExperimentalFeatureState: (stage: string, enabled: boolean, defaultEnabled: boolean) =>
-    `${stage} · ${enabled ? "已启用" : "未启用"} · 默认 ${defaultEnabled ? "开" : "关"}`,
-  runtimeNoDescription: "无描述",
-  advancedPlatformWindowsSandbox: "Windows sandbox",
-  advancedPlatformSupportMatrix: "Support matrix",
-  searchDialogTitle: "搜索对话",
-  searchInputPlaceholder: "搜索对话",
-  recentConversations: "近期对话",
-  missingValue: "未返回",
-  yes: "是",
-  no: "否",
-};
-
 export function ConversationMain({
   actionsCopy,
   assistantThread,
@@ -271,7 +152,7 @@ export function ConversationMain({
   conversation,
   conversationCopy,
   controlStatus,
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   detailCopy,
   followUpStatus,
   isDetailCollapsed,
@@ -776,7 +657,7 @@ export function ConversationDetailPane({
 }
 
 export function DevicesPage({
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -855,15 +736,17 @@ export function DevicesPage({
 }
 
 export function DeviceDetailPane({
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   isCollapsed,
   isMobile = false,
   onBack,
   onCollapse,
   selectedDeviceId,
   devices,
+  detailCopy,
 }: {
-  copy?: WebDictionary["mainPanels"];
+  copy: WebDictionary["mainPanels"];
+  detailCopy: WebDictionary["detail"];
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
@@ -883,7 +766,7 @@ export function DeviceDetailPane({
         isMobile={isMobile}
         onBack={onBack}
         onCollapse={onCollapse}
-        title={FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL.deviceDetails}
+        title={detailCopy.deviceDetails}
         titleIcon="laptop"
       >
         <section className="linked-task">
@@ -902,7 +785,7 @@ export function DeviceDetailPane({
       isMobile={isMobile}
       onBack={onBack}
       onCollapse={onCollapse}
-      title={FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL.deviceDetails}
+      title={detailCopy.deviceDetails}
       titleIcon={iconForDevice(selectedDevice)}
     >
       <section className="linked-task">
@@ -921,29 +804,6 @@ export function DeviceDetailPane({
   );
 }
 
-const FALLBACK_DICTIONARY_FOR_DEVICE_DETAIL: WebDictionary["detail"] = {
-  review: "审查",
-  terminal: "终端",
-  browser: "浏览器",
-  files: "文件",
-  sideChat: "侧边聊天",
-  deviceDetails: "设备详情",
-  taskDetails: "任务详情",
-  collapseRight: "收起右侧边栏",
-  toolMeta: "工具",
-  context: "上下文",
-  fileMeta: "路径与资源",
-  browserMeta: "页面与 tab",
-  reviewMeta: "代码与结果检查",
-  sideChatMeta: "补充沟通",
-  terminalMeta: "命令与日志",
-  workspaceOutput: "工作区输出",
-  inlineOutput: "内联输出",
-  fileChanges: (count: number) => `${count} 个文件变更`,
-  temporaryFileLink: "当前先展示链接目标，后续再接入真实读取。",
-  reviewRequestTitle: "Review request accepted",
-};
-
 const FALLBACK_STATUS_DICTIONARY = {
   Connected: "Connected",
   "Not connected": "Not connected",
@@ -957,7 +817,7 @@ const FALLBACK_STATUS_DICTIONARY = {
 
 export function TaskBoardPage({
   conversations,
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -1106,7 +966,7 @@ export function TaskBoardPage({
 
 export function LocalWorkbenchPage({
   canStartReview,
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   isDetailCollapsed,
   isMobile = false,
   isSidebarCollapsed,
@@ -1333,13 +1193,15 @@ function ExtensionGroup({ label, values }: { label: string; values: string[] }) 
 }
 
 export function TaskDetailPane({
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
+  detailCopy,
   isCollapsed,
   isMobile = false,
   onBack,
   onCollapse,
 }: {
-  copy?: WebDictionary["mainPanels"];
+  copy: WebDictionary["mainPanels"];
+  detailCopy: WebDictionary["detail"];
   isCollapsed: boolean;
   isMobile?: boolean;
   onBack?: () => void;
@@ -1354,7 +1216,7 @@ export function TaskDetailPane({
       isMobile={isMobile}
       onBack={onBack}
       onCollapse={onCollapse}
-      title={copy.taskDetails}
+      title={detailCopy.taskDetails}
       titleIcon="reload"
     />
   );
@@ -1368,7 +1230,7 @@ function formatTaskLink(link: TaskConversationLink, conversations: CodexConversa
 }
 
 export function SearchDialog({
-  copy = FALLBACK_MAIN_PANELS,
+  copy,
   onClose,
   onSelectConversation,
   open,

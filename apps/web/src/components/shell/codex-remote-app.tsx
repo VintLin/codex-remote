@@ -13,7 +13,7 @@ import {
   shouldPersistSelectedDeviceId,
 } from "../../domain/connection/connectionEntry";
 import type { BoardTask, ConversationQueuedMessage, Device, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
-import type { WebDictionary } from "../../i18n/dictionary";
+import { getDictionary } from "../../i18n/dictionary";
 import type { Locale } from "../../i18n/locales";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
@@ -89,12 +89,11 @@ function writeStoredSelectedDeviceId(deviceId: string): void {
 }
 
 interface CodexRemoteAppProps {
-  dictionary: WebDictionary;
   locale: Locale;
 }
 
-export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
-  void locale;
+export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
+  const dictionary = getDictionary(locale);
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(true);
@@ -760,6 +759,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         detail: (
           <DeviceDetailPane
             copy={dictionary.mainPanels}
+            detailCopy={dictionary.detail}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}
@@ -795,6 +795,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
         detail: (
           <TaskDetailPane
             copy={dictionary.mainPanels}
+            detailCopy={dictionary.detail}
             isCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
             onBack={() => setMobilePane("main")}

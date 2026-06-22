@@ -202,7 +202,6 @@ export const enUSDictionary = {
     localReviewConfirmation: "Review confirmation text",
     localReviewPlaceholder: "START REVIEW",
     backToTaskList: "Back to task list",
-    taskDetails: "Task details",
     advancedPlatform: "Advanced Platform",
     advancedPlatformEmpty: "Select a project on a connected device to show advanced platform read-only support.",
     advancedPlatformMissing: "Advanced platform summary is temporarily unavailable",

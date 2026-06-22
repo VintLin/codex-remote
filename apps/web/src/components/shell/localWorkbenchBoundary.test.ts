@@ -9,6 +9,8 @@ const webSources = [
   "components/sidebar/sidebar.tsx",
   "components/detail/main-panels.tsx",
   "components/shell/codex-remote-app.tsx",
+  "i18n/dictionaries/zh-CN.ts",
+  "i18n/dictionaries/en-US.ts",
 ].map((path) => ({ path, source: readWebSource(path) }));
 
 test("local workbench Web source when rendered should stay on public API boundary", () => {
@@ -118,7 +120,8 @@ test("runtime settings UI source should render read-only summary without raw lea
 test("runtime settings SettingsPage source should keep archive restore and avoid unsupported write controls", () => {
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
-  const combined = `${mainPanelsSource}\n${shellSource}`;
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
+  const combined = `${mainPanelsSource}\n${shellSource}\n${dictionarySource}`;
   const unsupportedActionMarkers = [
     "login",
     "logout",
@@ -136,7 +139,7 @@ test("runtime settings SettingsPage source should keep archive restore and avoid
   ];
 
   assert.match(mainPanelsSource, /RuntimeSettingsPanel/);
-  assert.match(mainPanelsSource, /已归档对话/);
+  assert.match(combined, /已归档对话/);
   assert.match(mainPanelsSource, /onRestoreConversation/);
   assert.match(shellSource, /runtimeSettings=\{runtimeSettings\}/);
   assert.deepEqual(unsupportedActionMarkers.filter((marker) => combined.includes(marker)), []);
@@ -160,7 +163,8 @@ test("advanced platform SettingsPage source should render read-only panel withou
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
   const workbenchSource = readWebSource("data/workerApi/workbenchData.ts");
-  const combined = `${mainPanelsSource}\n${shellSource}\n${workbenchSource}`;
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
+  const combined = `${mainPanelsSource}\n${shellSource}\n${workbenchSource}\n${dictionarySource}`;
   const expectedUiMarkers = [
     "Advanced Platform",
     "Windows sandbox",
@@ -199,7 +203,9 @@ test("advanced platform SettingsPage source should render read-only panel withou
 test("advanced platform SettingsPage source should keep archive restore and avoid unsupported action controls", () => {
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
   const combined = `${mainPanelsSource}\n${shellSource}`;
+  const combinedForPresence = `${mainPanelsSource}\n${shellSource}\n${dictionarySource}`;
   const unsupportedActionMarkers = [
     "feedback/upload",
     "externalAgentConfig/detect",
@@ -223,7 +229,7 @@ test("advanced platform SettingsPage source should keep archive restore and avoi
 
   assert.match(mainPanelsSource, /RuntimeSettingsPanel/);
   assert.match(mainPanelsSource, /AdvancedPlatformPanel/);
-  assert.match(mainPanelsSource, /已归档对话/);
+  assert.match(combinedForPresence, /已归档对话/);
   assert.match(mainPanelsSource, /onRestoreConversation/);
   assert.match(shellSource, /advancedPlatform=\{advancedPlatform\}/);
   assert.deepEqual(unsupportedActionMarkers.filter((marker) => combined.includes(marker)), []);
@@ -251,6 +257,7 @@ test("local workbench UI source should expose compact read-only local tools with
   const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
   const expectedUiMarkers = [
     "Local Tools",
     "Files",
@@ -261,7 +268,7 @@ test("local workbench UI source should expose compact read-only local tools with
     "搜索本地项目文件",
     "LocalWorkbenchPage",
   ];
-  const missing = expectedUiMarkers.filter((marker) => !`${sidebarSource}\n${mainPanelsSource}\n${shellSource}`.includes(marker));
+  const missing = expectedUiMarkers.filter((marker) => !`${sidebarSource}\n${mainPanelsSource}\n${shellSource}\n${dictionarySource}`.includes(marker));
   const unsupportedActionMarkers = [
     "mcpServer/tool/call",
     "plugin install",

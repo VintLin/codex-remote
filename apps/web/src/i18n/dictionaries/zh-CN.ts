@@ -200,7 +200,6 @@ export const zhCNDictionary = {
     localReviewConfirmation: "Review confirmation text",
     localReviewPlaceholder: "START REVIEW",
     backToTaskList: "返回任务列表",
-    taskDetails: "任务详情",
     advancedPlatform: "Advanced Platform",
     advancedPlatformEmpty: "选择已连接设备上的项目后显示高级平台只读支持摘要。",
     advancedPlatformMissing: "高级平台摘要暂不可用",
