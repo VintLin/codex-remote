@@ -69,8 +69,8 @@ Rules:
 | MCP | Server status, OAuth, reload, resources, tool calls, progress, elicitation | Stage 12 exposes read-only MCP status summary when available; degraded 408 is allowed in current real stack | OAuth, reload, resource reads, tool calls, progress, and elicitation remain future |
 | Apps | App list and app list updates | Stage 12 exposes read-only app inventory | App list updates and actions remain future |
 | Account | Login/logout/read/auth status, rate limits, usage, account updates | Not exposed | Need account state surface without moving secrets into Control Plane |
-| Realtime voice | Realtime thread, transcript, audio, SDP, errors, close | Not exposed | Need voice experience only after protocol path is proven |
-| Windows sandbox | Setup, readiness, warnings | Not exposed | Need platform-specific surface when Windows is in scope |
+| Realtime voice | Realtime thread, transcript, audio, SDP, errors, close | Stage 15 watchlist only; no action exposed | Need voice experience only after protocol path is proven |
+| Windows sandbox | Setup, readiness, warnings | Stage 15 exposes read-only readiness in Settings -> Advanced Platform; macOS real stack reports `not_applicable` | Setup and Windows-specific ready behavior remain future |
 | Remote-only devices/tasks | Multi-device routing, project binding, task links | Partially supported with real local evidence | Need deeper integration with the Codex App-like workbench |
 
 ## Stage Split Direction
@@ -81,7 +81,7 @@ Future stages should be split by product capability area, not by raw app-server 
 2. Local work tools read-only: filesystem preview/metadata, Git summary, fuzzy search, MCP status/tools/resources summary, plugin read, skills/hooks/apps inventory. Stage 12 closure gates passed; command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
 3. Controlled local actions: confirmed uncommitted-changes review start is implemented in Stage 13; explicit shell command, allowlisted project actions, stage/unstage/revert hunk/file, enable/disable skill, and OAuth or connector login remain future controlled-action slices.
 4. Runtime and extension management: model/profile, sanitized `account/read`, device platform/sandbox/auth projection, config read-only, richer skills/plugins/MCP/apps management. This is the next stage.
-5. Advanced realtime and platform watchlist: realtime voice, Windows sandbox setup/readiness, feedback upload, external agent config import, remote GUI/computer use, automations.
+5. Advanced realtime and platform watchlist: Stage 15 completed the first read-only slice with Windows sandbox readiness and a disabled support matrix for realtime voice, feedback upload, external agent config import, remote GUI/computer use, and automations. Windows setup and all advanced actions remain future.
 6. Remote-specific hardening: devices, project binding, task association, self-hosted evidence, future pairing/reverse connection.
 
 Each stage must still keep the existing architecture boundary:

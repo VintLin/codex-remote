@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AdvancedPlatformReadinessSummary,
   BoardTask,
   CommandAccepted,
   ConversationQueuedMessage,
@@ -492,6 +493,32 @@ test("WorkerApiClient runtime settings summary when called, should use project-s
   assert.equal((requests[0]?.init.headers as Headers).get("content-type"), null);
 });
 
+test("WorkerApiClient advanced platform readiness when called, should use project-scoped Control Plane GET route", async () => {
+  const summary = createAdvancedPlatformReadinessSummary();
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetchMock: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} });
+    return new Response(JSON.stringify(summary), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+  });
+
+  const response = await client.getAdvancedPlatformReadinessSummary("device/a", "project/a");
+
+  assert.deepEqual(response, summary);
+  assert.deepEqual(requests.map((request) => `${request.init.method ?? "GET"} ${request.url}`), [
+    "GET http://127.0.0.1:8787/v1/devices/device%2Fa/projects/project%2Fa/advanced-platform-readiness",
+  ]);
+  assert.equal((requests[0]?.init.headers as Headers).get("authorization"), "Bearer example-token");
+  assert.equal((requests[0]?.init.headers as Headers).get("content-type"), null);
+});
+
 function createLocalWorkbenchSummary(): LocalWorkbenchSummary {
   return {
     deviceId: "device-a",
@@ -636,6 +663,40 @@ function createRuntimeSettingsSummary(): RuntimeSettingsSummary {
         description: "Read-only feature summary",
         enabled: false,
         defaultEnabled: false,
+      },
+    ],
+  };
+}
+
+function createAdvancedPlatformReadinessSummary(): AdvancedPlatformReadinessSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    readAt: "2026-06-22T00:00:00.000Z",
+    platform: "macos",
+    readinessSections: [
+      {
+        id: "windows_sandbox",
+        label: "Windows sandbox",
+        status: "not_applicable",
+        summary: "Windows sandbox is not applicable on this platform.",
+        details: null,
+      },
+    ],
+    watchlistItems: [
+      {
+        id: "realtime-voice",
+        label: "Realtime voice",
+        support: "deferred",
+        reason: "Voice transport needs a separate design.",
+        nextSafeStep: "Define a privacy model first.",
+      },
+      {
+        id: "remote-gui-computer-use",
+        label: "Remote GUI and computer use",
+        support: "not_supported",
+        reason: "Out of scope for this slice.",
+        nextSafeStep: "Keep disabled.",
       },
     ],
   };

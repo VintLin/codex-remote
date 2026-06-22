@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
 import type { ConversationQueueRepository, TaskRepository } from "@codex-remote/db";
 import type {
+  AdvancedPlatformReadinessSummary,
   ApprovalDecisionInput,
   BoardTask,
   CodexConversation,
@@ -254,6 +255,15 @@ export function createControlPlaneHttpApp(params: {
     const projectId = c.req.param("projectId");
     const summary = await runForDevice(device, "runtime-settings/read", () => params.workerClient.getRuntimeSettingsSummary(device, projectId));
     return c.json(normalizeRuntimeSettingsSummary(device, projectId, summary));
+  });
+
+  app.get("/v1/devices/:deviceId/projects/:projectId/advanced-platform-readiness", async (c) => {
+    const device = requireDevice(registry, c.req.param("deviceId"));
+    const projectId = c.req.param("projectId");
+    const summary = await runForDevice(device, "advanced-platform/readiness", () =>
+      params.workerClient.getAdvancedPlatformReadinessSummary(device, projectId)
+    );
+    return c.json(normalizeAdvancedPlatformReadinessSummary(device, projectId, summary));
   });
 
   app.post("/v1/devices/:deviceId/conversations", async (c) => {
@@ -576,6 +586,14 @@ function normalizeRuntimeSettingsSummary(
   projectId: string,
   summary: RuntimeSettingsSummary,
 ): RuntimeSettingsSummary {
+  return { ...summary, deviceId: device.id, projectId };
+}
+
+function normalizeAdvancedPlatformReadinessSummary(
+  device: ConfiguredWorkerDevice,
+  projectId: string,
+  summary: AdvancedPlatformReadinessSummary,
+): AdvancedPlatformReadinessSummary {
   return { ...summary, deviceId: device.id, projectId };
 }
 

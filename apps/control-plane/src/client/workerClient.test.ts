@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AdvancedPlatformReadinessSummary,
   ExtensionInventory,
   LocalWorkbenchSummary,
   McpServerSummary,
@@ -284,6 +285,72 @@ test("worker upstream client runtime settings method when called, should use pro
   assert.equal(requests[0]?.url, "http://127.0.0.1:8788/v1/projects/project-a/runtime-settings");
   assert.equal(requests[0]?.headers.get("authorization"), "Bearer example-token");
   assert.deepEqual(summary, createRuntimeSettingsSummary({ deviceId: "upstream-device" }));
+});
+
+test("worker upstream client when advanced platform readiness method is called, should use project-scoped worker route and bearer auth", async () => {
+  const requests: Array<{ headers: Headers; method: string | undefined; url: string }> = [];
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async (request, init) => {
+      requests.push({ headers: new Headers(init?.headers), method: init?.method, url: String(request) });
+      return Response.json(createAdvancedPlatformReadinessSummary({ deviceId: "upstream-device" }));
+    },
+  });
+
+  const summary = await client.getAdvancedPlatformReadinessSummary(device, "project-a");
+
+  assert.equal(requests[0]?.method, "GET");
+  assert.equal(requests[0]?.url, "http://127.0.0.1:8788/v1/projects/project-a/advanced-platform-readiness");
+  assert.equal(requests[0]?.headers.get("authorization"), "Bearer example-token");
+  assert.deepEqual(summary, createAdvancedPlatformReadinessSummary({ deviceId: "upstream-device" }));
+});
+
+test("worker upstream client when advanced platform readiness response has hostile extra fields, should fail closed without leaking them", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json({
+        ...createAdvancedPlatformReadinessSummary(),
+        cwd: "/Users/Vint/project",
+        appServerUrl: "http://127.0.0.1:8788",
+        logs: "raw logs",
+        stack: "raw stack",
+        actionId: "setupStart",
+        inputs: [{ name: "extraLogFiles" }],
+      }),
+  });
+
+  await assert.rejects(client.getAdvancedPlatformReadinessSummary(device, "project-a"), (error) => {
+    const serialized = JSON.stringify(error);
+    assert.doesNotMatch(serialized, /cwd|\/Users\/Vint|appServerUrl|8788|logs|stack|actionId|setupStart|inputs|extraLogFiles/);
+    assert.equal((error as { status?: number }).status, 424);
+    return true;
+  });
+});
+
+test("worker upstream client when advanced platform readiness nested fields are hostile, should fail closed without leaking them", async () => {
+  const client = createWorkerUpstreamClient({
+    timeoutMs: 1_000,
+    fetch: async () =>
+      Response.json(createAdvancedPlatformReadinessSummary({
+        readinessSections: [
+          {
+            id: "windows_sandbox",
+            label: "Windows sandbox",
+            status: "ready",
+            summary: "Ready",
+            cwd: "/Users/Vint/project",
+          } as AdvancedPlatformReadinessSummary["readinessSections"][number],
+        ],
+      })),
+  });
+
+  await assert.rejects(client.getAdvancedPlatformReadinessSummary(device, "project-a"), (error) => {
+    const serialized = JSON.stringify(error);
+    assert.doesNotMatch(serialized, /cwd|\/Users\/Vint|windows_sandbox/);
+    assert.equal((error as { status?: number }).status, 424);
+    return true;
+  });
 });
 
 test("worker upstream client when runtime settings response has extra public fields, should fail closed without leaking them", async () => {
@@ -671,6 +738,34 @@ function createRuntimeSettingsSummary(overrides: Partial<RuntimeSettingsSummary>
         description: "A feature",
         enabled: false,
         defaultEnabled: false,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function createAdvancedPlatformReadinessSummary(overrides: Partial<AdvancedPlatformReadinessSummary> = {}): AdvancedPlatformReadinessSummary {
+  return {
+    deviceId: "device-a",
+    projectId: "project-a",
+    readAt: "2026-06-22T00:00:00.000Z",
+    platform: "macos",
+    readinessSections: [
+      {
+        id: "windows_sandbox",
+        label: "Windows sandbox",
+        status: "not_applicable",
+        summary: "Windows sandbox is not applicable on this platform.",
+        details: null,
+      },
+    ],
+    watchlistItems: [
+      {
+        id: "realtime_voice",
+        label: "Realtime voice",
+        support: "deferred",
+        reason: "No safe public start path is exposed.",
+        nextSafeStep: "Define a separate realtime voice security model.",
       },
     ],
     ...overrides,

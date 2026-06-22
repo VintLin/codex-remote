@@ -52,6 +52,10 @@ import {
   getRuntimeSettingsSummary,
   type WorkerRuntimeSettingsHandlerContext,
 } from "./runtimeSettingsHandlers.ts";
+import {
+  getAdvancedPlatformReadinessSummary,
+  type WorkerAdvancedPlatformHandlerContext,
+} from "./advancedPlatformHandlers.ts";
 
 type WorkerHonoEnv = {
   Variables: {
@@ -72,6 +76,7 @@ export function createWorkerHttpApp(
   const localWorkbenchContext = context as unknown as WorkerLocalWorkbenchHandlerContext;
   const localActionContext = context as unknown as WorkerLocalActionHandlerContext;
   const runtimeSettingsContext = context as unknown as WorkerRuntimeSettingsHandlerContext;
+  const advancedPlatformContext = context as unknown as WorkerAdvancedPlatformHandlerContext;
   const app = new Hono<WorkerHonoEnv>();
 
   app.onError((error, c) => {
@@ -139,6 +144,9 @@ export function createWorkerHttpApp(
   );
   app.get("/v1/projects/:projectId/runtime-settings", async (c) =>
     c.json(await getRuntimeSettingsSummary(runtimeSettingsContext, c.req.param("projectId"))),
+  );
+  app.get("/v1/projects/:projectId/advanced-platform-readiness", async (c) =>
+    c.json(await getAdvancedPlatformReadinessSummary(advancedPlatformContext, c.req.param("projectId"))),
   );
   app.get("/v1/conversations", async (c) => c.json(await listConversations(context)));
   app.post("/v1/conversations", async (c) => c.json(await startConversation(context, await readStartInput(c)), 202));

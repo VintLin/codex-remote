@@ -39,6 +39,9 @@ export type RuntimeAccountSummary = components["schemas"]["RuntimeAccountSummary
 export type RuntimeConfigPosture = components["schemas"]["RuntimeConfigPosture"];
 export type RuntimePermissionProfileSummary = components["schemas"]["RuntimePermissionProfileSummary"];
 export type RuntimeExperimentalFeatureSummary = components["schemas"]["RuntimeExperimentalFeatureSummary"];
+export type AdvancedPlatformReadinessSummary = components["schemas"]["AdvancedPlatformReadinessSummary"];
+export type AdvancedPlatformReadinessSection = components["schemas"]["AdvancedPlatformReadinessSection"];
+export type AdvancedPlatformWatchlistItem = components["schemas"]["AdvancedPlatformWatchlistItem"];
 
 export type Device = components["schemas"]["Device"];
 export type RemoteProject = components["schemas"]["RemoteProject"];

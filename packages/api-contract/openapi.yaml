@@ -1813,6 +1813,37 @@ paths:
           $ref: "#/components/responses/DeviceUnavailableError"
         "500":
           $ref: "#/components/responses/InternalWorkerError"
+  /v1/devices/{deviceId}/projects/{projectId}/advanced-platform-readiness:
+    get:
+      operationId: getControlPlaneDeviceProjectAdvancedPlatformReadiness
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read-only advanced platform readiness and support summary for a configured device project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdvancedPlatformReadinessSummary"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/DeviceNotFoundError"
+        "424":
+          $ref: "#/components/responses/DeviceUnavailableError"
+        "500":
+          $ref: "#/components/responses/InternalWorkerError"
 components:
   responses:
     BadRequestError:
@@ -2715,6 +2746,100 @@ components:
           type: boolean
         defaultEnabled:
           type: boolean
+    AdvancedPlatformReadinessSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - deviceId
+        - projectId
+        - readAt
+        - platform
+        - readinessSections
+        - watchlistItems
+      properties:
+        deviceId:
+          type: string
+        projectId:
+          type: string
+        readAt:
+          type: string
+          format: date-time
+        platform:
+          type: string
+          enum:
+            - macos
+            - windows
+            - linux
+            - unknown
+        readinessSections:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AdvancedPlatformReadinessSection"
+        watchlistItems:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AdvancedPlatformWatchlistItem"
+    AdvancedPlatformReadinessSection:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - label
+        - status
+        - summary
+      properties:
+        id:
+          type: string
+          maxLength: 120
+        label:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          enum:
+            - ready
+            - not_applicable
+            - degraded
+            - unavailable
+        summary:
+          type: string
+          maxLength: 400
+        details:
+          type:
+            - string
+            - "null"
+          maxLength: 800
+        error:
+          $ref: "#/components/schemas/ErrorEnvelope"
+    AdvancedPlatformWatchlistItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - label
+        - support
+        - reason
+        - nextSafeStep
+      properties:
+        id:
+          type: string
+          maxLength: 120
+        label:
+          type: string
+          maxLength: 200
+        support:
+          type: string
+          enum:
+            - not_supported
+            - deferred
+        reason:
+          type: string
+          maxLength: 400
+        nextSafeStep:
+          type: string
+          maxLength: 200
     LocalWorkbenchSummary:
       type: object
       additionalProperties: false

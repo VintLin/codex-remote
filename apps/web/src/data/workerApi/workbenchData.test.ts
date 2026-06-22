@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  AdvancedPlatformReadinessSummary,
   ErrorEnvelope,
   ExtensionInventory,
   LocalWorkbenchSummary,
@@ -466,6 +467,85 @@ test("workbench datasource when runtime settings summary loads should expose sel
   assert.equal(data.runtimeSettings.summary?.account.emailDomain, "example.com");
 });
 
+test("workbench datasource when advanced platform readiness loads should expose selected project support summary", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-advanced", icon: "laptop", name: "Advanced", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Advanced", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("project-advanced", "Advanced", "device-advanced")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "device-advanced", projectId: "project-advanced" })),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "device-advanced", projectId: "project-advanced" })),
+      "/v1/devices/device-advanced/projects/project-advanced/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "device-advanced", projectId: "project-advanced" })),
+      "/v1/devices/device-advanced/projects/project-advanced/runtime-settings": jsonResponse(createRuntimeSettingsSummary({ deviceId: "device-advanced", projectId: "project-advanced" })),
+      "/v1/devices/device-advanced/projects/project-advanced/advanced-platform-readiness": jsonResponse(createAdvancedPlatformReadinessSummary({ deviceId: "device-advanced", projectId: "project-advanced" })),
+    }),
+  });
+
+  assert.equal(data.advancedPlatform.status, "loaded");
+  assert.equal(data.advancedPlatform.summary?.projectId, "project-advanced");
+  assert.equal(data.advancedPlatform.summary?.readinessSections[0]?.id, "windows_sandbox");
+  assert.deepEqual(data.advancedPlatform.summary?.watchlistItems.map((item) => item.support), ["deferred", "not_supported"]);
+});
+
+test("workbench datasource when no selected project exists should mark advanced platform empty", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-empty-advanced", icon: "laptop", name: "Empty", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([]),
+      "/v1/tasks": jsonResponse([]),
+    }),
+  });
+
+  assert.equal(data.advancedPlatform.status, "empty");
+  assert.equal(data.advancedPlatform.summary, null);
+  assert.equal(data.advancedPlatform.deviceId, null);
+  assert.equal(data.advancedPlatform.projectId, null);
+});
+
+test("workbench datasource when advanced platform request fails should keep app source loaded and mark advanced platform failed", async () => {
+  const data = await loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: createFetchMock({
+      "/v1/devices": jsonResponse([
+        { id: "device-advanced-fail", icon: "laptop", name: "Advanced fail", status: "Connected", ip: "local", lastOnlineAt: "now", currentProject: "Advanced", model: "Codex" },
+      ]),
+      "/v1/conversations": jsonResponse([]),
+      "/v1/projects": jsonResponse([project("project-advanced-fail", "Advanced", "device-advanced-fail")]),
+      "/v1/tasks": jsonResponse([]),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/summary": jsonResponse(createLocalWorkbenchSummary({ deviceId: "device-advanced-fail", projectId: "project-advanced-fail" })),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/files": jsonResponse(createProjectDirectoryListing()),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/file-preview": jsonResponse(createProjectFilePreview()),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/git": jsonResponse(createProjectGitSummary()),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/mcp": jsonResponse(createMcpServerSummary({ deviceId: "device-advanced-fail", projectId: "project-advanced-fail" })),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/local-workbench/extensions": jsonResponse(createExtensionInventory({ deviceId: "device-advanced-fail", projectId: "project-advanced-fail" })),
+      "/v1/devices/device-advanced-fail/projects/project-advanced-fail/advanced-platform-readiness": jsonResponse(
+        { code: "app_server_unavailable", message: "advanced platform unavailable" },
+        424,
+      ),
+    }),
+  });
+
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.advancedPlatform.status, "failed");
+  assert.equal(data.advancedPlatform.summary, null);
+  assert.equal(data.advancedPlatform.error?.code, "app_server_unavailable");
+  assert.equal(data.localWorkbench.status, "loaded");
+});
+
 test("workbench datasource when no selected project exists should mark runtime settings empty", async () => {
   const data = await loadWorkbenchData({
     baseUrl: "http://example.test",
@@ -657,6 +737,41 @@ function createRuntimeSettingsSummary(overrides: Partial<RuntimeSettingsSummary>
         description: "Read-only feature summary",
         enabled: false,
         defaultEnabled: false,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function createAdvancedPlatformReadinessSummary(overrides: Partial<AdvancedPlatformReadinessSummary> = {}): AdvancedPlatformReadinessSummary {
+  return {
+    deviceId: "w1",
+    projectId: "p-live",
+    readAt: "2026-06-22T00:00:00.000Z",
+    platform: "macos",
+    readinessSections: [
+      {
+        id: "windows_sandbox",
+        label: "Windows sandbox",
+        status: "not_applicable",
+        summary: "Windows sandbox is not applicable on this platform.",
+        details: null,
+      },
+    ],
+    watchlistItems: [
+      {
+        id: "realtime-voice",
+        label: "Realtime voice",
+        support: "deferred",
+        reason: "No safe public start path is exposed.",
+        nextSafeStep: "Define a separate safety model.",
+      },
+      {
+        id: "remote-gui-computer-use",
+        label: "Remote GUI and computer use",
+        support: "not_supported",
+        reason: "Remote control is outside this read-only readiness slice.",
+        nextSafeStep: "Keep disabled.",
       },
     ],
     ...overrides,

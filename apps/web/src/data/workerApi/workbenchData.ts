@@ -1,4 +1,5 @@
 import type {
+  AdvancedPlatformReadinessSummary,
   ConversationTimeline,
   ConversationApprovalCard,
   ConversationQueuedMessage,
@@ -76,6 +77,14 @@ export interface RuntimeSettingsData {
   summary: RuntimeSettingsSummary | null;
 }
 
+export interface AdvancedPlatformData {
+  deviceId: string | null;
+  error?: SourceErrorEnvelope;
+  projectId: string | null;
+  status: "degraded" | "empty" | "failed" | "loaded" | "unavailable";
+  summary: AdvancedPlatformReadinessSummary | null;
+}
+
 export interface WorkbenchData {
   source: {
     reason:
@@ -98,6 +107,7 @@ export interface WorkbenchData {
   tasks: BoardTask[];
   localWorkbench: LocalWorkbenchData;
   runtimeSettings: RuntimeSettingsData;
+  advancedPlatform: AdvancedPlatformData;
   assistantThreads: AssistantThreadSnapshot[];
   searchRecents: SearchRecent[];
 }
@@ -130,6 +140,7 @@ export function createFallbackWorkbenchData(
     tasks: [...mockTasks],
     localWorkbench: createUnavailableLocalWorkbenchData(),
     runtimeSettings: createUnavailableRuntimeSettingsData(),
+    advancedPlatform: createUnavailableAdvancedPlatformData(),
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
   };
@@ -169,6 +180,22 @@ function createUnavailableRuntimeSettingsData(): RuntimeSettingsData {
 function createEmptyRuntimeSettingsData(): RuntimeSettingsData {
   return {
     ...createUnavailableRuntimeSettingsData(),
+    status: "empty",
+  };
+}
+
+function createUnavailableAdvancedPlatformData(): AdvancedPlatformData {
+  return {
+    deviceId: null,
+    projectId: null,
+    status: "unavailable",
+    summary: null,
+  };
+}
+
+function createEmptyAdvancedPlatformData(): AdvancedPlatformData {
+  return {
+    ...createUnavailableAdvancedPlatformData(),
     status: "empty",
   };
 }
@@ -454,6 +481,10 @@ function createRuntimeSettingsErrorEnvelope(error: unknown): SourceErrorEnvelope
   return createLocalWorkbenchErrorEnvelope(error);
 }
 
+function createAdvancedPlatformErrorEnvelope(error: unknown): SourceErrorEnvelope {
+  return createLocalWorkbenchErrorEnvelope(error);
+}
+
 function createSearchRecents(
   conversations: readonly CodexConversation[],
   selectedConversationKey?: string | null,
@@ -535,6 +566,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
     const selectedProject = findLocalWorkbenchProject(projects, selectedConversation, options.selectedDeviceId ?? devices[0]?.id ?? null);
     const localWorkbench = await loadLocalWorkbenchData(client, selectedProject);
     const runtimeSettings = await loadRuntimeSettingsData(client, selectedProject);
+    const advancedPlatform = await loadAdvancedPlatformData(client, selectedProject);
 
     if (timelineError) {
       return {
@@ -548,6 +580,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         tasks,
         localWorkbench,
         runtimeSettings,
+        advancedPlatform,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -565,6 +598,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
         tasks: [],
         localWorkbench,
         runtimeSettings,
+        advancedPlatform,
         assistantThreads,
         searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
       };
@@ -581,6 +615,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
       tasks,
       localWorkbench,
       runtimeSettings,
+      advancedPlatform,
       assistantThreads,
       searchRecents: createSearchRecents(conversations, options.selectedConversationKey),
     };
@@ -689,6 +724,31 @@ async function loadRuntimeSettingsData(client: WorkerApiClient, project: RemoteP
       error: createRuntimeSettingsErrorEnvelope(error),
       projectId: project.id,
       status: "degraded",
+      summary: null,
+    };
+  }
+}
+
+async function loadAdvancedPlatformData(client: WorkerApiClient, project: RemoteProject | null): Promise<AdvancedPlatformData> {
+  if (!project) {
+    return createEmptyAdvancedPlatformData();
+  }
+
+  try {
+    const summary = await client.getAdvancedPlatformReadinessSummary(project.deviceId, project.id);
+    const hasDegradedSection = summary.readinessSections.some((section) => section.status === "degraded" || section.status === "unavailable");
+    return {
+      deviceId: project.deviceId,
+      projectId: project.id,
+      status: hasDegradedSection ? "degraded" : "loaded",
+      summary,
+    };
+  } catch (error: unknown) {
+    return {
+      deviceId: project.deviceId,
+      error: createAdvancedPlatformErrorEnvelope(error),
+      projectId: project.id,
+      status: "failed",
       summary: null,
     };
   }

@@ -75,7 +75,7 @@ export function CodexRemoteApp() {
   const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
-  const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, runtimeSettings, assistantThreads, searchRecents, source, taskSource } = workbenchData;
+  const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, runtimeSettings, advancedPlatform, assistantThreads, searchRecents, source, taskSource } = workbenchData;
   const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
   const selectedConversation = findConversationByKey(conversations, selectedConversationKey);
   const conversation =
@@ -759,6 +759,7 @@ export function CodexRemoteApp() {
         ),
         main: (
           <SettingsPage
+            advancedPlatform={advancedPlatform}
             conversations={conversations}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}

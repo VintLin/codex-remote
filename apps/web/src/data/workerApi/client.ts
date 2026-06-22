@@ -1,4 +1,5 @@
 import type {
+  AdvancedPlatformReadinessSummary,
   CodexConversation,
   BoardTask,
   CommandAccepted,
@@ -78,6 +79,7 @@ export interface WorkerApiClientLike {
   getLocalWorkbenchMcpSummary(deviceId: string, projectId: string): Promise<McpServerSummary>;
   getLocalWorkbenchExtensionInventory(deviceId: string, projectId: string): Promise<ExtensionInventory>;
   getRuntimeSettingsSummary(deviceId: string, projectId: string): Promise<RuntimeSettingsSummary>;
+  getAdvancedPlatformReadinessSummary(deviceId: string, projectId: string): Promise<AdvancedPlatformReadinessSummary>;
 }
 
 type RequestOptions = {
@@ -373,6 +375,12 @@ export class WorkerApiClient implements WorkerApiClientLike {
   public async getRuntimeSettingsSummary(deviceId: string, projectId: string): Promise<RuntimeSettingsSummary> {
     return this.request<RuntimeSettingsSummary>(
       `/v1/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId)}/runtime-settings`,
+    );
+  }
+
+  public async getAdvancedPlatformReadinessSummary(deviceId: string, projectId: string): Promise<AdvancedPlatformReadinessSummary> {
+    return this.request<AdvancedPlatformReadinessSummary>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId)}/advanced-platform-readiness`,
     );
   }
 

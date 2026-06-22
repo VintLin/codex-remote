@@ -81,7 +81,8 @@ type WorkerAppServerMethod =
   | "thread/unarchive"
   | "turn/start"
   | "turn/interrupt"
-  | "turn/steer";
+  | "turn/steer"
+  | "windowsSandbox/readiness";
 type RpcClientErrorKind =
   | "app_server_connection_error"
   | "app_server_connection_timeout"

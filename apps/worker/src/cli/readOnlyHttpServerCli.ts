@@ -15,6 +15,11 @@ import type {
   WorkerRuntimeSettingsAppServerClient,
   WorkerRuntimeSettingsHandlerContext,
 } from "../http/runtimeSettingsHandlers.ts";
+import type {
+  WorkerAdvancedPlatformAppServerClient,
+  WorkerAdvancedPlatformHandlerContext,
+} from "../http/advancedPlatformHandlers.ts";
+import type { AdvancedPlatformPublicPlatform } from "../http/advancedPlatformProjections.ts";
 import { createWorkerHttpApp } from "../http/workerHttpApp.ts";
 import { loadWorkerHttpConfig, type WorkerHttpConfig } from "../http/workerHttpConfig.ts";
 import {
@@ -27,6 +32,7 @@ interface StartReadOnlyHttpServerOptions {
   stdout: Pick<NodeJS.WriteStream, "write">;
   stderr: Pick<NodeJS.WriteStream, "write">;
   openWorkerSession?: typeof openWorkerAppServerSession;
+  platform?: () => AdvancedPlatformPublicPlatform;
   serveHttp?: typeof serve;
 }
 
@@ -41,7 +47,7 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
   }
 
   try {
-    const app = createWorkerHttpApp(createDefaultWorkerHandlerContext(config, options.openWorkerSession));
+    const app = createWorkerHttpApp(createDefaultWorkerHandlerContext(config, options.openWorkerSession, options.platform));
     const serveHttp = options.serveHttp ?? serve;
     serveHttp({
       fetch: app.fetch,
@@ -60,10 +66,12 @@ export async function startReadOnlyHttpServer(options: StartReadOnlyHttpServerOp
 function createDefaultWorkerHandlerContext(
   config: WorkerHttpConfig,
   openWorkerSession = openWorkerAppServerSession,
+  platform?: () => AdvancedPlatformPublicPlatform,
 ): WorkerControlHandlerContext &
   WorkerLocalWorkbenchHandlerContext &
   WorkerLocalActionHandlerContext &
-  WorkerRuntimeSettingsHandlerContext {
+  WorkerRuntimeSettingsHandlerContext &
+  WorkerAdvancedPlatformHandlerContext {
   const approvalRegistry = createWorkerApprovalRegistry();
   let sharedSession: Promise<WorkerAppServerSession> | null = null;
 
@@ -72,6 +80,7 @@ function createDefaultWorkerHandlerContext(
     now: () => new Date().toISOString(),
     approvalRegistry,
     writeState: createWorkerWriteHandlerState(),
+    ...(platform ? { platform } : {}),
     openClient: async () => {
       sharedSession ??= openWorkerSession({
         configuredUrl: config.appServerUrl,
@@ -106,7 +115,8 @@ function createSessionClient(
 ): WorkerControlAppServerClient &
   WorkerLocalWorkbenchAppServerClient &
   WorkerLocalActionAppServerClient &
-  WorkerRuntimeSettingsAppServerClient {
+  WorkerRuntimeSettingsAppServerClient &
+  WorkerAdvancedPlatformAppServerClient {
   return {
     readyz: () => client.readyz(),
     initialize: () => client.initialize(),
@@ -139,6 +149,7 @@ function createSessionClient(
     readConfig: (params) => client.readConfig(params),
     listPermissionProfiles: (params) => client.listPermissionProfiles(params),
     listExperimentalFeatures: (params) => client.listExperimentalFeatures(params),
+    readWindowsSandboxReadiness: () => client.readWindowsSandboxReadiness(),
     sendApprovalResponse: (params) => client.sendApprovalResponse(params),
     close: () => closeSession(),
   };

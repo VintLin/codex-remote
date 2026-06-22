@@ -339,6 +339,10 @@ export class AppServerWorkerClient extends AppServerReadOnlyProbeClient {
     return (await this.rpc.request("experimentalFeature/list", params)) as v2.ExperimentalFeatureListResponse;
   }
 
+  async readWindowsSandboxReadiness(): Promise<v2.WindowsSandboxReadinessResponse> {
+    return (await this.rpc.request("windowsSandbox/readiness", undefined)) as v2.WindowsSandboxReadinessResponse;
+  }
+
   async sendApprovalResponse(params: { requestId: string | number; result: unknown }): Promise<void> {
     this.rpc.sendApprovalResponse(params);
   }

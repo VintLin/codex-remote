@@ -292,6 +292,53 @@ test("read-only http server cli when runtime-settings route is requested, should
   ]);
 });
 
+test("read-only http server cli when advanced-platform route is requested, should forward only Windows sandbox readiness", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
+  const writes = createWritable();
+  const captured: { fetch?: (request: Request) => Promise<Response> | Response } = {};
+  const methods: string[] = [];
+
+  const exitCode = await startReadOnlyHttpServer({
+    env: {
+      CODEX_REMOTE_WORKER_TOKEN: "example-token",
+      CODEX_REMOTE_ALLOWED_PROJECT_ROOT: projectRoot,
+      CODEX_REMOTE_ALLOWED_ORIGINS: "http://127.0.0.1:5173",
+      CODEX_APP_SERVER_URL: "ws://127.0.0.1:4321",
+    },
+    stdout: writes.stdout,
+    stderr: writes.stderr,
+    platform: () => "windows",
+    openWorkerSession: async () => ({
+      client: createFakeWorkerClient({
+        readWindowsSandboxReadiness: async () => {
+          methods.push("windowsSandbox/readiness");
+          return { status: "ready" };
+        },
+      } as Partial<AppServerWorkerClient>),
+      startedByWorker: false,
+      close: () => {},
+    }),
+    serveHttp: (options) => {
+      captured.fetch = (request) => options.fetch(request, undefined as never) as Promise<Response> | Response;
+      return undefined as never;
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  if (!captured.fetch) {
+    throw new Error("fetch app was not captured");
+  }
+
+  const response: Response = await captured.fetch(new Request("http://127.0.0.1:8787/v1/projects/local-project/advanced-platform-readiness", {
+    headers: { authorization: "Bearer example-token" },
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.projectId, "local-project");
+  assert.deepEqual(methods, ["windowsSandbox/readiness"]);
+});
+
 test("read-only http server cli when server binding fails, should print sanitized internal error", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "worker-http-cli-"));
   const writes = createWritable();
@@ -377,6 +424,7 @@ function createFakeWorkerClient(overrides: Partial<AppServerWorkerClient> = {}):
       throw new Error("unexpected_read_plugin");
     },
     listApps: async () => ({ data: [], nextCursor: null }),
+    readWindowsSandboxReadiness: async () => ({ status: "ready" }),
     sendApprovalResponse: async () => {},
     close: () => {},
     ...overrides,

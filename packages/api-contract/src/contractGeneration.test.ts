@@ -72,6 +72,9 @@ const schemaTypeNames = [
   "RuntimeConfigPosture",
   "RuntimePermissionProfileSummary",
   "RuntimeExperimentalFeatureSummary",
+  "AdvancedPlatformReadinessSummary",
+  "AdvancedPlatformReadinessSection",
+  "AdvancedPlatformWatchlistItem",
 ] as const;
 const schemaTypeNamePattern = schemaTypeNames.join("|");
 const stage2Paths = [
@@ -305,6 +308,90 @@ const stage14ForbiddenWriteRouteTerms = [
   "experimentalFeature/enablement/set",
   "experimental-enable",
 ] as const;
+const stage15AdvancedPlatformReadinessPath =
+  "/v1/devices/{deviceId}/projects/{projectId}/advanced-platform-readiness:" as const;
+const stage15AdvancedPlatformErrorResponsesByStatus = new Map([
+  ["400", "BadRequestError"],
+  ["401", "UnauthorizedError"],
+  ["404", "DeviceNotFoundError"],
+  ["424", "DeviceUnavailableError"],
+  ["500", "InternalWorkerError"],
+] as const);
+const stage15SchemaNames = [
+  "AdvancedPlatformReadinessSummary",
+  "AdvancedPlatformReadinessSection",
+  "AdvancedPlatformWatchlistItem",
+] as const;
+const stage15ForbiddenLeakFields = [
+  "authToken",
+  "token",
+  "secret",
+  "apiKey",
+  "appServerUrl",
+  "jsonRpc",
+  "absolutePath",
+  "cwd",
+  "home",
+  "hostname",
+  "username",
+  "env",
+  "logs",
+  "prompt",
+  "stdout",
+  "stderr",
+  "stack",
+  "cause",
+  "fullDiff",
+  "migrationItems",
+  "extraLogFiles",
+  "upload",
+  "uploadedFile",
+  "uploadedFiles",
+  "uploadedFileMetadata",
+  "fileMetadata",
+  "fileName",
+  "fileSize",
+  "mimeType",
+  "threadId",
+  "tags",
+] as const;
+const stage15ForbiddenPublicActionFields = [
+  "ready",
+  "action",
+  "actionId",
+  "executableActionId",
+  "input",
+  "inputFields",
+  "fields",
+  "includeHome",
+  "migrationItems",
+] as const;
+const stage15ForbiddenWriteRouteTerms = [
+  "realtime",
+  "voice",
+  "webrtc",
+  "feedback",
+  "upload",
+  "external-agent",
+  "externalAgent",
+  "detect",
+  "import",
+  "windows-sandbox/setup",
+  "windowsSandbox/setup",
+  "setupStart",
+  "remote-gui",
+  "remoteGui",
+  "computer-use",
+  "automation",
+  "automations",
+  "shell",
+  "config/write",
+  "config-write",
+  "login",
+  "logout",
+  "model/switch",
+  "model-switch",
+] as const;
 const stage7TaskWritePathMethodPairs = [
   "/v1/tasks:post",
   "/v1/tasks/{taskId}/conversation-links:post",
@@ -433,6 +520,12 @@ function expectPropertyMaxLength(schemaBlockLines: string[], propertyName: strin
   const propertyBlockLines = extractPropertyBlock(schemaBlockLines, propertyName);
   assert.equal(propertyBlockLines.length > 0, true, `${propertyName} should exist`);
   assert.match(propertyBlockLines.join("\n"), new RegExp(`^          maxLength:\\s*${maxLength}$`, "m"));
+}
+
+function expectPropertyMaxItems(schemaBlockLines: string[], propertyName: string, maxItems: number): void {
+  const propertyBlockLines = extractPropertyBlock(schemaBlockLines, propertyName);
+  assert.equal(propertyBlockLines.length > 0, true, `${propertyName} should exist`);
+  assert.match(propertyBlockLines.join("\n"), new RegExp(`^          maxItems:\\s*${maxItems}$`, "m"));
 }
 
 function expectPropertyEnum(schemaBlockLines: string[], propertyName: string, expectedValues: readonly string[]): void {
@@ -1288,6 +1381,129 @@ test("when stage 14 public api types are exported, source index should re-export
   const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
 
   for (const aliasName of stage14SchemaNames) {
+    assert.match(publicExportSource, new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`));
+  }
+});
+
+test("when stage 15 advanced platform contract is maintained, openapi should define one project-scoped read route", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const versionedPathLines = extractVersionedPathLines(source);
+
+  assert.equal(versionedPathLines.includes(stage15AdvancedPlatformReadinessPath), true);
+
+  const pathBlockLines = extractPathBlock(source, stage15AdvancedPlatformReadinessPath);
+  assert.equal(pathBlockLines.length > 0, true);
+  const methods = extractMethodBlocks(pathBlockLines);
+  assert.deepEqual(
+    methods.map((methodBlock) => methodBlock.method),
+    ["get"],
+  );
+
+  const method = expectDefined(
+    methods.find((methodBlock) => methodBlock.method === "get"),
+    "advanced platform readiness should define GET",
+  );
+  const methodSource = method.lines.join("\n");
+  assert.match(methodSource, /^ {6}operationId:\s*getControlPlaneDeviceProjectAdvancedPlatformReadiness$/m);
+  assert.match(methodSource, /#\/components\/schemas\/AdvancedPlatformReadinessSummary/);
+  assert.equal(method.lines.some((line) => /^ {6}requestBody:\s*$/.test(line)), false);
+
+  const responseRefs = extractResponseRefs(method.lines);
+  assert.deepEqual([...responseRefs.keys()].sort(), ["200", "400", "401", "404", "424", "500"]);
+  assert.deepEqual(responseRefs.get("200")?.componentResponseRefs, []);
+  assert.equal(responseRefs.get("200")?.hasDirectSchemaRef, false);
+  for (const [status, responseName] of stage15AdvancedPlatformErrorResponsesByStatus) {
+    assert.deepEqual(responseRefs.get(status)?.componentResponseRefs, [responseName]);
+  }
+});
+
+test("when stage 15 advanced platform schemas are maintained, public response schemas should stay closed and bounded", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of stage15SchemaNames) {
+    const schemaBlockLines = expectSchemaDisallowsAdditionalProperties(source, schemaName);
+    assert.match(schemaBlockLines.join("\n"), /^        /m);
+  }
+
+  const summaryBlock = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformReadinessSummary");
+  const summarySource = summaryBlock.join("\n");
+  for (const fieldName of ["deviceId", "projectId", "readAt", "platform", "readinessSections", "watchlistItems"]) {
+    assert.match(summarySource, new RegExp(`^        ${fieldName}:`, "m"));
+  }
+  expectPropertyEnum(summaryBlock, "platform", ["macos", "windows", "linux", "unknown"]);
+  expectPropertyMaxItems(summaryBlock, "readinessSections", 20);
+  expectPropertyMaxItems(summaryBlock, "watchlistItems", 20);
+
+  const sectionBlock = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformReadinessSection");
+  expectPropertyMaxLength(sectionBlock, "id", 120);
+  expectPropertyMaxLength(sectionBlock, "label", 200);
+  expectPropertyMaxLength(sectionBlock, "summary", 400);
+  expectPropertyEnum(sectionBlock, "status", ["ready", "not_applicable", "degraded", "unavailable"]);
+
+  const watchlistBlock = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformWatchlistItem");
+  expectPropertyMaxLength(watchlistBlock, "id", 120);
+  expectPropertyMaxLength(watchlistBlock, "label", 200);
+  expectPropertyMaxLength(watchlistBlock, "reason", 400);
+  expectPropertyMaxLength(watchlistBlock, "nextSafeStep", 200);
+});
+
+test("when stage 15 advanced platform schemas are maintained, public response schemas should stay leak-free", () => {
+  const source = readFileSync(openApiPath, "utf8");
+
+  for (const schemaName of stage15SchemaNames) {
+    const schemaSource = expectSchemaDisallowsAdditionalProperties(source, schemaName).join("\n");
+    for (const leakField of stage15ForbiddenLeakFields) {
+      assert.doesNotMatch(schemaSource, new RegExp(`\\b${escapeRegExp(leakField)}\\b`, "i"));
+    }
+  }
+
+  const watchlistSource = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformWatchlistItem").join("\n");
+  for (const actionField of stage15ForbiddenPublicActionFields) {
+    assert.doesNotMatch(watchlistSource, new RegExp(`\\b${escapeRegExp(actionField)}\\b`, "i"));
+  }
+});
+
+test("when stage 15 advanced platform support is maintained, readiness and watchlist states should stay separate", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const sectionBlock = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformReadinessSection");
+  const watchlistBlock = expectSchemaDisallowsAdditionalProperties(source, "AdvancedPlatformWatchlistItem");
+
+  expectPropertyEnum(sectionBlock, "status", ["ready", "not_applicable", "degraded", "unavailable"]);
+  expectPropertyEnum(watchlistBlock, "support", ["not_supported", "deferred"]);
+  assert.deepEqual(extractPropertyNames(watchlistBlock).filter((fieldName) => fieldName === "status"), []);
+  assert.deepEqual(extractEnumValues(extractPropertyBlock(watchlistBlock, "support")).filter((value) => value === "ready"), []);
+});
+
+test("when stage 15 advanced platform contract is maintained, public api should not expose advanced write routes", () => {
+  const source = readFileSync(openApiPath, "utf8");
+  const advancedPlatformPathLines = extractVersionedPathLines(source).filter((path) =>
+    /advanced-platform|realtime|voice|feedback|external-agent|externalAgent|remote-gui|remoteGui|automation/i.test(path),
+  );
+  assert.deepEqual(advancedPlatformPathLines, [stage15AdvancedPlatformReadinessPath]);
+
+  const pathBlockLines = extractPathBlock(source, stage15AdvancedPlatformReadinessPath);
+  const method = expectDefined(
+    extractMethodBlocks(pathBlockLines).find((methodBlock) => methodBlock.method === "get"),
+    "advanced platform readiness should define GET",
+  );
+  assert.equal(method.lines.some((line) => /^ {6}requestBody:\s*$/.test(line)), false);
+
+  const pathMethodPairs = extractPathMethodPairs(source);
+  const forbiddenWriteRoutes = pathMethodPairs.filter((pathMethodPair) => {
+    const methodName = expectDefined(pathMethodPair.split(":").at(-1), "method should exist");
+    if (!writeMethods.includes(methodName as (typeof writeMethods)[number])) {
+      return false;
+    }
+    return stage15ForbiddenWriteRouteTerms.some((term) => pathMethodPair.toLowerCase().includes(term.toLowerCase()));
+  });
+
+  assert.deepEqual(forbiddenWriteRoutes, []);
+});
+
+test("when stage 15 public api types are exported, source index should re-export advanced platform aliases", () => {
+  const publicExportSource = readFileSync(new URL("index.ts", import.meta.url), "utf8");
+
+  for (const aliasName of stage15SchemaNames) {
     assert.match(publicExportSource, new RegExp(`export type ${aliasName} = components\\["schemas"\\]\\["${aliasName}"\\];`));
   }
 });

@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
-import type { CommandAccepted, ConversationTimeline, ErrorEnvelope, PendingApproval } from "@codex-remote/api-contract";
+import type {
+  AdvancedPlatformReadinessSummary,
+  CommandAccepted,
+  ConversationTimeline,
+  ErrorEnvelope,
+  PendingApproval,
+} from "@codex-remote/api-contract";
 
 import { createFakeWorkerSmokeServer } from "./fakeWorkerSmokeServer.ts";
 
@@ -420,12 +426,131 @@ test("fake Worker smoke server when two instances are configured, should return 
   }
 });
 
+test("fake Worker smoke server when advanced platform readiness loads, should expose read-only support matrix", async () => {
+  const { baseUrl, close } = await startFakeServer();
+  try {
+    const response = await fetch(`${baseUrl}/v1/projects/smoke-project/advanced-platform-readiness`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.status, 200);
+    const summary = (await response.json()) as AdvancedPlatformReadinessSummary;
+    assert.equal(summary.deviceId, "smoke-worker");
+    assert.equal(summary.projectId, "smoke-project");
+    assert.equal(summary.platform, "macos");
+    assert.equal(summary.readinessSections[0]?.id, "windows_sandbox");
+    assert.equal(summary.readinessSections[0]?.status, "not_applicable");
+    assert.deepEqual(summary.watchlistItems.map((item) => [item.id, item.support]), [
+      ["realtime-voice", "deferred"],
+      ["feedback-upload", "deferred"],
+      ["external-agent-config", "deferred"],
+      ["remote-gui-computer-use", "not_supported"],
+      ["automations", "deferred"],
+    ]);
+    const watchlistSupports: string[] = summary.watchlistItems.map((item) => item.support);
+    assert.equal(watchlistSupports.includes("ready"), false);
+    assert.equal(hasForbiddenObjectKey(summary, new Set(["action", "input"])), false);
+  } finally {
+    await close();
+  }
+});
+
+test("fake Worker smoke server when non-Windows readiness loads, should mark Windows sandbox not applicable", async () => {
+  const { baseUrl, close } = await startFakeServer({ advancedPlatform: { platform: "linux", windowsSandbox: "not_applicable" } });
+  try {
+    const summary = await fetchJson<AdvancedPlatformReadinessSummary>(`${baseUrl}/v1/projects/smoke-project/advanced-platform-readiness`);
+
+    assert.equal(summary.platform, "linux");
+    assert.equal(summary.readinessSections[0]?.status, "not_applicable");
+    assert.equal(summary.readinessSections[0]?.error, undefined);
+  } finally {
+    await close();
+  }
+});
+
+test("fake Worker smoke server when Windows readiness is degraded, should keep safe watchlist response", async () => {
+  const { baseUrl, close } = await startFakeServer({ advancedPlatform: { platform: "windows", windowsSandbox: "degraded" } });
+  try {
+    const summary = await fetchJson<AdvancedPlatformReadinessSummary>(`${baseUrl}/v1/projects/smoke-project/advanced-platform-readiness`);
+
+    assert.equal(summary.platform, "windows");
+    assert.equal(summary.readinessSections[0]?.status, "degraded");
+    assert.equal(summary.readinessSections[0]?.error?.code, "app_server_unavailable");
+    assert.equal(summary.watchlistItems.length, 5);
+  } finally {
+    await close();
+  }
+});
+
+test("fake Worker smoke server when advanced platform project mismatches, should reject before returning readiness", async () => {
+  const { baseUrl, close } = await startFakeServer();
+  try {
+    const response = await fetch(`${baseUrl}/v1/projects/other-project/advanced-platform-readiness`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.status, 403);
+    assert.equal(((await response.json()) as ErrorEnvelope).code, "project_forbidden");
+  } finally {
+    await close();
+  }
+});
+
+test("fake Worker smoke server advanced platform serialized body should not leak unsafe values", async () => {
+  const unsafeValues = [
+    "example-token",
+    "sk-proj-secret",
+    "http://127.0.0.1:9999",
+    ["", "Users", "example", ".codex", "auth.json"].join("/"),
+    ["C:", "Users", "example", ".codex", "auth.json"].join("\\"),
+    "{\"jsonrpc\":\"2.0\"",
+    "raw prompt",
+    "command output",
+    "application log",
+    "diff --git",
+    "stack trace",
+    "root cause",
+  ];
+  const { baseUrl, close } = await startFakeServer({
+    advancedPlatform: {
+      platform: "windows",
+      windowsSandbox: "degraded",
+      unsafeFixtureValues: unsafeValues,
+    },
+  });
+  try {
+    const response = await fetch(`${baseUrl}/v1/projects/smoke-project/advanced-platform-readiness`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    for (const value of unsafeValues) {
+      assert.equal(body.includes(value), false, value);
+    }
+  } finally {
+    await close();
+  }
+});
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: { authorization: `Bearer ${token}` },
   });
   assert.equal(response.status, 200);
   return response.json() as Promise<T>;
+}
+
+function hasForbiddenObjectKey(value: unknown, forbiddenKeys: ReadonlySet<string>): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasForbiddenObjectKey(item, forbiddenKeys));
+  }
+
+  return Object.entries(value).some(([key, nestedValue]) => forbiddenKeys.has(key) || hasForbiddenObjectKey(nestedValue, forbiddenKeys));
 }
 
 async function startFakeServer(options: Parameters<typeof createFakeWorkerSmokeServer>[0] = {}): Promise<{ baseUrl: string; close: () => Promise<void> }> {

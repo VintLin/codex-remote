@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { openTaskDatabase, type TaskDatabase, type TaskRepository } from "@codex-remote/db";
 import type {
+  AdvancedPlatformReadinessSummary,
   ApprovalDecisionInput,
   BoardTask,
   CodexConversation,
@@ -825,6 +826,45 @@ test("control plane http app when runtime settings route succeeds, should not se
   assert.doesNotMatch(body, /secret-token|person@example\.com|\/Users\/Vint|rawConfig|appServerUrl|jsonrpc|stack|cause|stdout|stderr|fullDiff/);
 });
 
+test("control plane http app when advanced platform readiness route is requested, should call only selected device and normalize public ids", async () => {
+  const client = new FakeWorkerClient({ upstreamDeviceId: "other-device" });
+  const app = createApp(client);
+
+  const response = await request(app, "/v1/devices/device-b/projects/project-a/advanced-platform-readiness");
+  const summary = await response.json() as AdvancedPlatformReadinessSummary;
+
+  assert.equal(response.status, 200);
+  assert.equal(summary.deviceId, "device-b");
+  assert.equal(summary.projectId, "project-a");
+  assert.equal(summary.readinessSections[0]?.id, "windows_sandbox");
+  assert.equal(summary.watchlistItems[0]?.id, "realtime_voice");
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), ["getAdvancedPlatformReadinessSummary:device-b"]);
+  assert.deepEqual(client.localWorkbenchProjectCalls, [{ method: "getAdvancedPlatformReadinessSummary", projectId: "project-a" }]);
+});
+
+test("control plane http app when advanced platform readiness route uses unknown device or upstream fails, should return sanitized errors", async () => {
+  const client = new FakeWorkerClient({ unavailableDeviceIds: new Set(["device-a"]) });
+  const app = createApp(client);
+
+  const missing = await request(app, "/v1/devices/missing/projects/project-a/advanced-platform-readiness");
+  const unavailable = await request(app, "/v1/devices/device-a/projects/project-a/advanced-platform-readiness");
+
+  assert.equal(missing.status, 404);
+  assert.equal(unavailable.status, 424);
+  const body = `${await missing.text()} ${await unavailable.text()}`;
+  assert.doesNotMatch(body, /token-a|token-b|8788|8789|other-device|upstream unavailable|project-a|cwd|appServerUrl|logs|stack|actionId/);
+});
+
+test("control plane http app when advanced platform readiness route succeeds, should not serialize hostile upstream fields", async () => {
+  const app = createApp();
+
+  const response = await request(app, "/v1/devices/device-a/projects/project-a/advanced-platform-readiness");
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(body, /secret-token|person@example\.com|\/Users\/Vint|cwd|appServerUrl|logs|jsonrpc|stack|cause|actionId|inputs|extraLogFiles|stdout|stderr|fullDiff/);
+});
+
 test("control plane http app when local workbench search limit is invalid, should reject before worker call", async () => {
   for (const limit of ["101", "1abc"]) {
     const client = new FakeWorkerClient();
@@ -1152,6 +1192,13 @@ class FakeWorkerClient implements WorkerUpstreamClient {
     return createRuntimeSettingsSummary(this.upstreamDeviceId ?? device.id, projectId);
   }
 
+  async getAdvancedPlatformReadinessSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<AdvancedPlatformReadinessSummary> {
+    this.record(device, "getAdvancedPlatformReadinessSummary");
+    this.throwIfUnavailable(device);
+    this.localWorkbenchProjectCalls.push({ method: "getAdvancedPlatformReadinessSummary", projectId });
+    return createAdvancedPlatformReadinessSummary(this.upstreamDeviceId ?? device.id, projectId);
+  }
+
   async readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline> {
     this.record(device, "readTimeline");
     this.throwIfUnavailable(device);
@@ -1392,6 +1439,40 @@ function createRuntimeSettingsSummary(deviceId: string, projectId: string): Runt
         description: "A feature",
         enabled: false,
         defaultEnabled: false,
+      },
+    ],
+  };
+}
+
+function createAdvancedPlatformReadinessSummary(deviceId: string, projectId: string): AdvancedPlatformReadinessSummary {
+  return {
+    deviceId,
+    projectId,
+    readAt: "2026-06-22T00:00:00.000Z",
+    platform: "macos",
+    readinessSections: [
+      {
+        id: "windows_sandbox",
+        label: "Windows sandbox",
+        status: "not_applicable",
+        summary: "Windows sandbox is not applicable on this platform.",
+        details: null,
+      },
+    ],
+    watchlistItems: [
+      {
+        id: "realtime_voice",
+        label: "Realtime voice",
+        support: "deferred",
+        reason: "No safe public start path is exposed.",
+        nextSafeStep: "Define a separate realtime voice security model.",
+      },
+      {
+        id: "feedback_upload",
+        label: "Feedback upload",
+        support: "not_supported",
+        reason: "Feedback upload is not exposed by this read-only route.",
+        nextSafeStep: "Specify a local confirmation and scrubbing model first.",
       },
     ],
   };

@@ -50,6 +50,8 @@ Status labels:
 | Git diff summary | Supported | Yes | `gitDiffToRemote` | Stage 12 exposes file-level project-relative counts/status only and discards raw diff hunk/header/body text. |
 | Fuzzy search | Supported | Yes | `fuzzyFileSearch` | Stage 12 exposes bounded project-relative search matches through Web -> Control Plane -> Worker. |
 | Realtime voice | Not supported | No | realtime notifications only | Generated notifications include realtime audio/transcript events; no client request/product path exists here. |
+| Windows sandbox readiness | Partial | Yes | `windowsSandbox/readiness` | Stage 15 exposes read-only readiness in Settings -> Advanced Platform. Current macOS real evidence is `not_applicable`; setup/start and Windows-specific ready behavior are not exposed. |
+| Advanced platform watchlist | Codex Remote only | Yes | N/A | Stage 15 shows explicit `deferred` / `not_supported` entries for realtime voice, feedback upload, external agent config, remote GUI/computer use, and automations without actions. |
 
 ## App-Server Client Requests
 
@@ -118,7 +120,7 @@ Status labels:
 | `mcpServer/resource/read` | Not supported | Not exposed. |
 | `mcpServer/tool/call` | Not supported | Not exposed. |
 | `windowsSandbox/setupStart` | Not supported | Not exposed. |
-| `windowsSandbox/readiness` | Not supported | Not exposed. |
+| `windowsSandbox/readiness` | Partial | Stage 15 exposes project-scoped read-only readiness only through Advanced Platform; non-Windows platforms return `not_applicable`, and setup remains unsupported. |
 | `account/login/start` | Not supported | Not exposed. |
 | `account/login/cancel` | Not supported | Not exposed. |
 | `account/logout` | Not supported | Not exposed. |
@@ -237,7 +239,7 @@ Codex Remote should not try to expose all app-server methods at once. Q29-Q33 re
 1. Stage 11 conversation workbench parity is closed after UI repair and durable queue repair. Composer-centered start/follow-up/interrupt/steer/queue, app-like timeline content, Settings -> 已归档对话, request cards in the timeline, protocol-derived permission placeholders, and assistant message action rows passed full verification and Web smoke; approval decision remains the known real-gap from Stage 10/isolated fixture.
 2. Stage 12 local work tools read-only is complete: file preview/metadata, Git summary, fuzzy search, MCP status summary with degraded fallback, and skills/hooks/plugins/apps inventory. Command output stays out of Stage 12 and belongs with later controlled shell/terminal work.
 3. Stage 13 controlled write actions come next: explicit shell commands, allowlisted project actions, review start, hunk/file stage/revert, enable/disable skill, and connector/OAuth flows only with local confirmation.
-4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell.
+4. Advanced protocol groups stay delayed or watchlisted: realtime voice, Windows sandbox setup, feedback upload, external agent config import, remote GUI/computer use, arbitrary MCP tool call, and automatic full-access shell. Stage 15 only exposes read-only Windows sandbox readiness and a disabled watchlist matrix.
 5. Keep approval as a major gap inside the conversation/request lifecycle, but do not let approval alone define the roadmap.
 
 See `CODEX_APP_PARITY.md` for the current capability target and stage split direction.

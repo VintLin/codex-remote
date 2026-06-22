@@ -1,4 +1,5 @@
 import type {
+  AdvancedPlatformReadinessSummary,
   ApprovalDecisionInput,
   CommandAccepted,
   CodexConversation,
@@ -49,6 +50,7 @@ export interface WorkerUpstreamClient {
   getMcpServerSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<McpServerSummary>;
   getExtensionInventory(device: ConfiguredWorkerDevice, projectId: string): Promise<ExtensionInventory>;
   getRuntimeSettingsSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<RuntimeSettingsSummary>;
+  getAdvancedPlatformReadinessSummary(device: ConfiguredWorkerDevice, projectId: string): Promise<AdvancedPlatformReadinessSummary>;
   listConversations(device: ConfiguredWorkerDevice): Promise<CodexConversation[]>;
   readTimeline(device: ConfiguredWorkerDevice, conversationId: string): Promise<ConversationTimeline>;
   openConversation(device: ConfiguredWorkerDevice, conversationId: string, input: ConversationLifecycleInput): Promise<OpenConversationResult>;
@@ -186,6 +188,12 @@ export function createWorkerUpstreamClient(options: {
         method: "GET",
         notFoundCode: "project_not_found",
         project: projectRuntimeSettingsSummary,
+      }),
+    getAdvancedPlatformReadinessSummary: (device, projectId) =>
+      request<AdvancedPlatformReadinessSummary>(device, `/v1/projects/${encodeURIComponent(projectId)}/advanced-platform-readiness`, {
+        method: "GET",
+        notFoundCode: "project_not_found",
+        project: projectAdvancedPlatformReadinessSummary,
       }),
     listConversations: (device) => request<CodexConversation[]>(device, "/v1/conversations", { method: "GET", project: projectConversationList }),
     readTimeline: (device, conversationId) =>
@@ -605,6 +613,55 @@ function projectRuntimeSettingsSummary(value: unknown): RuntimeSettingsSummary {
     config: projectRuntimeConfigPosture(body.config),
     permissionProfiles: requireArray(body.permissionProfiles).map(projectRuntimePermissionProfileSummary),
     experimentalFeatures: requireArray(body.experimentalFeatures).map(projectRuntimeExperimentalFeatureSummary),
+  };
+}
+
+function projectAdvancedPlatformReadinessSummary(value: unknown): AdvancedPlatformReadinessSummary {
+  const body = requireRecord(value);
+  assertExactFields(body, ["deviceId", "projectId", "readAt", "platform", "readinessSections", "watchlistItems"]);
+  return {
+    deviceId: readString(body, "deviceId"),
+    projectId: readString(body, "projectId"),
+    readAt: readString(body, "readAt"),
+    platform: readEnum(body, "platform", ["macos", "windows", "linux", "unknown"]),
+    readinessSections: requireArray(body.readinessSections).map(projectAdvancedPlatformReadinessSection),
+    watchlistItems: requireArray(body.watchlistItems).map(projectAdvancedPlatformWatchlistItem),
+  };
+}
+
+function projectAdvancedPlatformReadinessSection(value: unknown): AdvancedPlatformReadinessSummary["readinessSections"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "label", "status", "summary", "details", "error"]);
+  return {
+    id: readString(body, "id"),
+    label: readString(body, "label"),
+    status: readEnum(body, "status", ["ready", "not_applicable", "degraded", "unavailable"]),
+    summary: readString(body, "summary"),
+    ...(body.details === undefined ? {} : { details: readNullableString(body, "details") }),
+    ...(isRecord(body.error) ? { error: projectAdvancedPlatformSectionError(body.error) } : {}),
+  };
+}
+
+function projectAdvancedPlatformSectionError(value: unknown): ErrorEnvelope {
+  const body = requireRecord(value);
+  assertExactFields(body, ["code", "message", "details", "requestId"]);
+  return {
+    code: isSafeUpstreamCode(readString(body, "code")) ? readString(body, "code") : "worker_internal_error",
+    message: "Advanced platform section is unavailable.",
+    ...(isRecord(body.details) ? { details: projectRuntimeSectionErrorDetails(body.details) } : {}),
+    ...(typeof body.requestId === "string" ? { requestId: readString(body, "requestId") } : {}),
+  };
+}
+
+function projectAdvancedPlatformWatchlistItem(value: unknown): AdvancedPlatformReadinessSummary["watchlistItems"][number] {
+  const body = requireRecord(value);
+  assertExactFields(body, ["id", "label", "support", "reason", "nextSafeStep"]);
+  return {
+    id: readString(body, "id"),
+    label: readString(body, "label"),
+    support: readEnum(body, "support", ["not_supported", "deferred"]),
+    reason: readString(body, "reason"),
+    nextSafeStep: readString(body, "nextSafeStep"),
   };
 }
 

@@ -60,7 +60,7 @@ flowchart LR
 | 12. Local Work Tools Read-only | 文件/Git/MCP/插件等本地工作工具只读能力 | 已完成；MCP 在当前 real stack 可降级为 408 |
 | 13. Controlled Local Actions | 显式用户本地动作、受控 shell/Git/review/extension 操作 | 已完成首批 confirmed review-start 切片 |
 | 14. Runtime And Settings Parity | 模型/profile、账号/运行时/config 只读投影与设置面 | 已完成 |
-| 15. Advanced App-like Platform | 高级 App-like 平台能力拆分与验证 | 下一阶段 |
+| 15. Advanced App-like Platform | 高级 App-like 平台能力拆分与验证 | 已完成首批 readiness/watchlist 切片 |
 
 ```mermaid
 flowchart TB
@@ -79,7 +79,7 @@ flowchart TB
   P12["12 Local Work Tools Read-only"]
   P13["13 Controlled Local Actions"]
   P14["14 Runtime And Settings Parity"]
-  P15["15 Advanced App-like Platform - next"]
+  P15["15 Advanced App-like Platform"]
 
   P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12 --> P13 --> P14 --> P15
 ```
@@ -97,6 +97,8 @@ flowchart TB
 - Stage 13 closure verification 通过：focused package tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`、浏览器 Local Tools disabled/confirmation/accepted/fallback no-leak smoke。`real:check` 仍为 total=19、real-pass=18、real-gap=1，唯一 real-gap 是既有 approval fixture gap。
 - Stage 14 已完成 project-scoped Runtime & Settings read-only parity：OpenAPI public contract、Worker app-server projection、Control Plane route、Web Settings panel 均已接通，覆盖 model catalog、provider capabilities、sanitized account/auth、config posture、permission profiles、experimental features 和 section status degraded handling。
 - Stage 14 closure verification 通过：focused api-contract/worker/control-plane/web tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、API real smoke `Web -> Control Plane -> Worker -> Codex app-server` runtime-settings loaded、Chrome desktop normal no-leak、Chrome mobile degraded no-leak。截图：`logs/stage14-runtime-settings-desktop.png`、`logs/stage14-runtime-settings-degraded-mobile.png`。
+- Stage 15 已完成 Advanced Platform 首批 read-only readiness/watchlist 切片：OpenAPI public contract、Worker Windows sandbox readiness projection、Control Plane exact-field route、Web Settings -> Advanced Platform panel 均已接通。macOS real local stack 显示 Windows sandbox `not_applicable`，advanced watchlist 明确标记 realtime voice、feedback upload、external agent config、remote GUI/computer use、automations 为 `deferred` / `not_supported`，不暴露 setup、upload、import、remote GUI、automation action。
+- Stage 15 closure verification 通过：focused api-contract/worker/control-plane/web tests、`pnpm product:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm real:check`、`pnpm web:e2e:smoke`、direct API smoke `GET /v1/devices/local-device/projects/local-project/advanced-platform-readiness`、Chrome/Playwright desktop+mobile Advanced Platform no-leak smoke。`real:check` 结果为 total=19、real-pass=18、real-gap=1；唯一 gap 是既有 approval fixture 无 pending request。截图：`logs/stage15-advanced-platform-desktop.png`、`logs/stage15-advanced-platform-mobile.png`。
 
 ## Completed Stage 11
 
@@ -182,12 +184,20 @@ Stage 14 完成范围：
 - Control Plane 增加 device/project-scoped route 和 fail-closed response projection；Web Settings 增加只读 Runtime & Settings panel。
 - 仍禁止 model switch、config write、login/logout、token refresh、usage/rate/credits、MCP OAuth、experimental enablement、permission mutation。
 
-## Active Stage 15
+## Completed Stage 15
 
-Stage 15 下一步方向：
+Active docs:
 
-- Advanced App-like Platform：基于 Stage 11-14 的已完成 app-like browser workbench，继续拆分高级平台能力。
-- 候选方向包括 realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations；开始前必须先写 Stage 15 spec/plan 并做 subagent architecture review。
+- `docs/superpowers/specs/2026-06-22-advanced-platform-readiness-design.md`
+- `docs/superpowers/plans/2026-06-22-advanced-platform-readiness.md`
+
+Stage 15 完成范围：
+
+- 新增 public contract `GET /v1/devices/{deviceId}/projects/{projectId}/advanced-platform-readiness`，返回 closed readiness sections 和 advanced watchlist support matrix。
+- Worker 仅在 platform 适用时调用 `windowsSandbox/readiness`；非 Windows 平台返回 `not_applicable`，transport/app-server 失败只进入 section-level degraded/unavailable。
+- Control Plane 增加 device/project-scoped route，并做 exact-field projection；Web 只消费 Control Plane-shaped API。
+- Settings 新增 Advanced Platform panel，展示 Windows sandbox readiness 与 advanced watchlist；watchlist 不提供可点击 action。
+- 仍禁止 Windows sandbox setup、realtime voice、feedback upload、external agent import、remote GUI/computer use、automations，以及任何 raw JSON-RPC / token / path / prompt 暴露。
 
 ## Stage 11+ Draft Roadmap
 
@@ -195,7 +205,7 @@ Stage 15 下一步方向：
 2. Stage 12：Local Work Tools Read-only。项目文件树/metadata/preview、Git/review 摘要、fuzzy search、MCP status/resources/tools list、plugin/skills/hooks/apps inventory。已完成；Command history/output 留到后续受控 shell/terminal 阶段。
 3. Stage 13：Controlled Local Actions。已完成 confirmed uncommitted-changes review start；显式 shell command、allowlisted project actions、stage/unstage/revert hunk/file、enable/disable skill、OAuth/login-like flows 后续再拆。
 4. Stage 14：Runtime And Extension Management。已完成 project-scoped runtime/settings read-only projection 与 Settings panel；skills/plugins/MCP/apps richer management 的 mutation 类能力仍延后。
-5. Stage 15+：Advanced Platform Watchlist。realtime voice、Windows sandbox setup/readiness、feedback upload、external agent config import、remote GUI/computer use、automations。
+5. Stage 15：Advanced Platform Watchlist。已完成 Windows sandbox readiness 的只读 readiness 切片与 advanced watchlist support matrix；realtime voice、Windows sandbox setup、feedback upload、external agent config import、remote GUI/computer use、automations 仍不支持。
 
 ## 当前技术栈
 
@@ -238,4 +248,4 @@ Stage 15 下一步方向：
 
 ## 下一步
 
-下一步执行 Stage 15 spec/plan：先明确 Advanced App-like Platform 的首个垂直切片、non-goals 和验证方式，再做 subagent architecture review。
+下一步应从 Stage 16 继续拆分：优先选择一个可验证、低风险的 product capability slice，不按 raw app-server method 百分比推进；开始前仍需 spec、plan、subagent architecture review、focused tests、full checks 和浏览器实测。

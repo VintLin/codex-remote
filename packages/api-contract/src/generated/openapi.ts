@@ -804,6 +804,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{deviceId}/projects/{projectId}/advanced-platform-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getControlPlaneDeviceProjectAdvancedPlatformReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1058,6 +1074,33 @@ export interface components {
             description: string | null;
             enabled: boolean;
             defaultEnabled: boolean;
+        };
+        AdvancedPlatformReadinessSummary: {
+            deviceId: string;
+            projectId: string;
+            /** Format: date-time */
+            readAt: string;
+            /** @enum {string} */
+            platform: "macos" | "windows" | "linux" | "unknown";
+            readinessSections: components["schemas"]["AdvancedPlatformReadinessSection"][];
+            watchlistItems: components["schemas"]["AdvancedPlatformWatchlistItem"][];
+        };
+        AdvancedPlatformReadinessSection: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            status: "ready" | "not_applicable" | "degraded" | "unavailable";
+            summary: string;
+            details?: string | null;
+            error?: components["schemas"]["ErrorEnvelope"];
+        };
+        AdvancedPlatformWatchlistItem: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            support: "not_supported" | "deferred";
+            reason: string;
+            nextSafeStep: string;
         };
         LocalWorkbenchSummary: {
             deviceId: string;
@@ -3067,6 +3110,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuntimeSettingsSummary"];
+                };
+            };
+            400: components["responses"]["BadRequestError"];
+            401: components["responses"]["UnauthorizedError"];
+            404: components["responses"]["DeviceNotFoundError"];
+            424: components["responses"]["DeviceUnavailableError"];
+            500: components["responses"]["InternalWorkerError"];
+        };
+    };
+    getControlPlaneDeviceProjectAdvancedPlatformReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deviceId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only advanced platform readiness and support summary for a configured device project. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvancedPlatformReadinessSummary"];
                 };
             };
             400: components["responses"]["BadRequestError"];

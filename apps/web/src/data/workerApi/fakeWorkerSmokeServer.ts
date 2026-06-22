@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
+  AdvancedPlatformReadinessSummary,
   ApprovalDecisionInput,
   CommandAccepted,
   CodexConversation,
@@ -35,6 +36,7 @@ const messageMaxLength = 20_000;
 const localReviewConfirmationText = "START REVIEW";
 
 export interface FakeWorkerSmokeServerOptions {
+  advancedPlatform?: FakeAdvancedPlatformOptions;
   conversationIds?: {
     active: string;
     complete: string;
@@ -45,6 +47,12 @@ export interface FakeWorkerSmokeServerOptions {
   projectId?: string;
   projectName?: string;
   token?: string;
+}
+
+interface FakeAdvancedPlatformOptions {
+  platform?: AdvancedPlatformReadinessSummary["platform"];
+  unsafeFixtureValues?: string[];
+  windowsSandbox?: "degraded" | "not_applicable" | "ready" | "unavailable";
 }
 
 interface FakeWorkerSeedInput {
@@ -79,6 +87,7 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
   const approvals = cloneApprovals(seed.approvals);
   const health = seed.health;
   const capabilities = seed.capabilities;
+  const advancedPlatform = createAdvancedPlatformReadinessSummary(seed, options.advancedPlatform);
   let commandSequence = 0;
 
   return createServer((request, response) => {
@@ -138,6 +147,17 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
       return;
     }
 
+    const advancedPlatformProjectId = path.match(/^\/v1\/projects\/([^/]+)\/advanced-platform-readiness$/)?.[1];
+    if (advancedPlatformProjectId) {
+      if (advancedPlatformProjectId !== seed.projectId) {
+        writeError(response, 403, "project_forbidden", "Requested project is outside the allowed root.");
+        return;
+      }
+
+      writeJson(response, 200, advancedPlatform);
+      return;
+    }
+
     const approvalsConversationId = path.match(/^\/v1\/conversations\/([^/]+)\/approvals$/)?.[1];
     if (approvalsConversationId) {
       writeJson(response, 200, approvals.filter((approval) => approval.conversationId === approvalsConversationId));
@@ -152,6 +172,109 @@ export function createFakeWorkerSmokeServer(options: FakeWorkerSmokeServerOption
 
     writeError(response, 404, "conversation_not_found", "Conversation was not found.");
   });
+}
+
+function createAdvancedPlatformReadinessSummary(
+  input: FakeWorkerSeedInput,
+  options: FakeAdvancedPlatformOptions = {},
+): AdvancedPlatformReadinessSummary {
+  const platform = options.platform ?? "macos";
+  const windowsSandbox = options.windowsSandbox ?? (platform === "windows" ? "ready" : "not_applicable");
+
+  return {
+    deviceId: input.deviceId,
+    projectId: input.projectId,
+    readAt: "2026-06-22T00:05:00.000Z",
+    platform,
+    readinessSections: [createWindowsSandboxReadinessSection(windowsSandbox)],
+    watchlistItems: createAdvancedPlatformWatchlistItems(),
+  };
+}
+
+function createWindowsSandboxReadinessSection(
+  status: "degraded" | "not_applicable" | "ready" | "unavailable",
+): AdvancedPlatformReadinessSummary["readinessSections"][number] {
+  if (status === "ready") {
+    return {
+      id: "windows_sandbox",
+      label: "Windows sandbox",
+      status: "ready",
+      summary: "Windows sandbox readiness is available.",
+      details: "Read-only app-server readiness check completed.",
+    };
+  }
+
+  if (status === "degraded") {
+    return {
+      id: "windows_sandbox",
+      label: "Windows sandbox",
+      status: "degraded",
+      summary: "Windows sandbox readiness is degraded.",
+      details: "The readiness check failed; no setup action was attempted.",
+      error: {
+        code: "app_server_unavailable",
+        message: "Worker request failed.",
+      },
+    };
+  }
+
+  if (status === "unavailable") {
+    return {
+      id: "windows_sandbox",
+      label: "Windows sandbox",
+      status: "unavailable",
+      summary: "Windows sandbox readiness is unavailable.",
+      details: "No setup action is exposed.",
+    };
+  }
+
+  return {
+    id: "windows_sandbox",
+    label: "Windows sandbox",
+    status: "not_applicable",
+    summary: "Windows sandbox is not applicable on this platform.",
+    details: null,
+  };
+}
+
+function createAdvancedPlatformWatchlistItems(): AdvancedPlatformReadinessSummary["watchlistItems"] {
+  return [
+    {
+      id: "realtime-voice",
+      label: "Realtime voice",
+      support: "deferred",
+      reason: "Voice transport and audio privacy need a separate safety design.",
+      nextSafeStep: "Define a read-only protocol and privacy model first.",
+    },
+    {
+      id: "feedback-upload",
+      label: "Feedback upload",
+      support: "deferred",
+      reason: "Upload scope and redaction are not proven in this product boundary.",
+      nextSafeStep: "Design local confirmation and redaction first.",
+    },
+    {
+      id: "external-agent-config",
+      label: "External agent config",
+      support: "deferred",
+      reason: "Home and repo scanning can reveal private configuration.",
+      nextSafeStep: "Start with reviewed read-only detection.",
+    },
+    {
+      id: "remote-gui-computer-use",
+      label: "Remote GUI and computer use",
+      support: "not_supported",
+      reason: "Browser, desktop, and extension control are outside this read-only slice.",
+      nextSafeStep: "Keep this disabled until a dedicated security model exists.",
+    },
+    {
+      id: "automations",
+      label: "Automations",
+      support: "deferred",
+      reason: "Recurring tasks and wakeups need separate scheduling and consent rules.",
+      nextSafeStep: "Specify ownership and cancellation semantics first.",
+    },
+  ];
 }
 
 function createSeedData(input: FakeWorkerSeedInput): FakeWorkerSeedData {

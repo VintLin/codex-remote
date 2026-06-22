@@ -17,7 +17,7 @@ import type {
   TaskConversationLink,
   TaskStatus,
 } from "@codex-remote/api-contract";
-import type { LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
+import type { AdvancedPlatformData, LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -120,6 +120,7 @@ interface SettingsPageProps {
   onExpandDetail: () => void;
   onExpandSidebar: () => void;
   onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
+  advancedPlatform: AdvancedPlatformData;
   runtimeSettings: RuntimeSettingsData;
 }
 
@@ -320,6 +321,7 @@ export function SettingsPage({
   onExpandDetail,
   onExpandSidebar,
   onRestoreConversation,
+  advancedPlatform,
   runtimeSettings,
 }: SettingsPageProps) {
   const archivedConversations = conversations.filter((conversation) => conversation.archived === true);
@@ -344,6 +346,7 @@ export function SettingsPage({
       </header>
       <div className="content-scroll settings-content">
         <RuntimeSettingsPanel runtimeSettings={runtimeSettings} />
+        <AdvancedPlatformPanel advancedPlatform={advancedPlatform} />
         <section aria-label="已归档对话" className="settings-section">
           <h2>已归档对话</h2>
           {archivedConversations.length === 0 ? (
@@ -366,6 +369,55 @@ export function SettingsPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function AdvancedPlatformPanel({ advancedPlatform }: { advancedPlatform: AdvancedPlatformData }) {
+  if (advancedPlatform.status === "empty" || advancedPlatform.status === "unavailable") {
+    return (
+      <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
+        <h2>Advanced Platform</h2>
+        <p className="empty-state">选择已连接设备上的项目后显示高级平台只读支持摘要。</p>
+      </section>
+    );
+  }
+
+  if (!advancedPlatform.summary) {
+    return (
+      <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
+        <h2>Advanced Platform</h2>
+        <p className="empty-state">高级平台摘要暂不可用{advancedPlatform.error?.code ? `：${advancedPlatform.error.code}` : ""}</p>
+      </section>
+    );
+  }
+
+  const summary = advancedPlatform.summary;
+
+  return (
+    <section aria-label="Advanced Platform" className="settings-section runtime-settings-panel advanced-platform-panel">
+      <header className="runtime-settings-header">
+        <h2>Advanced Platform</h2>
+        <code>{advancedPlatform.status}</code>
+      </header>
+      <div className="runtime-settings-grid">
+        <RuntimeSettingsCard title="Windows sandbox" status={toRuntimeSettingsCardStatus(advancedPlatform.status)}>
+          {summary.readinessSections.length ? summary.readinessSections.map((section) => (
+            <RuntimeSettingsRow
+              key={section.id}
+              label={section.label}
+              value={section.error?.code ? `${section.status} · ${section.error.code}` : section.status}
+            />
+          )) : <p className="empty-state">未返回 readiness section</p>}
+          <RuntimeSettingsRow label="Platform" value={summary.platform} />
+        </RuntimeSettingsCard>
+
+        <RuntimeSettingsCard title="Support matrix" status="loaded">
+          {summary.watchlistItems.length ? summary.watchlistItems.map((item) => (
+            <RuntimeSettingsRow key={item.id} label={item.label} value={item.support} />
+          )) : <p className="empty-state">未返回 watchlist item</p>}
+        </RuntimeSettingsCard>
+      </div>
+    </section>
   );
 }
 
@@ -492,6 +544,18 @@ function RuntimeSettingsRow({ label, value }: { label: string; value: string }) 
       <strong>{value}</strong>
     </div>
   );
+}
+
+function toRuntimeSettingsCardStatus(status: AdvancedPlatformData["status"]): "degraded" | "loaded" | "unavailable" {
+  if (status === "loaded") {
+    return "loaded";
+  }
+
+  if (status === "degraded") {
+    return "degraded";
+  }
+
+  return "unavailable";
 }
 
 function findRuntimeSectionStatus(
