@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -20,59 +20,71 @@ import {
 } from "./readOnlyHandlers.ts";
 import type { WorkerHttpConfig } from "./workerHttpConfig.ts";
 
-test("worker read-only handlers when listing projects, should expose the allowed project root as one safe project", async () => {
+test("worker read-only handlers when listing projects, should group thread cwd values without leaking paths", async () => {
   const allowedRoot = await mkdtemp(join(tmpdir(), "codex-remote-project-"));
-  const context = createContext(allowedRoot, new FakeClient());
+  const siblingRoot = await mkdtemp(join(tmpdir(), "codex-remote-other-"));
+  const codexHome = await createCodexHomeWithSessionCwds([allowedRoot, siblingRoot]);
+  const client = new FakeClient({
+    listResponses: [
+      {
+        data: [
+          createThread({ cwd: allowedRoot, id: "allowed-thread" }),
+          createThread({ cwd: siblingRoot, id: "other-thread" }),
+          createThread({ cwd: siblingRoot, id: "other-thread-2" }),
+        ],
+        nextCursor: null,
+        backwardsCursor: null,
+      },
+      { data: [], nextCursor: null, backwardsCursor: null },
+    ],
+  });
 
-  const projects = listProjects(context);
+  const projects = await listProjects(createContext(allowedRoot, client, { codexHome }));
 
-  assert.deepEqual(projects, [
-    {
-      id: "local-project",
-      name: basename(allowedRoot),
-      deviceId: "device-local",
-      path: "",
-      branch: "unknown",
-      hasChanges: false,
-      pinned: false,
-      expanded: true,
-    },
-  ]);
+  assert.equal(projects.length, 2);
+  assert.equal(projects[0]?.id, "local-project");
+  assert.equal(projects[0]?.name, basename(allowedRoot));
+  assert.equal(projects[1]?.name, basename(siblingRoot));
+  assert.match(projects[1]?.id ?? "", /^project-[a-f0-9]{12}$/);
+  assert.equal(projects.every((project) => project.path === ""), true);
+  assert.doesNotMatch(JSON.stringify(projects), new RegExp(escapeRegExp(siblingRoot)));
 });
 
-test("worker read-only handlers when listing conversations, should pass explicit params and filter by realpath", async () => {
+test("worker read-only handlers when listing conversations, should list all local Codex project records by cwd", async () => {
   const paths = await createTempProjectPaths();
   const allowedThread = createThread({ cwd: paths.allowedChild, id: "allowed-thread", name: "Allowed" });
   const outsideThread = createThread({ cwd: paths.outside, id: "outside-thread", name: "Outside" });
   const symlinkEscapeThread = createThread({ cwd: paths.symlinkEscape, id: "symlink-escape-thread", name: "Symlink" });
+  const codexHome = await createCodexHomeWithSessionCwds([paths.allowedChild, paths.outside, paths.symlinkEscape]);
   const client = new FakeClient({
     listResponses: [{ data: [allowedThread, outsideThread, symlinkEscapeThread], nextCursor: null, backwardsCursor: null }],
   });
 
-  const conversations = await listConversations(createContext(paths.allowedRoot, client));
+  const conversations = await listConversations(createContext(paths.allowedRoot, client, { codexHome }));
 
-  assert.deepEqual(client.listCalls, [
-    {
-      cwd: paths.allowedRoot,
-      sourceKinds: ["cli", "vscode", "appServer"],
-      archived: false,
-      limit: 25,
-      sortDirection: "desc",
-      cursor: null,
-    },
-    {
-      cwd: paths.allowedRoot,
-      sourceKinds: ["cli", "vscode", "appServer"],
-      archived: true,
-      limit: 25,
-      sortDirection: "desc",
-      cursor: null,
-    },
-  ]);
   assert.deepEqual(
-    conversations.map((conversation) => conversation.id),
-    ["allowed-thread"],
+    client.listCalls.map((call) => [call.cwd, call.archived, call.cursor]),
+    [
+      [paths.allowedRoot, false, null],
+      [paths.allowedChild, false, null],
+      [paths.outside, false, null],
+      [paths.symlinkEscape, false, null],
+      [paths.allowedRoot, true, null],
+      [paths.allowedChild, true, null],
+      [paths.outside, true, null],
+      [paths.symlinkEscape, true, null],
+    ],
   );
+  assert.deepEqual(
+    conversations.map((conversation) => [conversation.id, conversation.title, conversation.projectName]),
+    [
+      ["allowed-thread", "Allowed", basename(paths.allowedChild)],
+      ["outside-thread", "Outside", basename(paths.outside)],
+      ["symlink-escape-thread", "Symlink", basename(paths.symlinkEscape)],
+    ],
+  );
+  assert.equal(conversations.every((conversation) => conversation.projectId), true);
+  assert.doesNotMatch(JSON.stringify(conversations), new RegExp(escapeRegExp(paths.outside)));
   assert.equal(client.closed, true);
 });
 
@@ -117,13 +129,17 @@ test("worker read-only handlers when listing conversations, should include archi
   );
 });
 
-test("worker read-only handlers when no allowed conversations exist, should return empty list", async () => {
+test("worker read-only handlers when conversations are outside the allowed root, should still return sanitized rows", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
     listResponses: [{ data: [createThread({ cwd: paths.outside })], nextCursor: null, backwardsCursor: null }],
   });
 
-  assert.deepEqual(await listConversations(createContext(paths.allowedRoot, client)), []);
+  const conversations = await listConversations(createContext(paths.allowedRoot, client));
+
+  assert.equal(conversations.length, 1);
+  assert.equal(conversations[0]?.projectName, basename(paths.outside));
+  assert.doesNotMatch(JSON.stringify(conversations), new RegExp(escapeRegExp(paths.outside)));
   assert.equal(client.closed, true);
 });
 
@@ -237,7 +253,7 @@ test("worker read-only handlers when timeline read is inaccessible, should map n
   assert.equal(client.closed, true);
 });
 
-test("worker read-only handlers when read result escapes root, should fail without leaking path", async () => {
+test("worker read-only handlers when read result is outside root, should return sanitized timeline", async () => {
   const paths = await createTempProjectPaths();
   const client = new FakeClient({
     listResponses: [{ data: [createThread({ cwd: paths.allowedChild, id: "thread-1" })], nextCursor: null, backwardsCursor: null }],
@@ -246,14 +262,12 @@ test("worker read-only handlers when read result escapes root, should fail witho
     },
   });
 
-  await assert.rejects(
-    readConversationTimeline(createContext(paths.allowedRoot, client), "thread-1"),
-    (error) =>
-      error instanceof WorkerHttpError &&
-      error.status === 404 &&
-      error.code === "conversation_not_found" &&
-      !JSON.stringify(error.details).includes(paths.outside),
-  );
+  const timeline = await readConversationTimeline(createContext(paths.allowedRoot, client), "thread-1");
+
+  assert.equal(timeline.conversationId, "thread-1");
+  assert.ok(timeline.projectId);
+  assert.match(timeline.projectId, /^project-[a-f0-9]{12}$/);
+  assert.doesNotMatch(JSON.stringify(timeline), new RegExp(escapeRegExp(paths.outside)));
   assert.equal(client.closed, true);
 });
 
@@ -431,6 +445,29 @@ async function createTempProjectPaths(): Promise<{
   return { allowedRoot, allowedChild, outside, symlinkEscape };
 }
 
+async function createCodexHomeWithSessionCwds(cwds: readonly string[]): Promise<string> {
+  const codexHome = await mkdtemp(join(tmpdir(), "codex-home-"));
+  const sessionsDir = join(codexHome, "sessions", "2026", "06", "22");
+  await mkdir(sessionsDir, { recursive: true });
+
+  await Promise.all(
+    cwds.map((cwd, index) => {
+      const session = {
+        timestamp: "2026-06-22T00:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          id: `session-${index}`,
+          timestamp: "2026-06-22T00:00:00.000Z",
+          cwd,
+        },
+      };
+      return writeFile(join(sessionsDir, `rollout-${index}.jsonl`), `${JSON.stringify(session)}\n`);
+    }),
+  );
+
+  return codexHome;
+}
+
 function createContext(
   allowedProjectRoot: string,
   client: WorkerReadOnlyAppServerClient,
@@ -453,6 +490,7 @@ function createContext(
       requestTimeoutMs: 5_000,
       startAppServer: false,
       workerToken: "example-token",
+      codexHome: join(tmpdir(), "codex-remote-test-missing-codex-home"),
       ...configOverrides,
     } satisfies WorkerHttpConfig,
     ...(approvalRegistry ? { approvalRegistry } : {}),
@@ -515,4 +553,8 @@ function createTurn(overrides: Partial<v2.Turn> = {}): v2.Turn {
     durationMs: 5_000,
     ...overrides,
   };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

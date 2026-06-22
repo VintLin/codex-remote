@@ -127,20 +127,13 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
     });
   }
 
-  async listThreadsWithParams(params: {
-    cwd: string;
-    sourceKinds: readonly ["cli", "vscode", "appServer"];
-    archived: boolean;
-    limit: number;
-    sortDirection: "desc";
-    cursor: string | null;
-  }): Promise<v2.ThreadListResponse> {
+  async listThreadsWithParams(params: v2.ThreadListParams): Promise<v2.ThreadListResponse> {
     return await this.requestThreadList(params);
   }
 
   private async probeThreadListWithParams(params: {
     cwd: string;
-    sourceKinds: readonly ["cli", "vscode", "appServer"];
+    sourceKinds: v2.ThreadSourceKind[];
     archived: false;
     limit: number;
     sortDirection: "desc";
@@ -183,22 +176,8 @@ export class AppServerReadOnlyProbeClient implements ReadOnlyProbeClient {
     };
   }
 
-  private async requestThreadList(params: {
-    cwd: string;
-    sourceKinds: readonly ["cli", "vscode", "appServer"];
-    archived: boolean;
-    limit: number;
-    sortDirection: "desc";
-    cursor: string | null;
-  }): Promise<v2.ThreadListResponse> {
-    return (await this.rpc.request("thread/list", {
-      cwd: params.cwd,
-      sourceKinds: [...params.sourceKinds],
-      archived: params.archived,
-      limit: params.limit,
-      sortDirection: params.sortDirection,
-      cursor: params.cursor,
-    })) as v2.ThreadListResponse;
+  private async requestThreadList(params: v2.ThreadListParams): Promise<v2.ThreadListResponse> {
+    return (await this.rpc.request("thread/list", params)) as v2.ThreadListResponse;
   }
 
   async readThread(params: { threadId: string; includeTurns: true }): Promise<v2.ThreadReadResponse> {

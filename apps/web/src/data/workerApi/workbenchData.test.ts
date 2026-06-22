@@ -18,7 +18,7 @@ import type {
   AssistantThreadSnapshot,
 } from "../../domain/assistant/assistantTimeline.ts";
 
-import { assistantThreads as mockAssistantThreads, conversations as mockConversations } from "../app-server/mockData.ts";
+import { assistantThreads as mockAssistantThreads } from "../app-server/mockData.ts";
 import { createConversationKey } from "../../domain/sidebar/conversationIdentity.ts";
 import { loadWorkbenchData, createFallbackWorkbenchData } from "./workbenchData.ts";
 
@@ -220,14 +220,16 @@ test("workbench datasource when token is missing should return fallback and skip
 
   assert.equal(requestCount, 0);
   assert.equal(data.source.reason, "not_configured");
-  assert.deepEqual(data.conversations, mockConversations);
+  assert.deepEqual(data.devices, []);
+  assert.deepEqual(data.projects, []);
+  assert.deepEqual(data.conversations, []);
   assert.deepEqual(data.tasks, fallback.tasks);
-  assert.deepEqual(data.searchRecents, fallback.searchRecents);
-  assert.deepEqual(data.assistantThreads, fallback.assistantThreads);
+  assert.deepEqual(data.searchRecents, []);
+  assert.deepEqual(data.assistantThreads, []);
   assert.equal(data.localWorkbench.status, "unavailable");
   assert.equal(data.localWorkbench.summary, null);
   assert.equal(data.localWorkbench.files.status, "unavailable");
-  assert.equal(data.assistantThreads.length, mockConversations.length);
+  assert.equal(data.assistantThreads.length, 0);
   const hasRichNodes = data.assistantThreads.some((thread: AssistantThreadSnapshot) =>
     thread.timeline.turns.some((turn: AssistantTimelineTurn) => turn.nodes.length > 0),
   );
@@ -239,7 +241,11 @@ test("workbench datasource when fallback is returned, should label source as not
   const data = createFallbackWorkbenchData("not_configured");
 
   assert.equal(data.source.reason, "not_configured");
-  assert.equal(data.conversations.every((conversation) => conversation.title.startsWith("Example ")), true);
+  assert.deepEqual(data.devices, []);
+  assert.deepEqual(data.projects, []);
+  assert.deepEqual(data.conversations, []);
+  assert.deepEqual(data.tasks, []);
+  assert.deepEqual(data.searchRecents, []);
 });
 
 test("workbench datasource when remote conversations are empty should keep remote empty state", async () => {
@@ -275,7 +281,7 @@ test("workbench datasource when remote conversations are empty should keep remot
   assert.equal(data.searchRecents.length, 0);
   assert.equal(data.localWorkbench.status, "empty");
   assert.equal(data.localWorkbench.summary, null);
-  assert.notDeepEqual(data.conversations, mockConversations);
+  assert.deepEqual(data.conversations, []);
 });
 
 test("workbench datasource when conversations are empty and projects exist should keep loaded source", async () => {
@@ -875,7 +881,7 @@ for (const [status, reason] of [
     });
 
     assert.equal(data.source.reason, reason);
-    assert.equal(data.conversations.length, mockConversations.length);
+    assert.equal(data.conversations.length, 0);
   });
 }
 

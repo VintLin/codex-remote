@@ -47,7 +47,8 @@ test("real local stack smoke: should load real Control Plane data and submit thr
   const followUpComposer = page.locator('[contenteditable="true"]').first();
   if ((await followUpComposer.count()) > 0) {
     const sendButton = main.getByRole("button", { name: "发送", exact: true }).first();
-    if ((await sendButton.count()) > 0 && await sendButton.isEnabled()) {
+    const followUpMode = main.getByText("输入后发送");
+    if ((await sendButton.count()) > 0 && (await followUpMode.count()) > 0 && await sendButton.isEnabled()) {
       await followUpComposer.fill("codex-remote-calibration web follow-up: acknowledge briefly.");
       const followUpResponsePromise = page.waitForResponse(
         (response) => response.url().includes("/follow-up") && response.status() === 202,

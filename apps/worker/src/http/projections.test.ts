@@ -46,19 +46,11 @@ test("worker http projections when projecting conversations, should use safe tit
     });
   });
 
-  await t.test("when thread name is empty, should fall back to project basename, then untitled without using preview", () => {
+  await t.test("when thread name is empty, should use safe preview text before untitled", () => {
     const previewConversation = projectThreadToConversation(
       createThread({
         name: "",
         preview: "Preview title",
-      }),
-      defaultContext,
-    );
-    const projectConversation = projectThreadToConversation(
-      createThread({
-        cwd: "/outside/root/path-that-must-not-leak",
-        name: null,
-        preview: "",
       }),
       defaultContext,
     );
@@ -71,28 +63,10 @@ test("worker http projections when projecting conversations, should use safe tit
       { ...defaultContext, allowedProjectRoot: "/", projectName: "" },
     );
 
-    assert.equal(previewConversation.title, "050_codex_remote");
+    assert.equal(previewConversation.title, "Preview title");
     assert.equal(previewConversation.summary, "");
-    assert.equal(projectConversation.title, "050_codex_remote");
     assert.equal(untitledConversation.title, "Untitled conversation");
     assert.equal(untitledConversation.summary, "");
-  });
-
-  await t.test("when project name differs from allowed project root basename, should use basename for title fallback", () => {
-    const conversation = projectThreadToConversation(
-      createThread({
-        name: null,
-        preview: "",
-      }),
-      {
-        ...defaultContext,
-        allowedProjectRoot: "/tmp/real-project-root",
-        projectName: "Display Name That Must Not Be Used For Title",
-      },
-    );
-
-    assert.equal(conversation.title, "real-project-root");
-    assert.equal(conversation.projectName, "Display Name That Must Not Be Used For Title");
   });
 
   await t.test("when app-server preview contains prompt text, should not expose it publicly", () => {

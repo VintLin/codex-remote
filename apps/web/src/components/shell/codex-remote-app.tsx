@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient, WorkerApiRequestError } from "../../data/workerApi/client";
-import type { BoardTask, ConversationQueuedMessage, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
+import type { BoardTask, ConversationQueuedMessage, Device, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -45,11 +45,21 @@ const controlPlaneBaseUrl =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? "http://127.0.0.1:8786";
 const controlPlaneToken =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "example-token");
+const unavailableDevice: Device = {
+  id: "",
+  icon: "laptop",
+  name: "未连接设备",
+  status: "Not connected",
+  ip: "unavailable",
+  lastOnlineAt: "",
+  currentProject: "",
+  model: "",
+};
 
 export function CodexRemoteApp() {
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
-  const [selectedDeviceId, setSelectedDeviceId] = useState(workbenchData.devices[0]!.id);
+  const [selectedDeviceId, setSelectedDeviceId] = useState(workbenchData.devices[0]?.id ?? "");
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(
     () => workbenchData.conversations[0] ? createConversationKey(workbenchData.conversations[0]) : null,
   );
@@ -76,7 +86,7 @@ export function CodexRemoteApp() {
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, runtimeSettings, advancedPlatform, assistantThreads, searchRecents, source, taskSource } = workbenchData;
-  const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0]!;
+  const device = devices.find((deviceItem) => deviceItem.id === selectedDeviceId) ?? devices[0] ?? unavailableDevice;
   const selectedConversation = findConversationByKey(conversations, selectedConversationKey);
   const conversation =
     selectedConversation?.deviceId === selectedDeviceId
@@ -97,7 +107,8 @@ export function CodexRemoteApp() {
         : { nextConversationKey: null, previousConversationKey: null },
     [selectedConversationKey, sidebarModel],
   );
-  const canSubmitFollowUp = source.reason === "loaded" && conversation !== null && Boolean(controlPlaneToken);
+  const canSubmitFollowUp =
+    source.reason === "loaded" && conversation !== null && conversation.loaded === true && Boolean(controlPlaneToken);
   const canStartConversation = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null;
   const canStartReview = source.reason === "loaded" && Boolean(controlPlaneToken) && selectedProject !== null && conversation !== null;
   const activeTurnId = getActiveTurnId(assistantThread);
@@ -505,7 +516,7 @@ export function CodexRemoteApp() {
   }, [conversation, refreshApprovals]);
 
   useEffect(() => {
-    if (selectedDeviceId !== "" && !devices.some((deviceItem) => deviceItem.id === selectedDeviceId)) {
+    if (selectedDeviceId === "" || !devices.some((deviceItem) => deviceItem.id === selectedDeviceId)) {
       const fallbackDevice = devices[0];
       if (fallbackDevice) {
         setSelectedDeviceId(fallbackDevice.id);

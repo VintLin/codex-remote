@@ -1,4 +1,5 @@
 import { realpath } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 import type { AppServerTransport } from "@codex-remote/api-contract";
@@ -18,6 +19,7 @@ interface WorkerHttpConfigInput {
   requestTimeoutMs: string | undefined;
   startAppServer: string | undefined;
   workerToken: string | undefined;
+  codexHome: string | undefined;
 }
 
 export interface WorkerHttpConfig {
@@ -33,6 +35,7 @@ export interface WorkerHttpConfig {
   calibrationApprovalMode: "on-request" | null;
   connectTimeoutMs: number;
   requestTimeoutMs: number;
+  codexHome?: string;
 }
 
 export function isLoopbackHost(host: string): boolean {
@@ -83,6 +86,7 @@ export async function loadWorkerHttpConfig(env: NodeJS.ProcessEnv): Promise<Work
     calibrationApprovalMode,
     connectTimeoutMs,
     requestTimeoutMs,
+    codexHome: input.codexHome?.trim() || `${homedir()}/.codex`,
   };
 }
 
@@ -100,6 +104,7 @@ function parseWorkerHttpConfigInput(env: NodeJS.ProcessEnv): WorkerHttpConfigInp
     calibrationApprovalMode: env.CODEX_REMOTE_CALIBRATION_APPROVAL_MODE,
     connectTimeoutMs: env.CODEX_REMOTE_CONNECT_TIMEOUT_MS,
     requestTimeoutMs: env.CODEX_REMOTE_REQUEST_TIMEOUT_MS,
+    codexHome: env.CODEX_HOME,
   };
 }
 

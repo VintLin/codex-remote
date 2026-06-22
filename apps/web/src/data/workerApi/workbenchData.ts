@@ -27,13 +27,6 @@ import type {
 } from "../../domain/assistant/assistantTimeline.ts";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
 
-import {
-  conversations as mockConversations,
-  devices as mockDevices,
-  sidebarProjects as mockProjects,
-  tasks as mockTasks,
-} from "../app-server/mockData.ts";
-
 import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
 
 const localWorkbenchOptionalTimeoutMs = 2_000;
@@ -127,17 +120,17 @@ export function createFallbackWorkbenchData(
   selectedConversationKey?: string | null,
   sourceError?: SourceErrorEnvelope,
 ): WorkbenchData {
-  const conversations = [...mockConversations];
+  const conversations: CodexConversation[] = [];
 
   return {
     source: createWorkbenchSource(reason, sourceError),
     taskSource: { status: "loaded" },
-    devices: [...mockDevices],
-    projects: [...mockProjects],
+    devices: [],
+    projects: [],
     conversations,
     approvalCards: [],
     queuedMessages: [],
-    tasks: [...mockTasks],
+    tasks: [],
     localWorkbench: createUnavailableLocalWorkbenchData(),
     runtimeSettings: createUnavailableRuntimeSettingsData(),
     advancedPlatform: createUnavailableAdvancedPlatformData(),

@@ -270,8 +270,8 @@ function getConversationTitle(thread: v2.Thread, context: ConversationProjection
     return threadName;
   }
 
-  const allowedProjectBasename = normalizeText(basename(context.allowedProjectRoot));
-  return allowedProjectBasename ?? "Untitled conversation";
+  const previewTitle = normalizeText(thread.preview);
+  return previewTitle ?? "Untitled conversation";
 }
 
 function getProjectName(context: ConversationProjectionContext): string {

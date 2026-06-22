@@ -111,18 +111,15 @@ test("worker http app when projects are requested, should return the safe local 
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(body, [
-    {
-      id: "local-project",
-      name: context.projectName,
-      deviceId: "device-local",
-      path: "",
-      branch: "unknown",
-      hasChanges: false,
-      pinned: false,
-      expanded: true,
-    },
-  ]);
+  assert.equal(body.length, 1);
+  assert.match(body[0].id, /^project-[a-f0-9]{12}$/);
+  assert.equal(body[0].name, "project");
+  assert.equal(body[0].deviceId, "device-local");
+  assert.equal(body[0].path, "");
+  assert.equal(body[0].branch, "unknown");
+  assert.equal(body[0].hasChanges, false);
+  assert.equal(body[0].pinned, false);
+  assert.equal(body[0].expanded, true);
 });
 
 test("worker http app when route is outside stage 2 allowlist, should not implement behavior", async () => {
@@ -426,11 +423,12 @@ test("worker http app when handler fails, should return sanitized ErrorEnvelope"
     "LEAK_COMMAND_OUTPUT",
     "LEAK_FULL_DIFF",
   ];
-  const context = await createContext({
-    client: new FakeClient({
-      listError: new Error(leakMarkers.join(" ")),
-    }),
-  });
+  const context = {
+    ...await createContext(),
+    openClient: async () => {
+      throw new Error(leakMarkers.join(" "));
+    },
+  };
   const app = createWorkerHttpApp(context);
 
   const response = await app.request("/v1/conversations", {
@@ -467,6 +465,7 @@ async function createContext(options: { client?: WorkerControlAppServerClient } 
       requestTimeoutMs: 5_000,
       startAppServer: false,
       workerToken: "example-token",
+      codexHome: join(tmpdir(), "codex-remote-worker-http-app-missing-home"),
     } satisfies WorkerHttpConfig,
     now: () => ticks.shift() ?? "2026-06-19T10:00:01.000Z",
     openClient: async () => client,

@@ -112,7 +112,7 @@ export function createWorkerHttpApp(
   app.get("/v1/worker/health", async (c) => c.json(await getHealth(context)));
   app.get("/v1/worker/capabilities", (c) => c.json(getCapabilities(context)));
   app.get("/v1/worker/probe", async (c) => c.json(await runProbe(context)));
-  app.get("/v1/projects", (c) => c.json(listProjects(context)));
+  app.get("/v1/projects", async (c) => c.json(await listProjects(context)));
   app.get("/v1/projects/:projectId/local-workbench/summary", async (c) =>
     c.json(await getLocalWorkbenchSummary(localWorkbenchContext, c.req.param("projectId"))),
   );
