@@ -18,6 +18,7 @@ import type {
   TaskStatus,
 } from "@codex-remote/api-contract";
 import type { AdvancedPlatformData, LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 import { getStatusClassName, statusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -30,6 +31,7 @@ interface ConversationMainProps {
   canStartConversation: boolean;
   canSubmitFollowUp: boolean;
   conversation: CodexConversation | null;
+  conversationCopy: WebDictionary["conversation"];
   controlStatus: "accepted" | "failed" | "idle" | "submitting";
   followUpStatus: "accepted" | "failed" | "idle" | "submitting";
   isDetailCollapsed: boolean;
@@ -137,6 +139,7 @@ export function ConversationMain({
   canStartConversation,
   canSubmitFollowUp,
   conversation,
+  conversationCopy,
   controlStatus,
   followUpStatus,
   isDetailCollapsed,
@@ -292,6 +295,7 @@ export function ConversationMain({
           canStartConversation={canStartConversation}
           canSubmitFollowUp={canSubmitFollowUp}
           controlStatus={controlStatus}
+          dictionary={conversationCopy}
           followUpStatus={followUpStatus}
           onOpenDetail={onOpenDetail}
           onCancelQueuedMessage={onCancelQueuedMessage}

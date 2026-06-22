@@ -42,9 +42,9 @@ test("when rendering the assistant thread, should keep assistant-ui runtime and 
 test("when rendering the composer, should preserve confirmed future access placeholders", () => {
   const source = readWebSource("components/conversation/codex-assistant-thread.tsx");
 
-  assert.match(source, /const accessModeOptions = \[/);
-  assert.match(source, /label: "请求批准"/);
-  assert.match(source, /label: "替我审批"/);
-  assert.match(source, /label: "完全访问"/);
+  assert.match(source, /function getAccessModes/);
+  assert.match(source, /label: copy\.requestApproval/);
+  assert.match(source, /label: copy\.delegateApproval/);
+  assert.match(source, /label: copy\.fullAccess/);
   assert.match(source, /role="menuitemradio"/);
 });

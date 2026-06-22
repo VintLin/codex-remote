@@ -4,19 +4,29 @@ import { useState } from "react";
 import { Icon, type IconName } from "@codex-remote/ui";
 
 import type { AssistantToolCallNode, AssistantToolGroupNode, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface CodexToolGroupRowProps {
+  copy?: WebDictionary["conversation"]["toolStatus"];
   group: AssistantToolGroupNode;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
 }
 
 interface CodexToolCallRowProps {
   call: AssistantToolCallNode;
+  copy?: WebDictionary["conversation"]["toolStatus"];
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
   variant?: "grouped" | "nested";
 }
 
-export function CodexToolGroupRow({ group, onOpenDetail }: CodexToolGroupRowProps) {
+const fallbackToolStatus: WebDictionary["conversation"]["toolStatus"] = {
+  completed: "完成",
+  failed: "失败",
+  running: "运行中",
+  unknown: "未知",
+};
+
+export function CodexToolGroupRow({ copy, group, onOpenDetail }: CodexToolGroupRowProps) {
   const [expanded, setExpanded] = useState(() => !group.defaultCollapsed);
 
   return (
@@ -34,7 +44,7 @@ export function CodexToolGroupRow({ group, onOpenDetail }: CodexToolGroupRowProp
       {expanded ? (
         <div className="codex-assistant-tool-children">
           {group.calls.map((call) => (
-            <CodexToolCallRow call={call} key={call.id} onOpenDetail={onOpenDetail} variant="grouped" />
+            <CodexToolCallRow call={call} key={call.id} onOpenDetail={onOpenDetail} variant="grouped" {...(copy ? { copy } : {})} />
           ))}
         </div>
       ) : null}
@@ -42,10 +52,11 @@ export function CodexToolGroupRow({ group, onOpenDetail }: CodexToolGroupRowProp
   );
 }
 
-export function CodexToolCallRow({ call, onOpenDetail, variant = "nested" }: CodexToolCallRowProps) {
+export function CodexToolCallRow({ call, copy, onOpenDetail, variant = "nested" }: CodexToolCallRowProps) {
   const [expanded, setExpanded] = useState(() => !call.defaultCollapsed);
   const inlineDetail = call.detailPlacement === "inline" ? getInlineDetail(call.detailTarget) : null;
   const canOpenWorkspace = call.detailPlacement === "workspace";
+  const statusCopy = copy ?? fallbackToolStatus;
 
   return (
     <div className="codex-assistant-message is-tool" data-role="assistant" data-tool-row={variant}>
@@ -57,7 +68,7 @@ export function CodexToolCallRow({ call, onOpenDetail, variant = "nested" }: Cod
       >
         <Icon name={getToolIconName(call)} />
         <span>{call.label}</span>
-        <code>{getStatusLabel(call.status)}</code>
+        <code>{getStatusLabel(statusCopy, call.status)}</code>
         <Icon name="right" />
       </button>
       {expanded ? (
@@ -103,17 +114,20 @@ function getToolIconName(call: AssistantToolCallNode): IconName {
   return "folder";
 }
 
-function getStatusLabel(status: AssistantToolCallNode["status"]): string {
+function getStatusLabel(
+  copy: WebDictionary["conversation"]["toolStatus"],
+  status: AssistantToolCallNode["status"],
+): string {
   if (status === "completed") {
-    return "完成";
+    return copy.completed;
   }
   if (status === "failed") {
-    return "失败";
+    return copy.failed;
   }
   if (status === "running") {
-    return "运行中";
+    return copy.running;
   }
-  return "未知";
+  return copy.unknown;
 }
 
 function getInlineDetail(target: DetailTarget): string | null {

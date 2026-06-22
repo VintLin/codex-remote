@@ -20,6 +20,7 @@ import type {
   DetailTarget,
   LinkReference,
 } from "../../domain/assistant/assistantTimeline";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 import { CodexMarkdownText } from "./codex-markdown-text";
 import { CodexToolCallRow, CodexToolGroupRow } from "./codex-tool-call-row";
 import { submitFollowUpDraft, type SubmitFollowUpDraftResult } from "./followUpComposerSubmit";
@@ -29,6 +30,7 @@ interface CodexAssistantThreadProps {
   canStartConversation?: boolean;
   canSubmitFollowUp?: boolean;
   controlStatus?: "accepted" | "failed" | "idle" | "submitting";
+  dictionary: WebDictionary["conversation"];
   followUpStatus?: "accepted" | "failed" | "idle" | "submitting";
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
   onCancelQueuedMessage?: (message: ConversationQueuedMessage) => Promise<void>;
@@ -75,17 +77,79 @@ const noopSubmitFollowUp = async () => {};
 const noopQueueMessage = async () => {};
 type ComposerMode = "send" | "start" | "steer" | "queue";
 
-const accessModeOptions = [
-  { key: "approval-request", label: "请求批准", icon: "hand" },
-  { key: "approval-delegate", label: "替我审批", icon: "shield-check" },
-  { key: "full-access", label: "完全访问", icon: "shield-alert" },
-] as const;
+const FALLBACK_DICTIONARY: WebDictionary["conversation"] = {
+  threadLabel: "Conversation thread",
+  empty: "暂无历史消息",
+  scrollToLatest: "回到最新聊天记录",
+  followUpMessage: "Follow-up message",
+  addAttachment: "添加附件",
+  accessMode: "权限模式",
+  sendMode: "发送模式",
+  requestApproval: "请求批准",
+  delegateApproval: "替我审批",
+  fullAccess: "完全访问",
+  newConversation: "新对话",
+  steerCurrentRun: "引导当前执行",
+  queueMessage: "排队发送",
+  queuedCount: (count: number) => ` · 已排队 ${count} 条`,
+  interrupt: "中断",
+  send: "发送",
+  copy: "复制",
+  up: "赞",
+  down: "踩",
+  derived: "派生",
+  hooks: "Hooks",
+  timestamp: "timestamp",
+  assistantMessageActions: "Assistant message actions",
+  contextCompaction: "上下文已压缩",
+  queued: "排队发送",
+  queuedFailed: "发送失败",
+  queuedWaiting: "等待当前执行结束",
+  cancel: "取消",
+  conversationRequests: "Conversation requests",
+  queuedMessages: "Queued messages",
+  status: {
+    steering: "正在引导",
+    interrupting: "正在中断",
+    steerFailed: "引导失败",
+    interruptFailed: "中断失败",
+    starting: "正在开始",
+    startFailed: "开始失败",
+    startedRefreshing: "已开始，正在刷新",
+    sending: "正在发送",
+    acceptedRefreshing: "已接受，正在刷新",
+    sendFailed: "发送失败",
+    queued: "排队发送将在当前执行后提交",
+    startHint: "输入后开始新对话",
+    steerHint: "输入后引导当前执行",
+    sendHint: "输入后发送",
+    startNewHint: "输入后开始",
+  },
+  toolStatus: {
+    completed: "完成",
+    failed: "失败",
+    running: "运行中",
+    unknown: "未知",
+  },
+  markdownImage: (alt: string | undefined, src: string | undefined) =>
+    `${alt ? `图片：${alt}` : "图片"}${src ? ` (${src})` : ""}`,
+  processedRunLabel: (duration: string) => (duration ? `已处理 ${duration}` : "已处理"),
+};
+
+function getAccessModes(copy: WebDictionary["conversation"]) {
+  return [
+    { key: "approval-request", label: copy.requestApproval, icon: "hand" },
+    { key: "approval-delegate", label: copy.delegateApproval, icon: "shield-check" },
+    { key: "full-access", label: copy.fullAccess, icon: "shield-alert" },
+  ] as const;
+}
 
 export function CodexAssistantThread({
   activeTurnId = null,
   canStartConversation = false,
   canSubmitFollowUp = false,
   controlStatus = "idle",
+  dictionary,
   followUpStatus = "idle",
   onOpenDetail = noopOpenDetail,
   onCancelQueuedMessage = noopQueueMessage,
@@ -108,6 +172,7 @@ export function CodexAssistantThread({
       canStartConversation={canStartConversation}
       canSubmitFollowUp={canSubmitFollowUp}
       controlStatus={controlStatus}
+      dictionary={dictionary ?? FALLBACK_DICTIONARY}
       followUpStatus={followUpStatus}
       key={thread?.id ?? "empty-thread"}
       onOpenDetail={onOpenDetail}
@@ -133,6 +198,7 @@ function CodexAssistantRuntimeThread({
   canStartConversation,
   canSubmitFollowUp,
   controlStatus,
+  dictionary,
   followUpStatus,
   onOpenDetail,
   onCancelQueuedMessage,
@@ -151,6 +217,7 @@ function CodexAssistantRuntimeThread({
 }: Required<CodexAssistantThreadProps>) {
   const [accessMenuOpen, setAccessMenuOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>("send");
+  const accessModeOptions = useMemo(() => getAccessModes(dictionary), [dictionary]);
   const [selectedAccessMode] = useState<(typeof accessModeOptions)[number]["key"]>("approval-request");
   const [draft, setDraft] = useState("");
   const [expandedRunIds, setExpandedRunIds] = useState(() => new Set<string>());
@@ -159,7 +226,7 @@ function CodexAssistantRuntimeThread({
   const composerInputRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messages = useMemo(() => getRuntimeMessages(thread), [thread]);
-  const rows = useMemo(() => getTimelineRows(thread), [thread]);
+  const rows = useMemo(() => getTimelineRows(thread, dictionary.processedRunLabel), [thread, dictionary.processedRunLabel]);
   const convertMessage = useCallback((message: RuntimeMessageSnapshot): ThreadMessageLike => {
     return {
       id: message.id,
@@ -329,12 +396,12 @@ function CodexAssistantRuntimeThread({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <section aria-label="Conversation thread" className="codex-assistant-thread">
+      <section aria-label={dictionary.threadLabel} className="codex-assistant-thread">
         <ThreadPrimitive.Root className="codex-assistant-root">
           <ThreadPrimitive.ViewportProvider>
             <div className="codex-assistant-scroll" onScroll={updateScrollToLatestVisibility} ref={scrollRef}>
               <ThreadPrimitive.Empty>
-                <div className="codex-assistant-empty">暂无历史消息</div>
+                <div className="codex-assistant-empty">{dictionary.empty}</div>
               </ThreadPrimitive.Empty>
               <div className="codex-assistant-message-list">
                 {rows.map((row) => (
@@ -346,11 +413,11 @@ function CodexAssistantRuntimeThread({
                         onToggle={() => toggleRun(row.id)}
                       />
                     ) : (
-                      renderTimelineNode(row.node, onOpenDetail)
+                      renderTimelineNode(row.node, onOpenDetail, dictionary)
                     )}
                     {row.type === "processedRun" && expandedRunIds.has(row.id)
                       ? row.nodes.map((node) => (
-                          <Fragment key={node.id}>{renderTimelineNode(node, onOpenDetail)}</Fragment>
+                          <Fragment key={node.id}>{renderTimelineNode(node, onOpenDetail, dictionary)}</Fragment>
                         ))
                       : null}
                   </Fragment>
@@ -358,12 +425,14 @@ function CodexAssistantRuntimeThread({
                   <ConversationRequestCards
                     canControl={canSubmitFollowUp}
                     controlStatus={controlStatus}
+                    dictionary={dictionary}
                     onSubmitApprovalDecision={onSubmitApprovalDecision}
                     approvalCards={approvalCards}
                     pendingApprovals={pendingApprovals}
                   />
                   <ConversationQueuedMessages
                     controlStatus={controlStatus}
+                    dictionary={dictionary}
                     messages={queuedMessages}
                     onCancelQueuedMessage={onCancelQueuedMessage}
                   />
@@ -371,7 +440,7 @@ function CodexAssistantRuntimeThread({
             </div>
             {showScrollToLatest ? (
               <button
-                aria-label="回到最新聊天记录"
+                aria-label={dictionary.scrollToLatest}
                 className="codex-assistant-scroll-latest"
                 onClick={handleScrollToLatest}
                 type="button"
@@ -381,7 +450,7 @@ function CodexAssistantRuntimeThread({
             ) : null}
             <ComposerPrimitive.Root aria-disabled={!canCompose} className="codex-assistant-composer">
               <div
-                aria-label="Follow-up message"
+                aria-label={dictionary.followUpMessage}
                 aria-disabled={!canCompose || isSubmitting}
                 className="codex-assistant-composer-input"
                 contentEditable={canCompose && !isSubmitting}
@@ -401,7 +470,7 @@ function CodexAssistantRuntimeThread({
               </div>
               <div className="codex-assistant-composer-actions">
                 <div className="codex-assistant-composer-left">
-                  <button aria-label="添加附件" className="codex-assistant-composer-icon" disabled type="button">
+                  <button aria-label={dictionary.addAttachment} className="codex-assistant-composer-icon" disabled type="button">
                     <Icon name="plus" />
                   </button>
                   <div className="codex-assistant-access-wrap" ref={accessMenuRef}>
@@ -418,26 +487,26 @@ function CodexAssistantRuntimeThread({
                       <Icon name="down" />
                     </button>
                     {accessMenuOpen ? (
-                      <div aria-label="权限模式" className="codex-assistant-access-menu" role="menu">
+                      <div aria-label={dictionary.accessMode} className="codex-assistant-access-menu" role="menu">
 	                        {accessModeOptions.map((option) => (
 	                          <button
 	                            aria-pressed={option.key === selectedAccessMode}
 	                            className={`codex-assistant-access-option${option.key === selectedAccessMode ? " is-selected" : ""}`}
-                              disabled
+	                            disabled
 	                            key={option.key}
-                              // TODO: review required - wire only after OpenAPI exposes a public permission/profile model.
+	                            // TODO: review required - wire only after OpenAPI exposes a public permission/profile model.
 	                            role="menuitemradio"
 	                            type="button"
 	                          >
-                            <Icon name={option.icon} />
-                            {option.label}
-                          </button>
-                        ))}
+	                            <Icon name={option.icon} />
+	                            {option.label}
+	                          </button>
+	                        ))}
                       </div>
                     ) : null}
                   </div>
 		                  {canInterrupt || (canStartConversation && canSubmitFollowUp) ? (
-		                    <div aria-label="发送模式" className="codex-assistant-send-modes">
+		                    <div aria-label={dictionary.sendMode} className="codex-assistant-send-modes">
                           {canStartConversation ? (
                             <button
                               aria-pressed={composerMode === "start"}
@@ -445,7 +514,7 @@ function CodexAssistantRuntimeThread({
                               onClick={() => setComposerMode("start")}
                               type="button"
                             >
-                              新对话
+                              {dictionary.newConversation}
                             </button>
                           ) : null}
                           {canInterrupt ? (
@@ -456,7 +525,7 @@ function CodexAssistantRuntimeThread({
 		                          onClick={() => setComposerMode("steer")}
 		                          type="button"
 		                        >
-		                          引导当前执行
+		                          {dictionary.steerCurrentRun}
 		                        </button>
 		                        <button
 		                          aria-pressed={composerMode === "queue"}
@@ -464,31 +533,31 @@ function CodexAssistantRuntimeThread({
 			                          onClick={() => setComposerMode("queue")}
 		                          type="button"
 		                        >
-		                          排队发送
+		                          {dictionary.queueMessage}
 		                        </button>
                             </>
                           ) : null}
 		                    </div>
 		                  ) : null}
-	                  <span className="codex-assistant-composer-status">
-		                    {getComposerStatusLabel(followUpStatus, controlStatus, startStatus, composerMode, canSubmitFollowUp)}
-                        {pendingQueuedMessages.length > 0 ? ` · 已排队 ${pendingQueuedMessages.length} 条` : ""}
-	                  </span>
-	                </div>
-	                <div className="codex-assistant-composer-right">
-	                  {canInterrupt ? (
-	                    <button
-	                      aria-label="中断"
-	                      className="codex-assistant-send codex-assistant-interrupt"
-	                      disabled={isInterrupting}
-	                      onClick={() => void submitInterrupt()}
-	                      type="button"
-                    >
-                      <Icon name="x" />
-                    </button>
-	                  ) : null}
+		                  <span className="codex-assistant-composer-status">
+		                    {getComposerStatusLabel(dictionary.status, followUpStatus, controlStatus, startStatus, composerMode, canSubmitFollowUp)}
+                        {pendingQueuedMessages.length > 0 ? dictionary.queuedCount(pendingQueuedMessages.length) : ""}
+		                  </span>
+		                </div>
+		                <div className="codex-assistant-composer-right">
+		                  {canInterrupt ? (
+		                    <button
+		                      aria-label={dictionary.interrupt}
+		                      className="codex-assistant-send codex-assistant-interrupt"
+		                      disabled={isInterrupting}
+		                      onClick={() => void submitInterrupt()}
+		                      type="button"
+		                    >
+		                      <Icon name="x" />
+		                    </button>
+		                  ) : null}
                     <button
-                      aria-label="发送"
+                      aria-label={dictionary.send}
                       className="codex-assistant-send"
                       disabled={!canSend}
                       onClick={() => void submitComposerDraft()}
@@ -496,7 +565,7 @@ function CodexAssistantRuntimeThread({
                     >
                       <Icon name="arrow-up" />
                     </button>
-	                </div>
+		                </div>
               </div>
             </ComposerPrimitive.Root>
           </ThreadPrimitive.ViewportProvider>
@@ -507,6 +576,7 @@ function CodexAssistantRuntimeThread({
 }
 
 function getComposerStatusLabel(
+  statusCopy: WebDictionary["conversation"]["status"],
   status: Required<CodexAssistantThreadProps>["followUpStatus"],
   controlStatus: Required<CodexAssistantThreadProps>["controlStatus"],
   startStatus: Required<CodexAssistantThreadProps>["startStatus"],
@@ -514,39 +584,39 @@ function getComposerStatusLabel(
   canSubmitFollowUp: boolean,
 ): string {
   if (controlStatus === "submitting") {
-    return composerMode === "steer" ? "正在引导" : "正在中断";
+    return composerMode === "steer" ? statusCopy.steering : statusCopy.interrupting;
   }
   if (controlStatus === "failed") {
-    return composerMode === "steer" ? "引导失败" : "中断失败";
+    return composerMode === "steer" ? statusCopy.steerFailed : statusCopy.interruptFailed;
   }
   if (startStatus === "submitting") {
-    return "正在开始";
+    return statusCopy.starting;
   }
   if (startStatus === "failed") {
-    return "开始失败";
+    return statusCopy.startFailed;
   }
   if (startStatus === "accepted") {
-    return "已开始，正在刷新";
+    return statusCopy.startedRefreshing;
   }
   if (status === "submitting") {
-    return "正在发送";
+    return statusCopy.sending;
   }
   if (status === "accepted") {
-    return "已接受，正在刷新";
+    return statusCopy.acceptedRefreshing;
   }
   if (status === "failed") {
-    return "发送失败";
+    return statusCopy.sendFailed;
   }
   if (composerMode === "queue") {
-    return "排队发送将在当前执行后提交";
+    return statusCopy.queued;
   }
   if (composerMode === "start") {
-    return "输入后开始新对话";
+    return statusCopy.startHint;
   }
   if (composerMode === "steer") {
-    return "输入后引导当前执行";
+    return statusCopy.steerHint;
   }
-  return canSubmitFollowUp ? "输入后发送" : "输入后开始";
+  return canSubmitFollowUp ? statusCopy.sendHint : statusCopy.startNewHint;
 }
 
 function CodexAssistantProcessedRun(props: { expanded: boolean; label: string; onToggle: () => void }) {
@@ -566,23 +636,25 @@ function CodexAssistantProcessedRun(props: { expanded: boolean; label: string; o
 function renderTimelineNode(
   node: AssistantTimelineNode,
   onOpenDetail: (target: DetailTarget | LinkReference) => void,
+  dictionary: WebDictionary["conversation"],
 ) {
   if (node.type === "text") {
-    return <CodexAssistantTextMessage node={node} onOpenDetail={onOpenDetail} />;
+    return <CodexAssistantTextMessage dictionary={dictionary} node={node} onOpenDetail={onOpenDetail} />;
   }
 
   if (node.type === "contextCompaction") {
-    return <CodexAssistantContextCompaction node={node} />;
+    return <CodexAssistantContextCompaction dictionary={dictionary} node={node} />;
   }
 
   if (node.type === "toolGroup") {
-    return <CodexToolGroupRow group={node} onOpenDetail={onOpenDetail} />;
+    return <CodexToolGroupRow copy={dictionary.toolStatus} group={node} onOpenDetail={onOpenDetail} />;
   }
 
-  return <CodexToolCallRow call={node} onOpenDetail={onOpenDetail} variant="nested" />;
+  return <CodexToolCallRow call={node} copy={dictionary.toolStatus} onOpenDetail={onOpenDetail} variant="nested" />;
 }
 
 function CodexAssistantTextMessage(props: {
+  dictionary: WebDictionary["conversation"];
   node: AssistantTextNode;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
 }) {
@@ -590,33 +662,38 @@ function CodexAssistantTextMessage(props: {
 
   return (
     <div className="codex-assistant-message" data-role={role}>
-      <CodexMarkdownText links={props.node.links} onOpenDetail={props.onOpenDetail} text={props.node.text} />
-      {role === "assistant" ? <AssistantMessageActions text={props.node.text} /> : null}
+      <CodexMarkdownText
+        imageLabel={props.dictionary.markdownImage}
+        links={props.node.links}
+        onOpenDetail={props.onOpenDetail}
+        text={props.node.text}
+      />
+      {role === "assistant" ? <AssistantMessageActions copy={props.dictionary} text={props.node.text} /> : null}
     </div>
   );
 }
 
-function AssistantMessageActions(props: { text: string }) {
+function AssistantMessageActions(props: { copy: WebDictionary["conversation"]; text: string }) {
   return (
-    <div aria-label="Assistant message actions" className="codex-assistant-message-actions">
+    <div aria-label={props.copy.assistantMessageActions} className="codex-assistant-message-actions">
       <button
-        aria-label="复制"
+        aria-label={props.copy.copy}
         className="codex-assistant-message-action"
         onClick={() => void navigator.clipboard?.writeText(props.text)}
         type="button"
       >
         copy
       </button>
-      <button aria-label="赞" className="codex-assistant-message-action" disabled type="button">
+      <button aria-label={props.copy.up} className="codex-assistant-message-action" disabled type="button">
         up
       </button>
-      <button aria-label="踩" className="codex-assistant-message-action" disabled type="button">
+      <button aria-label={props.copy.down} className="codex-assistant-message-action" disabled type="button">
         down
       </button>
-      <button aria-label="派生" className="codex-assistant-message-action" disabled type="button">
+      <button aria-label={props.copy.derived} className="codex-assistant-message-action" disabled type="button">
         派生
       </button>
-      <button aria-label="Hooks" className="codex-assistant-message-action" disabled type="button">
+      <button aria-label={props.copy.hooks} className="codex-assistant-message-action" disabled type="button">
         hooks
       </button>
       <span className="codex-assistant-message-action" title="public timestamp pending">
@@ -626,10 +703,10 @@ function AssistantMessageActions(props: { text: string }) {
   );
 }
 
-function CodexAssistantContextCompaction(props: { node: AssistantContextCompactionNode }) {
+function CodexAssistantContextCompaction(props: { dictionary: WebDictionary["conversation"]; node: AssistantContextCompactionNode }) {
   return (
     <div className="codex-assistant-run-status">
-      <span>{props.node.text || "上下文已压缩"}</span>
+      <span>{props.node.text || props.dictionary.contextCompaction}</span>
     </div>
   );
 }
@@ -637,6 +714,7 @@ function CodexAssistantContextCompaction(props: { node: AssistantContextCompacti
 function ConversationRequestCards(props: {
   canControl: boolean;
   controlStatus: Required<CodexAssistantThreadProps>["controlStatus"];
+  dictionary: WebDictionary["conversation"];
   onSubmitApprovalDecision: (approval: PendingApproval, decision: "accept" | "decline" | "cancel") => Promise<void>;
   approvalCards: ConversationApprovalCard[];
   pendingApprovals: PendingApproval[];
@@ -646,7 +724,7 @@ function ConversationRequestCards(props: {
   }
 
   return (
-    <div aria-label="Conversation requests" className="conversation-request-cards">
+    <div aria-label={props.dictionary.conversationRequests} className="conversation-request-cards">
       {props.pendingApprovals.map((approval) => (
         <div className="conversation-approval-card" data-state="pending" key={approval.id}>
           <span className="conversation-control-meta">
@@ -681,6 +759,7 @@ function ConversationRequestCards(props: {
 
 function ConversationQueuedMessages(props: {
   controlStatus: Required<CodexAssistantThreadProps>["controlStatus"];
+  dictionary: WebDictionary["conversation"];
   messages: ConversationQueuedMessage[];
   onCancelQueuedMessage: (message: ConversationQueuedMessage) => Promise<void>;
 }) {
@@ -690,11 +769,11 @@ function ConversationQueuedMessages(props: {
   }
 
   return (
-    <div aria-label="Queued messages" className="conversation-request-cards">
+    <div aria-label={props.dictionary.queuedMessages} className="conversation-request-cards">
       {visibleMessages.map((message) => (
         <div className="conversation-approval-card" data-state={message.status} key={message.id}>
           <span className="conversation-control-meta">
-            排队发送 · {message.status === "failed" ? "发送失败" : "等待当前执行结束"}
+            {props.dictionary.queued} · {message.status === "failed" ? props.dictionary.queuedFailed : props.dictionary.queuedWaiting}
           </span>
           <span className="conversation-approval-summary">{message.message}</span>
           <div className="conversation-request-actions">
@@ -704,7 +783,7 @@ function ConversationQueuedMessages(props: {
               onClick={() => void props.onCancelQueuedMessage(message)}
               type="button"
             >
-              取消
+              {props.dictionary.cancel}
             </button>
           </div>
         </div>
@@ -732,15 +811,15 @@ function getRuntimeMessages(thread: AssistantThreadSnapshot | null): RuntimeMess
   );
 }
 
-function getTimelineRows(thread: AssistantThreadSnapshot | null): TimelineRow[] {
+function getTimelineRows(thread: AssistantThreadSnapshot | null, labelBuilder: (duration: string) => string): TimelineRow[] {
   if (!thread) {
     return [];
   }
 
-  return thread.timeline.turns.flatMap(getTurnRows);
+  return thread.timeline.turns.flatMap((turn) => getTurnRows(turn, labelBuilder));
 }
 
-function getTurnRows(turn: AssistantTimelineTurn): TimelineRow[] {
+function getTurnRows(turn: AssistantTimelineTurn, labelBuilder: (duration: string) => string): TimelineRow[] {
   const finalAssistantIndex = getFinalAssistantTextIndex(turn.nodes);
   if (finalAssistantIndex < 1) {
     return turn.nodes.map((node) => ({ id: node.id, node, type: "node" }));
@@ -756,7 +835,7 @@ function getTurnRows(turn: AssistantTimelineTurn): TimelineRow[] {
     const id = `${turn.id}-processed-${pendingRun[0]?.id ?? beforeIndex}-${beforeIndex}`;
     rows.push({
       id,
-      label: getProcessedRunLabel(turn),
+      label: getProcessedRunLabel(turn, labelBuilder),
       nodes: pendingRun,
       type: "processedRun",
     });
@@ -788,9 +867,9 @@ function getFinalAssistantTextIndex(nodes: AssistantTimelineNode[]): number {
   return -1;
 }
 
-function getProcessedRunLabel(turn: AssistantTimelineTurn): string {
+function getProcessedRunLabel(turn: AssistantTimelineTurn, labelBuilder: (duration: string) => string): string {
   const duration = formatDuration(turn.durationMs);
-  return duration ? `已处理 ${duration}` : "已处理";
+  return labelBuilder(duration ?? "");
 }
 
 function formatDuration(durationMs: number | null): string | null {

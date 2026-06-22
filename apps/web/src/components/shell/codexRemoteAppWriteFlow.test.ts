@@ -89,7 +89,7 @@ test("codex remote app when task board is wired, should create tasks and link th
   const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
   const sidebarSource = readWebSource("components/sidebar/sidebar.tsx");
 
-  assert.match(sidebarSource, /label="任务"/);
+  assert.match(sidebarSource, /label=\{props\.copy\.sidebar\.tasks\}/);
   assert.doesNotMatch(mainPanelsSource, /暂无自动化 mock/);
   assert.match(mainPanelsSource, /TaskBoardPage/);
   assert.match(mainPanelsSource, /aria-label="Task title"/);
@@ -164,8 +164,10 @@ test("conversation workbench UI when composing messages, should keep start follo
   assert.match(assistantThreadSource, /composerMode/);
   assert.match(assistantThreadSource, /onSubmitStart/);
   assert.match(assistantThreadSource, /onSubmitSteer/);
-  assert.match(assistantThreadSource, /新对话/);
-  assert.match(assistantThreadSource, /排队发送/);
+  assert.match(assistantThreadSource, /dictionary\.newConversation/);
+  assert.match(assistantThreadSource, /dictionary\.queueMessage/);
+  assert.doesNotMatch(assistantThreadSource, />新对话</);
+  assert.doesNotMatch(assistantThreadSource, />排队发送</);
   assert.match(assistantThreadSource, /onQueueMessage/);
   assert.doesNotMatch(assistantThreadSource, /local queue/);
 });
@@ -198,8 +200,8 @@ test("conversation workbench UI when rendering app-like conversation content, sh
   assert.match(assistantThreadSource, /disabled[\s\S]+TODO: review required/);
   assert.match(assistantThreadSource, /AssistantMessageActions/);
   assert.match(assistantThreadSource, /navigator\.clipboard/);
-  assert.match(assistantThreadSource, /aria-label="派生"[\s\S]+disabled/);
-  assert.match(assistantThreadSource, /aria-label="Hooks"[\s\S]+disabled/);
+  assert.match(assistantThreadSource, /aria-label=\{[^}]*\.derived[\s\S]+disabled/);
+  assert.match(assistantThreadSource, /aria-label=\{[^}]*\.hooks[\s\S]+disabled/);
   assert.match(assistantTimelineSource, /itemsView: "full" \| "partial" \| "unknown"/);
   assert.match(workbenchDataSource, /itemsView: turn\.itemsView/);
 });

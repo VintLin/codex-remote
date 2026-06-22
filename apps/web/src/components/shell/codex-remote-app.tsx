@@ -885,6 +885,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
             activeTurnId={null}
             controlStatus={controlStatus}
             conversation={null}
+            conversationCopy={dictionary.conversation}
             followUpStatus={followUpStatus}
             isDetailCollapsed={isDetailCollapsed}
             isMobile={isMobileViewport}
@@ -948,6 +949,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
           activeTurnId={activeTurnId}
           controlStatus={controlStatus}
           conversation={conversation}
+          conversationCopy={dictionary.conversation}
           followUpStatus={followUpStatus}
           isDetailCollapsed={isDetailCollapsed}
           isMobile={isMobileViewport}

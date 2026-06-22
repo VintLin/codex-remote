@@ -5,16 +5,22 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface CodexMarkdownTextProps {
+  imageLabel?: WebDictionary["conversation"]["markdownImage"];
   links?: LinkReference[];
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
   text: string;
 }
 
+const fallbackImageLabel: WebDictionary["conversation"]["markdownImage"] = (alt, src) =>
+  `${alt ? `图片：${alt}` : "图片"}${src ? ` (${src})` : ""}`;
+
 const noopOpenDetail = () => {};
 
 export function CodexMarkdownText({
+  imageLabel = fallbackImageLabel,
   links = [],
   onOpenDetail = noopOpenDetail,
   text,
@@ -39,8 +45,7 @@ export function CodexMarkdownText({
     img({ alt, src }) {
       return (
         <span className="codex-markdown-image-reference">
-          {alt ? `图片：${alt}` : "图片"}
-          {src ? ` (${src})` : ""}
+          {imageLabel(typeof alt === "string" ? alt : undefined, typeof src === "string" ? src : undefined)}
         </span>
       );
     },
