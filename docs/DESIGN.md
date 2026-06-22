@@ -126,7 +126,7 @@ Codex Remote should feel like a compact workstation that lets one operator super
 
 This is product UI, not a showcase surface. The interface should earn trust by making state, ownership, and boundaries explicit. Device identity, project grouping, active conversation state, approval risk, and detail context should always be legible before the user opens another panel or menu.
 
-The system explicitly rejects the anti-references in `PRODUCT.md`: it must not drift into a marketing SaaS landing page, a full Codex Desktop clone, a colorful multi-agent orchestration suite, a provider proxy console, or a decorative analytics dashboard. Oversized hero gestures, heavy gradients, novelty terminal themes, and any styling that makes inactive state look urgent are out of bounds.
+The system explicitly rejects the anti-references in `docs/PRODUCT.md`: it must not drift into a marketing SaaS landing page, a full Codex Desktop clone, a colorful multi-agent orchestration suite, a provider proxy console, or a decorative analytics dashboard. Oversized hero gestures, heavy gradients, novelty terminal themes, and any styling that makes inactive state look urgent are out of bounds.
 
 **Key Characteristics**
 
@@ -255,6 +255,16 @@ Rules:
 - Realtime or high-risk capabilities must show loading, active, waiting, accepted, failed, empty, and degraded states.
 - A disabled or unsupported capability must either be absent or visibly disabled with clear state; no clickable no-op controls.
 - Ownership context stays visible at action time: device, project, conversation, task, or account as applicable.
+
+Minimum UI states for every supported capability:
+
+- Loading
+- Loaded empty
+- Loaded with data
+- Degraded dependency
+- Action pending
+- Action accepted
+- Action failed with sanitized error
 
 ## Do's and Don'ts
 

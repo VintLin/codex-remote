@@ -14,6 +14,35 @@ Codex Remote is a self-hosted multi-device Codex control plane. It aggregates de
 
 Current subgoal: make the Web workbench feel as close as practical to Codex App while preserving Codex Remote's main product goal of controlling multiple Codex instances across multiple computers.
 
+## Current Product Direction
+
+Codex Remote remains a self-hosted multi-device Codex control plane. The current product direction is to make the Web workbench feel as close as practical to Codex App while preserving Codex Remote's primary goal: controlling multiple Codex instances across multiple computers.
+
+## Architecture Boundaries
+
+- `packages/api-contract/openapi.yaml` is the public API source of truth for Web, Worker, Control Plane, and future iOS-shaped clients.
+- `packages/codex-protocol` is the generated Codex app-server protocol source of truth.
+- `packages/db` schema is the persistence source of truth.
+- `apps/worker` is the only app that directly connects to Codex app-server, local filesystem, Git, shell, and terminal capabilities.
+- `apps/web` consumes only Control Plane-shaped public APIs.
+
+## Codex App-like Workbench Direction
+
+Each Codex App-like capability is designed as a product capability, not as a raw app-server method pass-through:
+
+```text
+Capability goal
+  -> public API contract
+  -> Control Plane routing/state
+  -> Worker app-server/local adapter
+  -> Web datasource
+  -> Web domain model
+  -> Web UI surface
+  -> real local verification
+```
+
+Web and Control Plane do not pass through raw JSON-RPC, raw prompts, raw command output, raw diffs, raw local paths, provider secrets, or app-server URLs.
+
 ## Core Scenarios
 
 - See all connected devices, their online state, active projects, running Codex conversations, models, sandbox mode, and approval posture in one Web workbench.

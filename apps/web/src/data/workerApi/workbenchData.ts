@@ -25,6 +25,7 @@ import type {
   AssistantTimelineTurn,
   AssistantThreadSnapshot,
 } from "../../domain/assistant/assistantTimeline.ts";
+import type { ConnectionLoadReason } from "../../domain/connection/connectionEntry.ts";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity.ts";
 
 import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
@@ -80,13 +81,7 @@ export interface AdvancedPlatformData {
 
 export interface WorkbenchData {
   source: {
-    reason:
-      | "loaded"
-      | "not_configured"
-      | "unauthorized"
-      | "forbidden"
-      | "app_server_unavailable"
-      | "request_failure";
+    reason: ConnectionLoadReason;
     error?: SourceErrorEnvelope;
   };
   taskSource: {
@@ -137,6 +132,11 @@ export function createFallbackWorkbenchData(
     assistantThreads: createMetadataOnlyAssistantThreads(conversations),
     searchRecents: createSearchRecents(conversations, selectedConversationKey),
   };
+}
+
+function findCoreSnapshotError(results: readonly PromiseSettledResult<unknown>[]): unknown | null {
+  const rejectedResults = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+  return rejectedResults.find((result) => result.reason instanceof WorkerApiRequestError)?.reason ?? rejectedResults[0]?.reason ?? null;
 }
 
 function createUnavailableLocalWorkbenchData(): LocalWorkbenchData {
@@ -514,9 +514,26 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
   });
 
   try {
-    const devices = await client.listDevices();
-    const conversations = await client.listConversations();
-    const projects = await client.listProjects();
+    const coreSnapshotResults = await Promise.allSettled([
+      client.listDevices(),
+      client.listConversations(),
+      client.listProjects(),
+    ]);
+    const coreSnapshotError = findCoreSnapshotError(coreSnapshotResults);
+    if (coreSnapshotError) {
+      throw coreSnapshotError;
+    }
+    const [devicesResult, conversationsResult, projectsResult] = coreSnapshotResults;
+    if (
+      devicesResult.status !== "fulfilled" ||
+      conversationsResult.status !== "fulfilled" ||
+      projectsResult.status !== "fulfilled"
+    ) {
+      throw new Error("Core snapshot request failed.");
+    }
+    const devices = devicesResult.value;
+    const conversations = conversationsResult.value;
+    const projects = projectsResult.value;
     let tasks: BoardTask[] = [];
     let taskError: unknown = null;
     try {

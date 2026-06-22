@@ -39,6 +39,7 @@ export interface WorkerApiClientConfig {
   baseUrl: string;
   token: string;
   fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
 }
 
 export interface WorkerApiClientLike {
@@ -97,6 +98,7 @@ type SanitizedErrorEnvelope = {
 
 const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind", "deviceId"]);
 const fallbackErrorMessage = "Worker request failed.";
+const defaultRequestTimeoutMs = 3_000;
 
 export interface WorkerApiErrorEnvelope extends Error {
   status: number;
@@ -393,11 +395,28 @@ export class WorkerApiClient implements WorkerApiClientLike {
       headers.set("content-type", "application/json");
     }
 
-    const response = await this.fetchImpl(url.toString(), {
-      method: options.method ?? "GET",
-      headers,
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    });
+    const abortController = new AbortController();
+    const timeout = globalThis.setTimeout(() => abortController.abort(), this.config.requestTimeoutMs ?? defaultRequestTimeoutMs);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: options.method ?? "GET",
+        headers,
+        signal: abortController.signal,
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      });
+    } catch {
+      throw new WorkerApiRequestError(0, {
+        code: "request_failure",
+        message: fallbackErrorMessage,
+        details: {
+          reason: abortController.signal.aborted ? "request_timeout" : "network_error",
+          retryable: true,
+        },
+      });
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const envelope = await this.parseErrorEnvelope(response);

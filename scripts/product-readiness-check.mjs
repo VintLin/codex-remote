@@ -441,7 +441,16 @@ function checkSensitiveShapes(root) {
   const allowedPlaceholders = new Set(["REDACTED", "example-token"]);
   const packageJsonFiles = ["package.json", ...listFiles(root, ["apps", "packages"], ["package.json"])];
   const scannedFiles = [
-    ...["AGENTS.md", "PLAN.md", "PRODUCT.md", "PROJECT_STRUCTURE.md", "DESIGN.md"].filter((file) => existsSync(join(root, file))),
+    ...[
+      "AGENTS.md",
+      "PROJECT_STRUCTURE.md",
+      "docs/README.md",
+      "docs/PRODUCT.md",
+      "docs/DESIGN.md",
+      "docs/FEATURE_INDEX.md",
+      "docs/references/RESEARCH.md",
+      "docs/verification/README.md",
+    ].filter((file) => existsSync(join(root, file))),
     ...packageJsonFiles,
     ...listFiles(root, ["docs/superpowers", "scripts"], [".md", ".mjs", ".sh"]).filter((file) => !file.endsWith(".test.mjs")),
     ...listFiles(root, ["docs/references"], [".md"]).filter(

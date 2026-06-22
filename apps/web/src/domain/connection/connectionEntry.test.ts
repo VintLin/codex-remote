@@ -1,0 +1,156 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import type { Device } from "@codex-remote/api-contract";
+
+import {
+  createConnectionEntryModel,
+  resolveConnectionEntryDevices,
+  resolveInitialSelectedDeviceId,
+  shouldPersistSelectedDeviceId,
+} from "./connectionEntry.ts";
+
+const devices: Device[] = [
+  {
+    id: "studio",
+    icon: "ST",
+    name: "Studio Mini",
+    status: "Connected",
+    ip: "192.168.1.2",
+    lastOnlineAt: "刚刚",
+    currentProject: "codex-remote",
+    model: "GPT-5",
+  },
+  {
+    id: "macbook",
+    icon: "MB",
+    name: "MacBook-Pro-4",
+    status: "Connected",
+    ip: "192.168.1.3",
+    lastOnlineAt: "1 分钟前",
+    currentProject: "codex-remote",
+    model: "GPT-5",
+  },
+  {
+    id: "office",
+    icon: "OF",
+    name: "Office iMac",
+    status: "Not connected",
+    ip: "192.168.1.4",
+    lastOnlineAt: "09:42",
+    currentProject: "",
+    model: "",
+  },
+  {
+    id: "lab",
+    icon: "LB",
+    name: "Lab Mac",
+    status: "Connected",
+    ip: "192.168.1.5",
+    lastOnlineAt: "2 分钟前",
+    currentProject: "",
+    model: "",
+  },
+];
+
+test("when connecting, should show the selected device first and only expose three devices", () => {
+  const model = createConnectionEntryModel({
+    devices,
+    errorCode: null,
+    isLoading: true,
+    selectedDeviceId: "macbook",
+    sourceReason: "not_configured",
+  });
+
+  assert.equal(model.status, "connecting");
+  assert.deepEqual(model.devices.map((device) => device.id), ["macbook", "studio", "office"]);
+  assert.equal(model.devices[0]?.meta, "上次使用 · 正在连接");
+  assert.equal(model.devices[0]?.ariaLabel, "MacBook-Pro-4，上次使用，正在连接");
+  assert.deepEqual(model.steps.map((step) => step.status), ["done", "active", "pending", "pending"]);
+});
+
+test("when connecting before devices are known, should keep the control center step active", () => {
+  const model = createConnectionEntryModel({
+    devices: [],
+    errorCode: null,
+    isLoading: true,
+    selectedDeviceId: "macbook",
+    sourceReason: "not_configured",
+  });
+
+  assert.deepEqual(model.steps.map((step) => step.status), ["active", "pending", "pending", "pending"]);
+});
+
+test("when only the selected device id is known, should still show the attempted device", () => {
+  const model = createConnectionEntryModel({
+    devices: [],
+    errorCode: null,
+    isLoading: true,
+    selectedDeviceId: "local-device",
+    sourceReason: "not_configured",
+  });
+
+  assert.deepEqual(model.devices, [
+    {
+      ariaLabel: "local-device，上次使用，正在连接",
+      id: "local-device",
+      meta: "上次使用 · 正在连接",
+      name: "local-device",
+      selected: true,
+      statusClassName: "running",
+    },
+  ]);
+});
+
+test("when the app-server is unavailable, should fail at the Codex local service step", () => {
+  const model = createConnectionEntryModel({
+    devices,
+    errorCode: "app_server_unavailable",
+    isLoading: false,
+    selectedDeviceId: "macbook",
+    sourceReason: "app_server_unavailable",
+  });
+
+  assert.equal(model.status, "failed");
+  assert.equal(model.failureTitle, "Codex 本机服务未就绪");
+  assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "failed", "pending"]);
+});
+
+test("when a device error is reported, should fail at the device step", () => {
+  const model = createConnectionEntryModel({
+    devices,
+    errorCode: "device_unavailable",
+    isLoading: false,
+    selectedDeviceId: "macbook",
+    sourceReason: "request_failure",
+  });
+
+  assert.equal(model.failureTitle, "设备不可达");
+  assert.deepEqual(model.steps.map((step) => step.status), ["done", "failed", "pending", "pending"]);
+});
+
+test("when loaded, should mark every connection step done", () => {
+  const model = createConnectionEntryModel({
+    devices,
+    errorCode: null,
+    isLoading: false,
+    selectedDeviceId: "macbook",
+    sourceReason: "loaded",
+  });
+
+  assert.equal(model.status, "connected");
+  assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "done", "done"]);
+});
+
+test("when restoring device choice, should prefer the stored device before falling back", () => {
+  assert.equal(resolveInitialSelectedDeviceId("macbook", "studio"), "macbook");
+  assert.equal(resolveInitialSelectedDeviceId(null, "studio"), "studio");
+  assert.equal(resolveInitialSelectedDeviceId("", null), "");
+  assert.equal(shouldPersistSelectedDeviceId("macbook"), true);
+  assert.equal(shouldPersistSelectedDeviceId(""), false);
+});
+
+test("when current devices are not loaded yet, should use cached connection devices", () => {
+  assert.deepEqual(resolveConnectionEntryDevices([], devices), devices);
+  assert.deepEqual(resolveConnectionEntryDevices([devices[0]!], devices), devices.slice(0, 1));
+});

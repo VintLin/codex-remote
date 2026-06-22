@@ -480,6 +480,19 @@ test("product readiness check when docs contain secret-shaped values should fail
   }
 });
 
+test("product readiness check scans canonical docs for sensitive-shaped values", () => {
+  const root = createFixture();
+  try {
+    writeFileSync(join(root, "docs/PRODUCT.md"), "token=realbearertoken12345\n");
+    writeFileSync(join(root, "docs/references/RESEARCH.md"), "OPENAI_API_TOKEN=realbearertoken12345\n");
+    const failures = runProductReadinessCheck(root).join("\n");
+    assert.match(failures, /docs\/PRODUCT\.md contains sensitive-shaped value/);
+    assert.match(failures, /docs\/references\/RESEARCH\.md contains sensitive-shaped value/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("product readiness check when package scripts contain token assignments should fail", () => {
   const root = createFixture();
   try {

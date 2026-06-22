@@ -2,23 +2,33 @@
 
 ## Source Of Truth
 
-- `PLAN.md`：项目总目标、阶段路线、风险和调研状态。
-- `PRODUCT.md`：产品定位、目标用户、MVP 范围、体验原则和非目标。
-- `DESIGN.md`：视觉系统、设计 token、组件风格和前端设计约束。
+权威优先级见 `docs/README.md` 的「Source of Truth Priority」表。当文档冲突时按该表取最新事实。
+
+事实源文档：
+
+- `docs/README.md`：事实源优先级、当前状态入口和阶段工作流入口。
+- `docs/PRODUCT.md`：产品定位、目标用户、MVP/P1/P2 范围、体验原则、非目标和 Codex App-like workbench 方向。
+- `docs/DESIGN.md`：视觉系统、设计 token、组件风格、UI support surfaces 和前端设计约束。
 - `PROJECT_STRUCTURE.md`：目录职责、依赖方向和新增文件规则。
-- `QUESTIONS.md`：调研问题和回答状态。
-- `CODEX_APP_PARITY.md`：Codex App-like 体验对齐目标、能力分组和后续阶段拆分方向。
+- `docs/references/RESEARCH.md`：调研问题、导入回答索引、local verification backlog 和 adopted research guardrails。
 - `docs/references/development-context.md`：阶段性技术决策、参考项目和未来阶段上下文。
+- `docs/features/*.md`：每个产品能力一份当前有效的功能规格。
+- `docs/FEATURE_INDEX.md`：当前功能索引和能力支持状态。
+- `docs/adr/*.md`：架构决策记录。
+- `docs/contracts/README.md`：契约索引。
+- `docs/verification/README.md`：验证入口和当前 real-gap。
 
 更新规则：
 
-- 阶段状态、下一步建议、风险判断变化时，同步更新 `PLAN.md`。
-- 产品定位、MVP 范围或体验原则变化时，同步更新 `PRODUCT.md`。
-- Codex App-like 体验目标、能力分组或阶段拆分方向变化时，同步更新 `CODEX_APP_PARITY.md`。
-- 视觉系统、组件风格或设计 token 变化时，同步更新 `DESIGN.md`。
+- 当前状态入口或阶段工作流变化时，同步更新 `docs/README.md`。
+- 产品定位、MVP/P1/P2 范围、体验原则或 Codex App-like workbench 方向变化时，同步更新 `docs/PRODUCT.md`。
+- 视觉系统、组件风格、UI support surfaces 或设计 token 变化时，同步更新 `docs/DESIGN.md`。
 - 目录职责、依赖方向或文件放置规则变化时，同步更新 `PROJECT_STRUCTURE.md`。
-- 调研结论变化时，同步更新 `QUESTIONS.md` 和相关 reference。
+- 调研结论变化时，同步更新 `docs/references/RESEARCH.md` 和相关 reference。
+- 单功能行为（用户意图、状态机、业务规则、边界、验收标准）变化时，同步更新对应 `docs/features/<slug>.md` 与 `docs/FEATURE_INDEX.md`。
+- 架构决策（不可轻易反转的设计）变化时，新增或更新 `docs/adr/<id>.md`。
 - 阶段级设计写入 `docs/superpowers/specs/`，阶段级执行计划写入 `docs/superpowers/plans/`。
+- 阶段级 spec/plan 完成并沉淀到 `docs/features/` 与契约后，移入 `docs/archives/specs/` 或 `docs/archives/plans/`。
 - 已完成或废弃文档统一归档到 `docs/archives/`。
 
 ## Environment
@@ -77,7 +87,7 @@ pnpm build
 
 ## Development Rules
 
-- 每个阶段开始前先读 `PLAN.md`，确认当前阶段、non-goals、风险和调研状态。
+- 每个阶段开始前先读 `docs/README.md`、`docs/PRODUCT.md`、`docs/FEATURE_INDEX.md` 和相关 `docs/features/*.md`，确认当前状态、non-goals、风险和调研状态。
 - 新增或移动文件前先读 `PROJECT_STRUCTURE.md`，确认目录职责和依赖方向。
 - 阶段性技术决策查 `docs/references/development-context.md`；不要把短期决策扩写进 `AGENTS.md`。
 - 复杂功能先写 `docs/superpowers/specs/`，再写 `docs/superpowers/plans/`，最后实现。

@@ -4,20 +4,23 @@
 
 This document defines where code and documents belong. It is a boundary guide, not a request to create empty folders.
 
-Do not create future-stage directories until a stage spec needs real files there.
+Code package directories under `apps/` and `packages/` must not be created preemptively. The `docs/` directory may declare documented subdirectories (`docs/features/`, `docs/adr/`, `docs/contracts/`, `docs/verification/`) ahead of first use so the boundary is enforced by structure, not convention. Each declared `docs/` subdirectory must carry a `README.md` explaining its current scope and `Status: empty / deferred` until the first real artifact lands.
 
 ## Current And Deferred Shape
 
 ```text
+AGENTS.md
+PROJECT_STRUCTURE.md
+
 apps/
   web/
     src/
       app/            # Next.js app shell only
       components/     # UI rendering and small interaction controllers
-      data/           # API clients and datasource adapters
-      domain/         # pure product logic derived from public contracts
-      contracts/      # boundary/style/source-discipline tests
-      test-support/   # test-only helpers
+      data/           # API 客户端与 datasource 适配层
+      domain/         # 从 public contract 派生的纯产品逻辑
+      contracts/      # 边界、风格和事实源纪律测试
+      test-support/   # 仅测试使用的 helper
   worker/
   control-plane/
 
@@ -29,7 +32,16 @@ packages/
   db/
 
 docs/
+  README.md              # 事实源优先级表
+  PRODUCT.md             # 产品目标、范围、非目标、架构边界和 Codex App-like 方向
+  DESIGN.md              # 设计系统、UI 支撑面和前端约束
+  FEATURE_INDEX.md       # 当前功能索引
+  features/              # 当前功能规格，每个文件对应一个产品能力组
+  adr/                   # 架构决策记录（占位，见 README）
+  contracts/             # 契约索引（占位，见 README）
+  verification/          # 验收矩阵与真实链路校准（占位，见 README）
   references/
+    RESEARCH.md          # 调研队列、导入回答索引和已采纳调研边界
   archives/
     specs/
     plans/
@@ -240,13 +252,30 @@ Not allowed:
 
 ### Root Documents
 
-- `PLAN.md`: live roadmap, stage status, risks, and research status.
-- `CODEX_APP_PARITY.md`: Codex App-like product capability target, parity gaps, and capability-area stage split direction.
-- `PRODUCT.md`: product positioning, users, MVP scope, product principles, and non-goals.
-- `DESIGN.md`: visual system, design tokens, component style, and frontend design constraints.
-- `QUESTIONS.md`: research question queue and answer status.
-- `PROJECT_STRUCTURE.md`: directory ownership and dependency boundaries.
 - `AGENTS.md`: execution rules for agents working in this repo.
+- `PROJECT_STRUCTURE.md`: directory ownership and dependency boundaries.
+
+Root documentation should not grow beyond these two files. Product, design, roadmap, research, feature, verification, and contract facts live under `docs/`.
+
+### `docs/README.md`
+
+Source-of-truth priority, current project state entrypoint, and stage workflow entrypoint.
+
+### `docs/PRODUCT.md`
+
+Product positioning, users, MVP/P1/P2 scope, principles, non-goals, architecture boundaries, and Codex App-like workbench direction.
+
+### `docs/DESIGN.md`
+
+Visual system, design tokens, component style, UI support surfaces, and frontend constraints.
+
+### `docs/FEATURE_INDEX.md`
+
+Current capability index, support status, stage, feature spec path, and test coverage.
+
+### `docs/references/RESEARCH.md`
+
+Research queue, imported-answer index, local verification backlog, and adopted research guardrails.
 
 ### `docs/references`
 
@@ -278,6 +307,22 @@ Active Superpowers workflow artifacts:
 - `docs/superpowers/plans/`: active execution plans derived from specs.
 
 New stage specs and plans should go here, not under root-level `docs/specs/` or `docs/plans/`. Completed or superseded stage specs/plans move to `docs/archives/specs/` or `docs/archives/plans/`.
+
+### `docs/features`
+
+当前有效功能规格。每个文件描述一个用户可理解的能力组，按“结论 -> 用户目标 -> 范围 -> 主流程 -> 状态模型 -> UI 表现 -> 契约与边界 -> 验收标准”组织；只有出现新的独立用户目标、独立入口和独立状态机时才新增文件。阶段工作稳定后沉淀到这里；被替代的规格移入 `docs/archives/`。
+
+### `docs/adr`
+
+Architecture Decision Records. Each ADR records a durable design rationale that future work should not casually reverse. Currently a placeholder; the first ADR will land when a stage produces a durable architecture decision. Template lives at `99_Memory/references/Project Structure.md` §`adr/_template.md`.
+
+### `docs/contracts`
+
+Contract index. Pointer to `packages/api-contract/openapi.yaml` as the only schema source for public API. Event and manifest schemas are deferred. Do not duplicate contract files under `docs/`.
+
+### `docs/verification`
+
+Verification matrix, regression cases, and real-link calibration records. Currently a placeholder pointing at `scripts/real-local-calibration.mjs` and `scripts/product-readiness-check.mjs`. Populate when a stage produces an acceptance matrix or regression scenarios.
 
 ## Dependency Direction
 

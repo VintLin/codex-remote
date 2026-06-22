@@ -4,7 +4,7 @@ Date: 2026-06-22
 
 ## Purpose
 
-Align this repository with `/Users/Vint/Memory/references/Project Structure.md` by moving non-code facts into `docs/`, splitting mixed roadmap documents into single-purpose facts, and removing long-lived root roadmap files.
+Align this repository with `~/Memory/references/Project Structure.md` by moving non-code facts into `docs/`, splitting mixed roadmap documents into single-purpose facts, and removing long-lived root roadmap files.
 
 This is a documentation-structure change only. It does not change application behavior, API contracts, generated protocol types, UI code, Worker behavior, Control Plane behavior, or package boundaries.
 

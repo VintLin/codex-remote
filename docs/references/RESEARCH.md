@@ -1,12 +1,14 @@
-# Codex Remote Research Queue
+# Research
 
 ## Purpose
 
-`QUESTIONS.md` tracks open research questions only. Completed prompts and imported answers live under `docs/references/questions/`.
+This file tracks active research questions, imported-answer indexes, adopted research guardrails, and local verification backlog. Research is evidence, not product/API fact. When research changes product scope, update `docs/PRODUCT.md`, `docs/FEATURE_INDEX.md`, relevant `docs/features/*.md`, or a stage spec before implementation.
 
 When new research changes architecture, update:
 
-- `PLAN.md` for roadmap, risks, and stage status.
+- `docs/README.md` for current-state and workflow entrypoints.
+- `docs/PRODUCT.md` for product scope, non-goals, or Codex App-like direction.
+- `docs/FEATURE_INDEX.md` for capability status.
 - `PROJECT_STRUCTURE.md` when directory ownership or dependency direction changes.
 - `docs/references/questions/SYNTHESIS.md` for research conclusions.
 - Relevant Superpowers spec/plan before implementation.
@@ -57,7 +59,7 @@ Stage 9 reopened a narrower research queue for real local verification. Q21, Q23
 
 ## Current Open Research Questions
 
-Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。下一步路线先按 `CODEX_APP_PARITY.md` 做 Codex App-like 能力对齐。
+Q18-Q21、Q23-Q28 已闭环并可作为实现约束。当前未闭环的是 Q22：approval pending list 已有真实证据，Stage 10 isolated fixture 已实现但仍未观察到安全 pending approval sample，approval decision 保留为 documented safety `real-gap`。Codex App-like 方向由 `docs/PRODUCT.md` 管，当前能力状态由 `docs/FEATURE_INDEX.md` 管。
 
 Codex App-like browser 子目标的窄范围官方资料调研已完成。Q29-Q33 的提问任务、会话清单、回答和汇总分别位于：
 
@@ -65,6 +67,14 @@ Codex App-like browser 子目标的窄范围官方资料调研已完成。Q29-Q3
 - `docs/references/questions/q29-q33-codex-app-parity-research-conversations.json`
 - `docs/references/questions/q29-q33-codex-app-parity-research-answers/`
 - `docs/references/questions/q29-q33-codex-app-parity-research-answers/summary.json`
+
+## Codex App-like Research Guardrails
+
+- Notifications are runtime stream inputs, not durable history. Worker projections need `seq`, `eventId`, redaction, replay/gap handling, and snapshot reconciliation before Web consumes them as live timeline.
+- Conversation lifecycle UI uses user intent names such as open/continue, fork, archive, restore, rename, goal, compact, and rollback preview. It must not expose raw `thread/*` method names as product actions.
+- Local tools enter as read-only evidence first. Arbitrary filesystem write, arbitrary shell, plugin install, MCP config edit, and destructive external app actions require separate controlled-action stages.
+- Account capability starts as sanitized device auth status. Login/logout, externally supplied tokens, usage/rate detail, and feedback upload are not near-term Web actions.
+- Realtime voice stays experimental/watch until a proven protocol path and product experience exist.
 
 ### Q21. Real command/control protocol compatibility
 
@@ -103,9 +113,9 @@ Codex App-like browser 子目标的窄范围官方资料调研已完成。Q29-Q3
 
 ### Q29. Codex App official product capability surface
 
-- Context: `CODEX_APP_PARITY.md` defines a Codex App-like browser sub-roadmap, but app-server protocol methods are not the same thing as official Codex App product behavior.
+- Context: `docs/PRODUCT.md` defines the Codex App-like browser workbench direction, but app-server protocol methods are not the same thing as official Codex App product behavior.
 - Reason: Before splitting future stages, the project needs to know which capabilities should be treated as Codex App parity targets versus Codex Remote-specific additions or future-only experiments.
-- Direction: Use web search with official OpenAI/Codex sources first. Compare official Codex App pages/docs/release notes with the generated app-server protocol categories already listed in `FEATURE_SUPPORT.md`.
+- Direction: Use web search with official OpenAI/Codex sources first. Compare official Codex App pages/docs/release notes with the generated app-server protocol categories archived in `docs/archives/references/2026-06-22-feature-support-matrix-snapshot.md`.
 - Desired result: A capability table that classifies conversation lifecycle, timeline, approvals/input, files, shell, Git/review, search, models/config, skills/plugins/MCP/apps, account, realtime voice, and Windows sandbox as current parity target, remote-only target, future/experimental, or not supported.
 - Status: Answered. See `docs/references/questions/q29-q33-codex-app-parity-research-answers/001-Q29-Codex-App-官方产品能力面.md`.
 
@@ -127,7 +137,7 @@ Codex App-like browser 子目标的窄范围官方资料调研已完成。Q29-Q3
 
 ### Q32. Local tool UI placement for files, shell, Git, review, MCP, plugins, and skills
 
-- Context: `DESIGN.md` now defines Sidebar, Main Conversation, Right Detail Pane, Tool Surface, Status, and Modal/Popover support surfaces.
+- Context: `docs/DESIGN.md` now defines Sidebar, Main Conversation, Right Detail Pane, Tool Surface, Status, and Modal/Popover support surfaces.
 - Reason: Local tool capabilities should not all be squeezed into the conversation shell or exposed as raw API buttons.
 - Direction: Use official Codex App product references and official docs to infer where these tools appear in the experience. Cross-check against app-server method groups.
 - Desired result: A UI placement matrix for files, shell/commands, Git diff, review, fuzzy search, MCP, plugins/marketplace, skills/hooks, and apps, including required empty/degraded/action states.
@@ -145,7 +155,7 @@ Summary and adopted decisions:
 
 - `docs/references/questions/SYNTHESIS.md`
 - `docs/references/development-context.md`
-- `PLAN.md`
+- `docs/README.md`
 
 Archived process material:
 

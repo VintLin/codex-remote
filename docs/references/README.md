@@ -2,13 +2,13 @@
 
 This directory stores evidence and background. It is not a source of truth for product scope, API fields, package boundaries, or design tokens.
 
-Use root documents for active decisions:
+Use active fact documents for current decisions:
 
-- `PRODUCT.md`: product positioning, MVP scope, users, non-goals, experience principles.
-- `DESIGN.md`: visual system and frontend style.
-- `PLAN.md`: roadmap, phase status, risks, and next action.
+- `docs/PRODUCT.md`: product positioning, MVP/P1/P2 scope, users, non-goals, architecture boundaries, and Codex App-like workbench direction.
+- `docs/DESIGN.md`: visual system, frontend style, UI support surfaces, and required states.
+- `docs/README.md`: source-of-truth priority, current project state, and workflow entrypoint.
 - `PROJECT_STRUCTURE.md`: directory ownership and dependency direction.
-- `QUESTIONS.md`: open research queue and local verification backlog.
+- `docs/references/RESEARCH.md`: research queue, imported-answer index, and local verification backlog.
 
 ## Current References
 

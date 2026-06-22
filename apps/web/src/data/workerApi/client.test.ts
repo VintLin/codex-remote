@@ -20,7 +20,7 @@ import type {
   WorkerHealth,
 } from "@codex-remote/api-contract";
 
-import { WorkerApiClient } from "./client.ts";
+import { WorkerApiClient, WorkerApiRequestError } from "./client.ts";
 
 test("WorkerApiClient request when using global fetch should bind the fetch receiver", async () => {
   const originalFetch = globalThis.fetch;
@@ -68,6 +68,37 @@ test("WorkerApiClient request when using global fetch should bind the fetch rece
     });
   }
 });
+
+test("WorkerApiClient request when fetch hangs should fail with a sanitized retryable error", async () => {
+  const fetchMock: typeof fetch = async (_url, init) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    });
+  const client = new WorkerApiClient({
+    baseUrl: "http://127.0.0.1:8787",
+    token: "example-token",
+    fetchImpl: fetchMock,
+    requestTimeoutMs: 1,
+  });
+
+  await assert.rejects(
+    () => client.listDevices(),
+    (error: unknown) => {
+      assert.equal(error instanceof WorkerApiRequestError, true);
+      const requestError = error as WorkerApiRequestError;
+      assert.equal(requestError.status, 0);
+      assert.equal(requestError.envelope.code, "request_failure");
+      assert.equal(requestError.envelope.message, "Worker request failed.");
+      assert.deepEqual(requestError.envelope.details, {
+        reason: "request_timeout",
+        retryable: true,
+      });
+      return true;
+    },
+  );
+});
+
 
 test("WorkerApiClient follow-up when called, should POST contract body with bearer auth", async () => {
   const accepted: CommandAccepted = {

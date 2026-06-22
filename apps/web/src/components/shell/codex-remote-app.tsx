@@ -5,6 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantThreadSnapshot, DetailTarget, LinkReference } from "../../domain/assistant/assistantTimeline";
 import { createFallbackWorkbenchData, loadWorkbenchData } from "../../data/workerApi/workbenchData";
 import { WorkerApiClient, WorkerApiRequestError } from "../../data/workerApi/client";
+import {
+  createConnectionEntryModel,
+  resolveConnectionEntryDevices,
+  resolveInitialSelectedDeviceId,
+  shouldPersistSelectedDeviceId,
+} from "../../domain/connection/connectionEntry";
 import type { BoardTask, ConversationQueuedMessage, Device, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
@@ -25,6 +31,7 @@ import {
   submitSteer,
   type ControlSubmitStatus,
 } from "./controlSubmitController";
+import { ConnectionEntry } from "./connection-entry";
 import { ResizableWorkspaceShell } from "./resizable-workspace-shell";
 import {
   ConversationDetailPane,
@@ -45,6 +52,7 @@ const controlPlaneBaseUrl =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_BASE_URL ?? "http://127.0.0.1:8786";
 const controlPlaneToken =
   process.env.NEXT_PUBLIC_CODEX_REMOTE_CONTROL_PLANE_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "example-token");
+const selectedDeviceStorageKey = "codex-remote:selected-device-id";
 const unavailableDevice: Device = {
   id: "",
   icon: "laptop",
@@ -56,10 +64,31 @@ const unavailableDevice: Device = {
   model: "",
 };
 
+function readStoredSelectedDeviceId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(selectedDeviceStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSelectedDeviceId(deviceId: string): void {
+  try {
+    window.localStorage.setItem(selectedDeviceStorageKey, deviceId);
+  } catch {
+    // Ignore storage failures; the in-memory selection still drives this session.
+  }
+}
+
 export function CodexRemoteApp() {
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
-  const [selectedDeviceId, setSelectedDeviceId] = useState(workbenchData.devices[0]?.id ?? "");
+  const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(true);
+  const [cachedConnectionDevices, setCachedConnectionDevices] = useState<Device[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState(() => resolveInitialSelectedDeviceId(null, workbenchData.devices[0]?.id ?? null));
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(
     () => workbenchData.conversations[0] ? createConversationKey(workbenchData.conversations[0]) : null,
   );
@@ -118,13 +147,18 @@ export function CodexRemoteApp() {
   }), []);
 
   const refreshWorkbenchData = useCallback(async (conversationKey: string | null) => {
-    const nextWorkbenchData = await loadWorkbenchData({
-      baseUrl: controlPlaneBaseUrl,
-      token: controlPlaneToken,
-      selectedConversationKey: conversationKey,
-      selectedDeviceId,
-    });
-    setWorkbenchData(nextWorkbenchData);
+    setIsWorkbenchLoading(true);
+    try {
+      const nextWorkbenchData = await loadWorkbenchData({
+        baseUrl: controlPlaneBaseUrl,
+        token: controlPlaneToken,
+        selectedConversationKey: conversationKey,
+        selectedDeviceId,
+      });
+      setWorkbenchData(nextWorkbenchData);
+    } finally {
+      setIsWorkbenchLoading(false);
+    }
   }, [selectedDeviceId]);
 
   const refreshApprovals = useCallback(async (conversationKey: string | null) => {
@@ -495,6 +529,7 @@ export function CodexRemoteApp() {
   useEffect(() => {
     let shouldIgnore = false;
     void (async () => {
+      setIsWorkbenchLoading(true);
       const nextWorkbenchData = await loadWorkbenchData({
         baseUrl: controlPlaneBaseUrl,
         token: controlPlaneToken,
@@ -503,6 +538,7 @@ export function CodexRemoteApp() {
       });
       if (!shouldIgnore) {
         setWorkbenchData(nextWorkbenchData);
+        setIsWorkbenchLoading(false);
       }
     })();
 
@@ -510,6 +546,40 @@ export function CodexRemoteApp() {
       shouldIgnore = true;
     };
   }, [selectedConversationKey, selectedDeviceId]);
+
+  useEffect(() => {
+    const storedDeviceId = readStoredSelectedDeviceId();
+    if (storedDeviceId) {
+      setSelectedDeviceId((currentDeviceId) => currentDeviceId || storedDeviceId);
+    }
+  }, []);
+
+  useEffect(() => {
+    let shouldIgnore = false;
+    void workerClient.listDevices().then((nextDevices) => {
+      if (shouldIgnore) {
+        return;
+      }
+      setCachedConnectionDevices(nextDevices);
+      setSelectedDeviceId((currentDeviceId) => currentDeviceId || nextDevices[0]?.id || "");
+    }).catch(() => {});
+
+    return () => {
+      shouldIgnore = true;
+    };
+  }, [workerClient]);
+
+  useEffect(() => {
+    if (devices.length) {
+      setCachedConnectionDevices(devices);
+    }
+  }, [devices]);
+
+  useEffect(() => {
+    if (shouldPersistSelectedDeviceId(selectedDeviceId)) {
+      writeStoredSelectedDeviceId(selectedDeviceId);
+    }
+  }, [selectedDeviceId]);
 
   useEffect(() => {
     void refreshApprovals(conversation ? createConversationKey(conversation) : null);
@@ -932,6 +1002,25 @@ export function CodexRemoteApp() {
       onToggleSection={toggleSection}
     />
   );
+
+  const connectionEntryDevices = resolveConnectionEntryDevices(devices, cachedConnectionDevices);
+  const connectionEntryModel = createConnectionEntryModel({
+    devices: connectionEntryDevices,
+    errorCode: source.error?.code ?? null,
+    isLoading: isWorkbenchLoading,
+    selectedDeviceId,
+    sourceReason: source.reason,
+  });
+
+  if (connectionEntryModel.status !== "connected") {
+    return (
+      <ConnectionEntry
+        model={connectionEntryModel}
+        onRetry={() => void refreshWorkbenchData(selectedConversationKey)}
+        onSelectDevice={selectDevice}
+      />
+    );
+  }
 
   return (
     <>

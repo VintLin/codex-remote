@@ -237,6 +237,44 @@ test("workbench datasource when token is missing should return fallback and skip
   assert.notDeepEqual(data.assistantThreads, mockAssistantThreads);
 });
 
+test("workbench datasource when loading the core snapshot should request devices conversations and projects together", async () => {
+  const corePaths = ["/v1/devices", "/v1/conversations", "/v1/projects"];
+  const requests: string[] = [];
+  const pendingResponses = new Map<string, (response: Response) => void>();
+
+  const dataPromise = loadWorkbenchData({
+    baseUrl: "http://example.test",
+    token: "token",
+    fetchImpl: async (input: RequestInfo | URL | string) => {
+      const requestUrl = new URL(input.toString());
+      requests.push(requestUrl.pathname);
+
+      if (corePaths.includes(requestUrl.pathname)) {
+        return new Promise<Response>((resolve) => {
+          pendingResponses.set(requestUrl.pathname, resolve);
+        });
+      }
+      if (requestUrl.pathname === "/v1/tasks") {
+        return jsonResponse([]);
+      }
+      throw new Error(`Unexpected endpoint: ${requestUrl.pathname}`);
+    },
+  });
+
+  await Promise.resolve();
+
+  assert.deepEqual(requests.slice(0, 3).sort(), [...corePaths].sort());
+
+  for (const path of corePaths) {
+    const resolveResponse = pendingResponses.get(path);
+    assert.ok(resolveResponse);
+    resolveResponse(jsonResponse([]));
+  }
+
+  const data = await dataPromise;
+  assert.equal(data.source.reason, "loaded");
+});
+
 test("workbench datasource when fallback is returned, should label source as not real data", async () => {
   const data = createFallbackWorkbenchData("not_configured");
 
