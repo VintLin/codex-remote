@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Device } from "@codex-remote/api-contract";
 
+import { getDictionary } from "../../i18n/dictionary.ts";
 import {
   createConnectionEntryModel,
   resolveConnectionEntryDevices,
@@ -53,10 +54,14 @@ const devices: Device[] = [
   },
 ];
 
+const copy = getDictionary("zh-CN").connection;
+
 test("when connecting, should show the selected device first and only expose three devices", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices,
     errorCode: null,
+    errorReason: null,
     isLoading: true,
     selectedDeviceId: "macbook",
     sourceReason: "not_configured",
@@ -71,8 +76,10 @@ test("when connecting, should show the selected device first and only expose thr
 
 test("when connecting before devices are known, should keep the control center step active", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices: [],
     errorCode: null,
+    errorReason: null,
     isLoading: true,
     selectedDeviceId: "macbook",
     sourceReason: "not_configured",
@@ -83,8 +90,10 @@ test("when connecting before devices are known, should keep the control center s
 
 test("when only the selected device id is known, should still show the attempted device", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices: [],
     errorCode: null,
+    errorReason: null,
     isLoading: true,
     selectedDeviceId: "local-device",
     sourceReason: "not_configured",
@@ -104,8 +113,10 @@ test("when only the selected device id is known, should still show the attempted
 
 test("when the app-server is unavailable, should fail at the Codex local service step", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices,
     errorCode: "app_server_unavailable",
+    errorReason: null,
     isLoading: false,
     selectedDeviceId: "macbook",
     sourceReason: "app_server_unavailable",
@@ -116,10 +127,27 @@ test("when the app-server is unavailable, should fail at the Codex local service
   assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "failed", "pending"]);
 });
 
+test("when a request times out after reaching the device, should fail at the Codex local service step", () => {
+  const model = createConnectionEntryModel({
+    copy,
+    devices,
+    errorCode: "request_failure",
+    errorReason: "request_timeout",
+    isLoading: false,
+    selectedDeviceId: "macbook",
+    sourceReason: "request_failure",
+  });
+
+  assert.equal(model.failureTitle, "Codex 本机服务未就绪");
+  assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "failed", "pending"]);
+});
+
 test("when a device error is reported, should fail at the device step", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices,
     errorCode: "device_unavailable",
+    errorReason: null,
     isLoading: false,
     selectedDeviceId: "macbook",
     sourceReason: "request_failure",
@@ -131,8 +159,10 @@ test("when a device error is reported, should fail at the device step", () => {
 
 test("when loaded, should mark every connection step done", () => {
   const model = createConnectionEntryModel({
+    copy,
     devices,
     errorCode: null,
+    errorReason: null,
     isLoading: false,
     selectedDeviceId: "macbook",
     sourceReason: "loaded",

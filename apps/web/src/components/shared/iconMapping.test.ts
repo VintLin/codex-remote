@@ -28,8 +28,8 @@ test("when icon semantics differ by action, should keep send pin resources and o
   assert.match(iconComponent, /"pin"/);
   assert.match(iconComponent, /"x"/);
 
-  assert.match(actionMenuComponent, /icon: "pin", label: "置顶"/);
-  assert.match(actionMenuComponent, /icon: "clock", label: "按创建时间排序"/);
+  assert.match(actionMenuComponent, /icon: "pin", label: copy\.pin/);
+  assert.match(actionMenuComponent, /icon: "clock", label: copy\.sortByCreatedAt/);
   assert.doesNotMatch(detailWorkspaceComponent, /<Icon name="x" \/>/);
   assert.doesNotMatch(assistantThreadComponent, /<Icon name="mic" \/>/);
   assert.match(assistantThreadComponent, /<Icon name="arrow-up" \/>/);
@@ -73,7 +73,7 @@ test("when user specifies explicit action icons, should use those exact svg mapp
   assert.match(styles, /\.icon-message-circle-plus\s*\{[^}]*url\("\/icons\/message-circle-plus\.svg"\);/s);
   assert.match(styles, /\.icon-pencil\s*\{[^}]*url\("\/icons\/pencil\.svg"\);/s);
   assert.match(styles, /\.icon-square-terminal\s*\{[^}]*url\("\/icons\/square-terminal\.svg"\);/s);
-  assert.match(actionMenuComponent, /icon: "message-circle-plus", label: "新对话"/);
-  assert.match(actionMenuComponent, /icon: "shrink", label: "创建工作树"/);
-  assert.match(actionMenuComponent, /icon: "pencil", label: "重命名"/);
+  assert.match(actionMenuComponent, /icon: "message-circle-plus", label: copy\.newConversation/);
+  assert.match(actionMenuComponent, /icon: "shrink", label: copy\.createWorktree/);
+  assert.match(actionMenuComponent, /icon: "pencil", label: copy\.rename/);
 });

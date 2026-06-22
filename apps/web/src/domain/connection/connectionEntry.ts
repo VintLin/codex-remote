@@ -1,5 +1,6 @@
 import type { Device } from "@codex-remote/api-contract";
 
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 import { getStatusClassName } from "../status/statusPresentation.ts";
 
 export type ConnectionLoadReason =
@@ -40,57 +41,69 @@ export interface ConnectionEntryModel {
 }
 
 interface CreateConnectionEntryModelOptions {
+  copy: WebDictionary["connection"];
   devices: Device[];
   errorCode: string | null | undefined;
+  errorReason: string | null | undefined;
   isLoading: boolean;
   selectedDeviceId: string | null;
   sourceReason: ConnectionLoadReason;
 }
 
-const connectionSteps: Array<Omit<ConnectionEntryStep, "status">> = [
-  {
-    id: "control_center",
-    label: "连接控制中心",
-    description: "确认当前 Web 可以访问控制中心。",
-  },
-  {
-    id: "device",
-    label: "连接上次使用的设备",
-    description: "优先连接上次选择的设备；失败时保留设备列表和重试入口。",
-  },
-  {
-    id: "codex_service",
-    label: "启动 Codex 本机服务",
-    description: "设备连接后检查 Codex 本机服务是否可用。",
-  },
-  {
-    id: "workspace",
-    label: "载入对话记录与工作区",
-    description: "成功后展开侧边栏，并显示正确的主内容区域。",
-  },
-];
-
-const failureTitles = {
-  control_center: "控制中心不可达",
-  device: "设备不可达",
-  codex_service: "Codex 本机服务未就绪",
-  workspace: "对话记录暂不可读",
-} satisfies Record<ConnectionStepId, string>;
+function getConnectionSteps(copy: WebDictionary["connection"]): Array<Omit<ConnectionEntryStep, "status">> {
+  return [
+    {
+      id: "control_center",
+      label: copy.steps.controlCenter,
+      description: "确认当前 Web 可以访问控制中心。",
+    },
+    {
+      id: "device",
+      label: copy.steps.device,
+      description: "优先连接上次选择的设备；失败时保留设备列表和重试入口。",
+    },
+    {
+      id: "codex_service",
+      label: copy.steps.codexService,
+      description: "设备连接后检查 Codex 本机服务是否可用。",
+    },
+    {
+      id: "workspace",
+      label: copy.steps.workspace,
+      description: "成功后展开侧边栏，并显示正确的主内容区域。",
+    },
+  ];
+}
 
 export function createConnectionEntryModel(options: CreateConnectionEntryModelOptions): ConnectionEntryModel {
+  const copy = options.copy;
   const status = resolveConnectionStatus(options);
   const failedStepId = status === "failed" ? resolveFailedStepId(options) : null;
 
   return {
-    devices: createConnectionEntryDevices(options.devices, options.selectedDeviceId, status),
-    failureTitle: failedStepId ? failureTitles[failedStepId] : null,
+    devices: createConnectionEntryDevices(copy, options.devices, options.selectedDeviceId, status),
+    failureTitle: failedStepId ? resolveFailureTitle(copy, options, failedStepId) : null,
     status,
-    steps: createConnectionSteps(status, failedStepId, options.devices.length > 0),
+    steps: createConnectionSteps(copy, status, failedStepId, options.devices.length > 0),
     summary: status === "failed"
-      ? "连接未完成。检查当前步骤后可重试连接。"
-      : "正在恢复上次选择的设备，并准备对话记录与工作区内容。",
+      ? copy.failedSummary
+      : copy.defaultSummary,
     title: "Codex Remote",
   };
+}
+
+function resolveFailureTitle(
+  copy: WebDictionary["connection"],
+  options: CreateConnectionEntryModelOptions,
+  failedStepId: ConnectionStepId,
+): string {
+  if (options.sourceReason === "not_configured") {
+    return copy.failureTitles.not_configured;
+  }
+  if (options.sourceReason === "unauthorized" || options.sourceReason === "forbidden") {
+    return copy.failureTitles.credential_invalid;
+  }
+  return copy.failureTitles[failedStepId];
 }
 
 export function resolveInitialSelectedDeviceId(storedDeviceId: string | null, fallbackDeviceId: string | null): string {
@@ -113,12 +126,13 @@ function resolveConnectionStatus(options: CreateConnectionEntryModelOptions): Co
 }
 
 function createConnectionEntryDevices(
+  copy: WebDictionary["connection"],
   devices: Device[],
   selectedDeviceId: string | null,
   status: ConnectionEntryStatus,
 ): ConnectionEntryDevice[] {
   if (!devices.length && selectedDeviceId) {
-    const meta = createSelectedDeviceMeta(status);
+    const meta = createSelectedDeviceMeta(copy, status);
     return [
       {
         ariaLabel: `${selectedDeviceId}，${meta.replace(" · ", "，")}`,
@@ -138,7 +152,7 @@ function createConnectionEntryDevices(
 
   return orderedDevices.slice(0, 3).map((device) => {
     const selected = device.id === selectedDevice?.id;
-    const meta = createDeviceMeta(device, selected, status);
+    const meta = createDeviceMeta(copy, device, selected, status);
 
     return {
       ariaLabel: `${device.name}，${meta.replace(" · ", "，")}`,
@@ -151,30 +165,29 @@ function createConnectionEntryDevices(
   });
 }
 
-function createDeviceMeta(device: Device, selected: boolean, status: ConnectionEntryStatus): string {
-  if (selected && status === "connecting") {
-    return createSelectedDeviceMeta(status);
-  }
-  if (selected && status === "failed") {
-    return createSelectedDeviceMeta(status);
-  }
-  if (selected && status === "connected") {
-    return createSelectedDeviceMeta(status);
+function createDeviceMeta(
+  copy: WebDictionary["connection"],
+  device: Device,
+  selected: boolean,
+  status: ConnectionEntryStatus,
+): string {
+  if (selected && (status === "connecting" || status === "failed" || status === "connected")) {
+    return createSelectedDeviceMeta(copy, status);
   }
   if (device.status === "Connected") {
-    return "在线 · 可切换";
+    return copy.deviceMeta.online;
   }
-  return device.lastOnlineAt ? `离线 · 上次 ${device.lastOnlineAt}` : "离线";
+  return device.lastOnlineAt ? copy.deviceMeta.offlineWithLastSeen(device.lastOnlineAt) : copy.deviceMeta.offline;
 }
 
-function createSelectedDeviceMeta(status: ConnectionEntryStatus): string {
+function createSelectedDeviceMeta(copy: WebDictionary["connection"], status: ConnectionEntryStatus): string {
   if (status === "connecting") {
-    return "上次使用 · 正在连接";
+    return copy.deviceMeta.lastConnecting;
   }
   if (status === "failed") {
-    return "上次使用 · 连接失败";
+    return copy.deviceMeta.lastFailed;
   }
-  return "上次使用 · 已连接";
+  return copy.deviceMeta.lastConnected;
 }
 
 function selectedStatusClassName(status: ConnectionEntryStatus): string {
@@ -188,10 +201,12 @@ function selectedStatusClassName(status: ConnectionEntryStatus): string {
 }
 
 function createConnectionSteps(
+  copy: WebDictionary["connection"],
   status: ConnectionEntryStatus,
   failedStepId: ConnectionStepId | null,
   hasDevices: boolean,
 ): ConnectionEntryStep[] {
+  const connectionSteps = getConnectionSteps(copy);
   if (status === "connected") {
     return connectionSteps.map((step) => ({ ...step, status: "done" }));
   }
@@ -212,6 +227,9 @@ function createConnectionSteps(
 
 function resolveFailedStepId(options: CreateConnectionEntryModelOptions): ConnectionStepId {
   if (options.sourceReason === "app_server_unavailable" || options.errorCode === "app_server_unavailable") {
+    return "codex_service";
+  }
+  if (options.errorReason === "request_timeout") {
     return "codex_service";
   }
   if (options.errorCode === "device_unavailable") {

@@ -1,24 +1,26 @@
-import type { ConnectionEntryModel } from "../../domain/connection/connectionEntry";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
+import type { ConnectionEntryModel } from "../../domain/connection/connectionEntry.ts";
 
 interface ConnectionEntryProps {
+  copy: WebDictionary["connection"];
   model: ConnectionEntryModel;
   onRetry: () => void;
   onSelectDevice: (deviceId: string) => void;
 }
 
-export function ConnectionEntry({ model, onRetry, onSelectDevice }: ConnectionEntryProps) {
+export function ConnectionEntry({ copy, model, onRetry, onSelectDevice }: ConnectionEntryProps) {
   return (
-    <main className="connection-entry-shell" aria-label="连接状态">
+    <main className="connection-entry-shell" aria-label={copy.shellLabel}>
       <header className="connection-entry-topbar">
         <div className="workspace-title">
           <h1>Codex Remote</h1>
         </div>
       </header>
 
-      <section className="connection-entry-stage" aria-label="正在连接">
+      <section className="connection-entry-stage" aria-label={copy.stageLabel}>
         <div className="connection-entry-center">
-          <aside className="connection-entry-devices" aria-label="设备">
-            <p className="connection-entry-label">设备</p>
+          <aside className="connection-entry-devices" aria-label={copy.devicesLabel}>
+            <p className="connection-entry-label">{copy.devicesLabel}</p>
             {model.devices.length ? (
               <div className="connection-entry-device-list">
                 {model.devices.slice(0, 3).map((device) => (
@@ -38,11 +40,11 @@ export function ConnectionEntry({ model, onRetry, onSelectDevice }: ConnectionEn
                 ))}
               </div>
             ) : (
-              <p className="connection-entry-empty">暂无可显示设备</p>
+              <p className="connection-entry-empty">{copy.noDevices}</p>
             )}
           </aside>
 
-          <section className="connection-entry-main" aria-label="连接步骤">
+          <section className="connection-entry-main" aria-label={copy.stepsLabel}>
             <div className="connection-entry-brand" aria-hidden="true">
               <span className="connection-entry-mark" />
               <h2>{model.title}</h2>
@@ -66,7 +68,7 @@ export function ConnectionEntry({ model, onRetry, onSelectDevice }: ConnectionEn
             {model.status === "failed" ? (
               <div className="connection-entry-retry">
                 <p>{model.failureTitle}</p>
-                <button onClick={onRetry} type="button">重试连接</button>
+                <button onClick={onRetry} type="button">{copy.retry}</button>
               </div>
             ) : null}
           </section>
@@ -74,8 +76,8 @@ export function ConnectionEntry({ model, onRetry, onSelectDevice }: ConnectionEn
       </section>
 
       <footer className="connection-entry-statusbar">
-        <span>{model.status === "failed" ? "连接失败" : "正在连接"}</span>
-        <span>设备列表最多显示前三台</span>
+        <span>{model.status === "failed" ? copy.failed : copy.connecting}</span>
+        <span>{copy.deviceLimit}</span>
       </footer>
     </main>
   );

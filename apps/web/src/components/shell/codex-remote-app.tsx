@@ -992,6 +992,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
     <Sidebar
       activeView={activeView}
       conversationNavigator={conversationNavigator}
+      copy={{ actions: dictionary.actions, sidebar: dictionary.sidebar, status: dictionary.status }}
       device={device}
       isCollapsed={isSidebarCollapsed}
       isMobile={isMobileViewport}
@@ -1015,6 +1016,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
 
   const connectionEntryDevices = resolveConnectionEntryDevices(devices, cachedConnectionDevices);
   const connectionEntryModel = createConnectionEntryModel({
+    copy: dictionary.connection,
     devices: connectionEntryDevices,
     errorCode: source.error?.code ?? null,
     errorReason: typeof source.error?.details?.reason === "string" ? source.error.details.reason : null,
@@ -1026,6 +1028,7 @@ export function CodexRemoteApp({ dictionary, locale }: CodexRemoteAppProps) {
   if (connectionEntryModel.status !== "connected") {
     return (
       <ConnectionEntry
+        copy={dictionary.connection}
         model={connectionEntryModel}
         onRetry={() => void refreshWorkbenchData(selectedConversationKey)}
         onSelectDevice={selectDevice}

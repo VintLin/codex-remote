@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@codex-remote/ui";
 
 import type { CodexConversation, Device } from "@codex-remote/api-contract";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 import type {
   ConversationNavigatorState,
   SidebarProjectGroup,
@@ -20,6 +21,7 @@ export type SidebarPressedItem = { kind: "project" | "conversation"; id: string 
 interface SidebarProps {
   activeView: AppView;
   conversationNavigator: ConversationNavigatorState;
+  copy: Pick<WebDictionary, "actions" | "sidebar" | "status">;
   device: Device;
   isCollapsed: boolean;
   isMobile?: boolean;
@@ -49,6 +51,7 @@ interface SidebarListItemProps {
     onRestore?: () => void;
   };
   contentAttributes?: Record<string, string>;
+  copy?: WebDictionary["actions"];
   expanded?: boolean;
   inline?: React.ReactNode;
   itemAttributes?: Record<string, string | number | boolean>;
@@ -99,7 +102,7 @@ export function Sidebar(props: SidebarProps) {
         <div className="sidebar-header-controls">
           {props.isMobile ? <span /> : (
             <button
-              aria-label={props.isCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
+              aria-label={props.isCollapsed ? props.copy.sidebar.expandSidebar : props.copy.sidebar.collapseSidebar}
               className="sidebar-header-control sidebar-header-control-button sidebar-toggle-button"
               data-direction="left"
               data-state={props.isCollapsed ? "collapsed" : "expanded"}
@@ -111,7 +114,7 @@ export function Sidebar(props: SidebarProps) {
           )}
           <div className="sidebar-header-nav">
             <button
-              aria-label="切换到上一条对话"
+              aria-label={props.copy.sidebar.previousConversation}
               className="sidebar-header-control sidebar-header-control-button"
               disabled={!props.conversationNavigator.previousConversationKey}
               onClick={() => {
@@ -124,7 +127,7 @@ export function Sidebar(props: SidebarProps) {
               <Icon name="arrow-left" />
             </button>
             <button
-              aria-label="切换到下一条对话"
+              aria-label={props.copy.sidebar.nextConversation}
               className="sidebar-header-control sidebar-header-control-button"
               disabled={!props.conversationNavigator.nextConversationKey}
               onClick={() => {
@@ -143,7 +146,7 @@ export function Sidebar(props: SidebarProps) {
           <NavButton
             active={props.activeView === "devices"}
             icon="laptop"
-            label="设备"
+            label={props.copy.sidebar.devices}
             onClick={() => props.onSelectView("devices")}
             trailing={
               <span className="nav-device-status">
@@ -152,17 +155,17 @@ export function Sidebar(props: SidebarProps) {
               </span>
             }
           />
-          <NavButton icon="search" label="搜索" onClick={props.onOpenSearch} />
+          <NavButton icon="search" label={props.copy.sidebar.openSearch} onClick={props.onOpenSearch} />
           <NavButton
             active={props.activeView === "localTools"}
             icon="folder"
-            label="Local Tools"
+            label={props.copy.sidebar.localTools}
             onClick={() => props.onSelectView("localTools")}
           />
           <NavButton
             active={props.activeView === "tasks"}
             icon="reload"
-            label="任务"
+            label={props.copy.sidebar.tasks}
             onClick={() => props.onSelectView("tasks")}
           />
         </nav>
@@ -177,6 +180,7 @@ export function Sidebar(props: SidebarProps) {
         ref={props.sidebarScrollRef}
       >
         <DeviceWorkspaceNav
+          copy={props.copy}
           model={props.model}
           onArchiveConversation={props.onArchiveConversation}
           onRenameConversation={props.onRenameConversation}
@@ -199,7 +203,7 @@ export function Sidebar(props: SidebarProps) {
           <span className="nav-glyph">
             <Icon name="setting-o" />
           </span>
-          <span>设置</span>
+          <span>{props.copy.sidebar.settings}</span>
         </button>
       </div>
     </aside>
@@ -219,6 +223,7 @@ function NavButton(props: { active?: boolean; icon: IconName; label: string; onC
 }
 
 function DeviceWorkspaceNav(props: {
+  copy: Pick<WebDictionary, "actions" | "sidebar" | "status">;
   model: SidebarModel;
   onArchiveConversation: (conversationKey: string) => void;
   onRenameConversation: (conversationKey: string) => void;
@@ -232,39 +237,42 @@ function DeviceWorkspaceNav(props: {
 }) {
   return (
     <>
-      <section aria-label="置顶" className="sidebar-section">
+      <section aria-label={props.copy.sidebar.pinned} className="sidebar-section">
         <SectionHeading
           actionGroup="section-pinned"
+          copy={props.copy.actions}
           expanded={props.sectionState.pinned}
-          label="置顶"
+          label={props.copy.sidebar.pinned}
           onToggle={() => props.onToggleSection("pinned")}
         />
         {props.sectionState.pinned ? (
           props.model.pinnedProjects.length > 0
           ? props.model.pinnedProjects.map((project) => <ProjectGroup key={project.projectKey} {...props} project={project} />)
-          : <EmptyProjectRow />
+          : <EmptyProjectRow copy={props.copy} />
         ) : null}
       </section>
 
-      <section aria-label="项目" className="sidebar-section">
+      <section aria-label={props.copy.sidebar.projects} className="sidebar-section">
         <SectionHeading
           actionGroup="section-projects"
+          copy={props.copy.actions}
           expanded={props.sectionState.projects}
-          label="项目"
+          label={props.copy.sidebar.projects}
           onToggle={() => props.onToggleSection("projects")}
         />
         {props.sectionState.projects ? (
           props.model.projects.length > 0
           ? props.model.projects.map((project) => <ProjectGroup key={project.projectKey} {...props} project={project} />)
-          : <EmptyProjectRow />
+          : <EmptyProjectRow copy={props.copy} />
         ) : null}
       </section>
 
-      <section aria-label="对话" className="sidebar-section">
+      <section aria-label={props.copy.sidebar.conversations} className="sidebar-section">
         <SectionHeading
           actionGroup="section-conversations"
+          copy={props.copy.actions}
           expanded={props.sectionState.conversations}
-          label="对话"
+          label={props.copy.sidebar.conversations}
           onToggle={() => props.onToggleSection("conversations")}
         />
         {props.sectionState.conversations ? (
@@ -273,6 +281,7 @@ function DeviceWorkspaceNav(props: {
               <ConversationRow
                 key={createConversationKey(conversation)}
                 conversation={conversation}
+                copy={props.copy}
                 onArchiveConversation={props.onArchiveConversation}
                 onRenameConversation={props.onRenameConversation}
                 onRestoreConversation={props.onRestoreConversation}
@@ -281,7 +290,7 @@ function DeviceWorkspaceNav(props: {
                 selectedConversationKey={props.selectedConversationKey}
               />
             ))
-          : <EmptyConversationRow />
+          : <EmptyConversationRow copy={props.copy} />
         ) : null}
       </section>
 
@@ -292,6 +301,7 @@ function DeviceWorkspaceNav(props: {
 
 function SectionHeading(props: {
   actionGroup: SidebarActionGroup;
+  copy: WebDictionary["actions"];
   expanded: boolean;
   label: string;
   onToggle: () => void;
@@ -310,12 +320,13 @@ function SectionHeading(props: {
           <Icon name="down" />
         </span>
       </button>
-      <ActionMenu group={props.actionGroup} />
+      <ActionMenu copy={props.copy} group={props.actionGroup} />
     </div>
   );
 }
 
 function ProjectGroup(props: {
+  copy: Pick<WebDictionary, "actions" | "sidebar" | "status">;
   onArchiveConversation: (conversationKey: string) => void;
   onRenameConversation: (conversationKey: string) => void;
   onRestoreConversation: (conversationKey: string) => void;
@@ -328,6 +339,7 @@ function ProjectGroup(props: {
   return (
     <>
       <ProjectRow
+        copy={props.copy.sidebar}
         onToggleProject={props.onToggleProject}
         project={props.project}
         selected={props.project.conversations.some((conversation) => createConversationKey(conversation) === props.selectedConversationKey)}
@@ -339,6 +351,7 @@ function ProjectGroup(props: {
                 <ConversationRow
                   key={createConversationKey(conversation)}
                   conversation={conversation}
+                  copy={props.copy}
                   nested
                   onArchiveConversation={props.onArchiveConversation}
                   onRenameConversation={props.onRenameConversation}
@@ -348,7 +361,7 @@ function ProjectGroup(props: {
                   selectedConversationKey={props.selectedConversationKey}
                 />
               ))
-            : <EmptyConversationRow />}
+            : <EmptyConversationRow copy={props.copy} />}
         </div>
       ) : null}
     </>
@@ -356,11 +369,12 @@ function ProjectGroup(props: {
 }
 
 function ProjectRow(props: {
+  copy: WebDictionary["sidebar"];
   onToggleProject: (projectKey: string, options?: { restoreFocus?: boolean }) => void;
   project: SidebarProjectGroup;
   selected: boolean;
 }) {
-  const expandedLabel = props.project.expanded ? "收起项目" : "展开项目";
+  const expandedLabel = props.project.expanded ? props.copy.collapseProject : props.copy.expandProject;
   return (
     <SidebarListItem
       actionGroup="project"
@@ -404,6 +418,7 @@ function ProjectRow(props: {
 
 function ConversationRow(props: {
   conversation: CodexConversation;
+  copy: Pick<WebDictionary, "actions" | "sidebar" | "status">;
   nested?: boolean;
   onArchiveConversation: (conversationKey: string) => void;
   onRenameConversation: (conversationKey: string) => void;
@@ -423,6 +438,7 @@ function ConversationRow(props: {
         onRestore: () => props.onRestoreConversation(conversationKey),
       }}
       contentAttributes={{ "data-conversation-key": conversationKey }}
+      copy={props.copy.actions}
       inline={<ConversationBadges conversation={props.conversation} />}
       kind="conversation"
       nested={props.nested ?? false}
@@ -445,12 +461,12 @@ function ConversationBadges(props: { conversation: CodexConversation }) {
   );
 }
 
-function EmptyConversationRow() {
-  return <SidebarListItem kind="empty" muted title="暂无对话" />;
+function EmptyConversationRow(props: { copy: Pick<WebDictionary, "actions" | "sidebar" | "status"> }) {
+  return <SidebarListItem kind="empty" muted title={props.copy.sidebar.emptyConversation} />;
 }
 
-function EmptyProjectRow() {
-  return <SidebarListItem kind="empty" muted title="暂无项目" />;
+function EmptyProjectRow(props: { copy: Pick<WebDictionary, "actions" | "sidebar" | "status"> }) {
+  return <SidebarListItem kind="empty" muted title={props.copy.sidebar.emptyProject} />;
 }
 
 function SidebarListItem(props: SidebarListItemProps) {
@@ -486,7 +502,7 @@ function SidebarListItem(props: SidebarListItemProps) {
         </span>
       )}
       <span className="sidebar-list-meta">{props.trailing ?? ""}</span>
-      <span className="sidebar-list-actions">{props.actionGroup ? <ActionMenu group={props.actionGroup} {...props.actionMenuProps} /> : null}</span>
+      <span className="sidebar-list-actions">{props.actionGroup && props.copy ? <ActionMenu copy={props.copy} group={props.actionGroup} {...props.actionMenuProps} /> : null}</span>
     </div>
   );
 }
