@@ -7,24 +7,17 @@ import type { AssistantToolCallNode, AssistantToolGroupNode, DetailTarget, LinkR
 import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface CodexToolGroupRowProps {
-  copy?: WebDictionary["conversation"]["toolStatus"];
+  copy: WebDictionary["conversation"]["toolStatus"];
   group: AssistantToolGroupNode;
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
 }
 
 interface CodexToolCallRowProps {
   call: AssistantToolCallNode;
-  copy?: WebDictionary["conversation"]["toolStatus"];
+  copy: WebDictionary["conversation"]["toolStatus"];
   onOpenDetail: (target: DetailTarget | LinkReference) => void;
   variant?: "grouped" | "nested";
 }
-
-const fallbackToolStatus: WebDictionary["conversation"]["toolStatus"] = {
-  completed: "完成",
-  failed: "失败",
-  running: "运行中",
-  unknown: "未知",
-};
 
 export function CodexToolGroupRow({ copy, group, onOpenDetail }: CodexToolGroupRowProps) {
   const [expanded, setExpanded] = useState(() => !group.defaultCollapsed);
@@ -44,7 +37,7 @@ export function CodexToolGroupRow({ copy, group, onOpenDetail }: CodexToolGroupR
       {expanded ? (
         <div className="codex-assistant-tool-children">
           {group.calls.map((call) => (
-            <CodexToolCallRow call={call} key={call.id} onOpenDetail={onOpenDetail} variant="grouped" {...(copy ? { copy } : {})} />
+            <CodexToolCallRow call={call} copy={copy} key={call.id} onOpenDetail={onOpenDetail} variant="grouped" />
           ))}
         </div>
       ) : null}
@@ -56,7 +49,6 @@ export function CodexToolCallRow({ call, copy, onOpenDetail, variant = "nested" 
   const [expanded, setExpanded] = useState(() => !call.defaultCollapsed);
   const inlineDetail = call.detailPlacement === "inline" ? getInlineDetail(call.detailTarget) : null;
   const canOpenWorkspace = call.detailPlacement === "workspace";
-  const statusCopy = copy ?? fallbackToolStatus;
 
   return (
     <div className="codex-assistant-message is-tool" data-role="assistant" data-tool-row={variant}>
@@ -68,7 +60,7 @@ export function CodexToolCallRow({ call, copy, onOpenDetail, variant = "nested" 
       >
         <Icon name={getToolIconName(call)} />
         <span>{call.label}</span>
-        <code>{getStatusLabel(statusCopy, call.status)}</code>
+        <code>{getStatusLabel(copy, call.status)}</code>
         <Icon name="right" />
       </button>
       {expanded ? (

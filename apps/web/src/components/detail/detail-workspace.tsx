@@ -14,33 +14,9 @@ interface DetailWorkspaceProps {
   target: DetailTarget | LinkReference | null;
 }
 
-const FALLBACK_DICTIONARY: WebDictionary["detail"] = {
-  review: "审查",
-  terminal: "终端",
-  browser: "浏览器",
-  files: "文件",
-  sideChat: "侧边聊天",
-  deviceDetails: "设备详情",
-  taskDetails: "任务详情",
-  collapseRight: "收起右侧边栏",
-  toolMeta: "工具",
-  context: "上下文",
-  fileMeta: "路径与资源",
-  browserMeta: "页面与 tab",
-  reviewMeta: "代码与结果检查",
-  sideChatMeta: "补充沟通",
-  terminalMeta: "命令与日志",
-  workspaceOutput: "工作区输出",
-  inlineOutput: "内联输出",
-  fileChanges: (count: number) => `${count} 个文件变更`,
-  temporaryFileLink: "当前先展示链接目标，后续再接入真实读取。",
-  reviewRequestTitle: "Review request accepted",
-};
-
 export function DetailWorkspace({ conversationTitle, copy, isCollapsed, isMobile = false, onBack, onCollapse, target }: DetailWorkspaceProps) {
-  const detailCopy = copy ?? FALLBACK_DICTIONARY;
   const [selectedTool, setSelectedTool] = useState<WorkspaceToolKey>("review");
-  const workspaceMeta = getWorkspaceMeta(detailCopy, target);
+  const workspaceMeta = getWorkspaceMeta(copy, target);
   const showWorkspaceMeta = target !== null;
 
   return (
@@ -55,7 +31,7 @@ export function DetailWorkspace({ conversationTitle, copy, isCollapsed, isMobile
       title={showWorkspaceMeta ? workspaceMeta.label : undefined}
       titleIcon={showWorkspaceMeta ? workspaceMeta.icon : undefined}
     >
-      {target ? <DetailContent copy={detailCopy} target={target} /> : <DetailEmptyState copy={detailCopy} selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
+      {target ? <DetailContent copy={copy} target={target} /> : <DetailEmptyState copy={copy} selectedTool={selectedTool} onSelectTool={setSelectedTool} />}
     </RightDetailPane>
   );
 }

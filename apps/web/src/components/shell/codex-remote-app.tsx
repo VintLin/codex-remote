@@ -15,6 +15,7 @@ import {
 import type { BoardTask, ConversationQueuedMessage, Device, PendingApproval, ProjectSearchResult, TaskConversationLink } from "@codex-remote/api-contract";
 import { getDictionary } from "../../i18n/dictionary";
 import type { Locale } from "../../i18n/locales";
+import { LOCALE_STORAGE_KEY } from "../../i18n/storageKey";
 import { createConversationKey, findConversationByKey } from "../../domain/sidebar/conversationIdentity";
 import {
   createDefaultSidebarSectionState,
@@ -118,7 +119,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
   const pathname = usePathname();
   const handleLocaleChange = useCallback((nextLocale: Locale) => {
     try {
-      window.localStorage.setItem("codex-remote-locale", nextLocale);
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
     } catch {
       // Ignore storage failures; the URL navigation still drives the current session.
     }

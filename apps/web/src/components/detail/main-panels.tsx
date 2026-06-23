@@ -269,7 +269,7 @@ export function ConversationMain({
             <ConversationStatusBadges conversation={conversation} />
             {!isMobile ? (
               <ActionMenu
-                {...(actionsCopy ? { copy: actionsCopy } : {})}
+                copy={actionsCopy}
                 archived={conversation?.archived === true}
                 ariaLabel={copy.openConversationMenu}
                 className="conversation-title-menu"

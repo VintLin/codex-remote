@@ -87,9 +87,9 @@ test("when Settings exposes language selection, should render dictionary-backed 
 
   assert.match(mainPanelsComponent, /copy\.settings\.languageLabel/);
   assert.match(mainPanelsComponent, /onLocaleChange/);
-  assert.match(shellComponent, /localStorage\.setItem\("codex-remote-locale"/);
+  assert.match(shellComponent, /LOCALE_STORAGE_KEY/);
   assert.match(shellComponent, /onLocaleChange/);
-  assert.match(shellComponent, /localStorage\.setItem\("codex-remote-locale"/);
+  assert.match(shellComponent, /localStorage\.setItem\(LOCALE_STORAGE_KEY/);
 });
 
 test("when the conversation header is simplified, should move collapsed sidebar controls into the main topbar and keep only title menu plus layout action", () => {
@@ -141,8 +141,9 @@ test("when device rows expose status and actions, should use a status dot plus i
   assert.match(mainPanelsComponent, /import \{ Badge as UiBadge, Icon, RightDetailPane, StatusDot \} from "@codex-remote\/ui";/);
   assert.match(mainPanelsComponent, /import \{ getStatusClassName, getStatusText \} from "\.\.\/\.\.\/domain\/status\/statusPresentation";/);
   assert.match(sidebarComponent, /import \{ getStatusClassName \} from "\.\.\/\.\.\/domain\/status\/statusPresentation";/);
-  assert.match(statusPresentation, /export const statusText = \{/);
   assert.match(statusPresentation, /export function getStatusClassName/);
+  assert.match(statusPresentation, /export function getStatusText/);
+  assert.doesNotMatch(statusPresentation, /export const statusText = \{/);
   assert.doesNotMatch(sidebarComponent, /export function statusToClass/);
   assert.match(mainPanelsComponent, /className="device-card-title">\s*<span>\{device\.name\}<\/span>\s*<StatusBadge status=\{device\.status\} \/>/s);
   assert.match(mainPanelsComponent, /<UiBadge ariaLabel=\{[A-Z_]+\[props\.status\]\} className=\{`badge-device-status \$\{statusClassName\}`\}>/);

@@ -77,65 +77,6 @@ const noopSubmitFollowUp = async () => {};
 const noopQueueMessage = async () => {};
 type ComposerMode = "send" | "start" | "steer" | "queue";
 
-const FALLBACK_DICTIONARY: WebDictionary["conversation"] = {
-  threadLabel: "Conversation thread",
-  empty: "暂无历史消息",
-  scrollToLatest: "回到最新聊天记录",
-  followUpMessage: "Follow-up message",
-  addAttachment: "添加附件",
-  accessMode: "权限模式",
-  sendMode: "发送模式",
-  requestApproval: "请求批准",
-  delegateApproval: "替我审批",
-  fullAccess: "完全访问",
-  newConversation: "新对话",
-  steerCurrentRun: "引导当前执行",
-  queueMessage: "排队发送",
-  queuedCount: (count: number) => ` · 已排队 ${count} 条`,
-  interrupt: "中断",
-  send: "发送",
-  copy: "复制",
-  up: "赞",
-  down: "踩",
-  derived: "派生",
-  hooks: "Hooks",
-  timestamp: "timestamp",
-  assistantMessageActions: "Assistant message actions",
-  contextCompaction: "上下文已压缩",
-  queued: "排队发送",
-  queuedFailed: "发送失败",
-  queuedWaiting: "等待当前执行结束",
-  cancel: "取消",
-  conversationRequests: "Conversation requests",
-  queuedMessages: "Queued messages",
-  status: {
-    steering: "正在引导",
-    interrupting: "正在中断",
-    steerFailed: "引导失败",
-    interruptFailed: "中断失败",
-    starting: "正在开始",
-    startFailed: "开始失败",
-    startedRefreshing: "已开始，正在刷新",
-    sending: "正在发送",
-    acceptedRefreshing: "已接受，正在刷新",
-    sendFailed: "发送失败",
-    queued: "排队发送将在当前执行后提交",
-    startHint: "输入后开始新对话",
-    steerHint: "输入后引导当前执行",
-    sendHint: "输入后发送",
-    startNewHint: "输入后开始",
-  },
-  toolStatus: {
-    completed: "完成",
-    failed: "失败",
-    running: "运行中",
-    unknown: "未知",
-  },
-  markdownImage: (alt: string | undefined, src: string | undefined) =>
-    `${alt ? `图片：${alt}` : "图片"}${src ? ` (${src})` : ""}`,
-  processedRunLabel: (duration: string) => (duration ? `已处理 ${duration}` : "已处理"),
-};
-
 function getAccessModes(copy: WebDictionary["conversation"]) {
   return [
     { key: "approval-request", label: copy.requestApproval, icon: "hand" },
@@ -172,7 +113,7 @@ export function CodexAssistantThread({
       canStartConversation={canStartConversation}
       canSubmitFollowUp={canSubmitFollowUp}
       controlStatus={controlStatus}
-      dictionary={dictionary ?? FALLBACK_DICTIONARY}
+      dictionary={dictionary}
       followUpStatus={followUpStatus}
       key={thread?.id ?? "empty-thread"}
       onOpenDetail={onOpenDetail}

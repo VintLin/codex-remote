@@ -55,7 +55,7 @@ interface ActionMenuProps {
   ariaLabel?: string;
   archived?: boolean;
   className?: string;
-  copy?: ActionCopy;
+  copy: ActionCopy;
   group: SidebarActionGroup;
   onArchive?: () => void;
   onRename?: () => void;
@@ -72,29 +72,14 @@ export function ActionMenu({
   onRename,
   onRestore,
 }: ActionMenuProps) {
-  const fallbackCopy: ActionCopy = {
-    openMenu: "打开操作菜单",
-    openConversationMenu: "打开对话操作菜单",
-    newConversation: "新对话",
-    createWorktree: "创建工作树",
-    pin: "置顶",
-    rename: "重命名",
-    archive: "归档",
-    remove: "移除",
-    restore: "恢复",
-    archiveAllChats: "归档所有聊天",
-    sortByCreatedAt: "按创建时间排序",
-    sortByUpdatedAt: "按更新时间排序",
-  };
-  const actionCopy = copy ?? fallbackCopy;
-  const actionItems = getActionItems(actionCopy);
+  const actionItems = getActionItems(copy);
   const actions = group === "conversation"
     ? [
-        { icon: "pencil", label: actionCopy.rename, disabled: !onRename, ...(onRename ? { onSelect: onRename } : {}) },
+        { icon: "pencil", label: copy.rename, disabled: !onRename, ...(onRename ? { onSelect: onRename } : {}) },
         archived
-          ? { icon: "reload", label: actionCopy.restore, disabled: !onRestore, ...(onRestore ? { onSelect: onRestore } : {}) }
-          : { icon: "inbox", label: actionCopy.archive, disabled: !onArchive, ...(onArchive ? { onSelect: onArchive } : {}) },
+          ? { icon: "reload", label: copy.restore, disabled: !onRestore, ...(onRestore ? { onSelect: onRestore } : {}) }
+          : { icon: "inbox", label: copy.archive, disabled: !onArchive, ...(onArchive ? { onSelect: onArchive } : {}) },
       ] satisfies ActionMenuItem[]
     : actionItems[group];
-  return <PopoverMenu actions={actions} ariaLabel={ariaLabel ?? actionCopy.openMenu} className={className} />;
+  return <PopoverMenu actions={actions} ariaLabel={ariaLabel ?? copy.openMenu} className={className} />;
 }

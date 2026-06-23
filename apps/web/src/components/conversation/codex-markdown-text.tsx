@@ -8,19 +8,16 @@ import type { DetailTarget, LinkReference } from "../../domain/assistant/assista
 import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface CodexMarkdownTextProps {
-  imageLabel?: WebDictionary["conversation"]["markdownImage"];
+  imageLabel: WebDictionary["conversation"]["markdownImage"];
   links?: LinkReference[];
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
   text: string;
 }
 
-const fallbackImageLabel: WebDictionary["conversation"]["markdownImage"] = (alt, src) =>
-  `${alt ? `图片：${alt}` : "图片"}${src ? ` (${src})` : ""}`;
-
 const noopOpenDetail = () => {};
 
 export function CodexMarkdownText({
-  imageLabel = fallbackImageLabel,
+  imageLabel,
   links = [],
   onOpenDetail = noopOpenDetail,
   text,
