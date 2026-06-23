@@ -19,6 +19,8 @@
 - User-facing copy uses product terms: 控制中心, 设备目录, 本机 Codex 服务, 对话记录, 工作区.
 - User-facing copy must not expose Control Plane, Worker, runtime, JSON-RPC, app-server, or raw protocol names.
 - Keep the implementation in the existing files unless a test proves the file is no longer readable.
+- Child-step progress in this plan is inferred visual progress inside the current major step. It is not real per-request event tracing.
+- Do not add timers, polling, new request events, or simulated async state for child steps.
 
 ---
 
@@ -38,6 +40,20 @@
   - Proves the model exposes child steps and maps active/failed states.
 - Modify: `apps/web/src/components/shell/connectionEntryLayout.test.ts`
   - Proves the component and CSS render child progress and avoid internal terms.
+
+---
+
+## Implementation Notes For Junior Agents
+
+- Work only on the files listed in each task. The worktree is already dirty; do not revert or reformat unrelated files.
+- Preserve existing import style, quote style, and CSS token usage.
+- When the plan says "inside `connection`", insert near the existing `loadingDetails` and `stepDescriptions` fields so the dictionary remains readable.
+- The child step states are intentionally coarse:
+  - A `done` major step has all child steps `done`.
+  - A `pending` major step has all child steps `pending`.
+  - An `active` major step shows the first child as `done`, the second child as `active`, and the rest as `pending`.
+  - A `failed` major step marks the second-to-last child as `failed`, earlier children as `done`, and later children as `pending`.
+- Do not try to make each child step correspond to a real HTTP request in this iteration.
 
 ---
 
@@ -94,7 +110,7 @@ Expected: FAIL because `ConnectionEntryStep` does not have `details`.
 
 - [ ] **Step 3: Add dictionary copy**
 
-In `apps/web/src/i18n/dictionaries/zh-CN.ts`, inside `connection`, add:
+In `apps/web/src/i18n/dictionaries/zh-CN.ts`, inside `connection`, insert `stepDetails` immediately after the existing `loadingDetails` block and before `stepDescriptions`:
 
 ```ts
     stepDetails: {
@@ -105,7 +121,7 @@ In `apps/web/src/i18n/dictionaries/zh-CN.ts`, inside `connection`, add:
     },
 ```
 
-In `apps/web/src/i18n/dictionaries/en-US.ts`, inside `connection`, add:
+In `apps/web/src/i18n/dictionaries/en-US.ts`, inside `connection`, insert `stepDetails` immediately after the existing `loadingDetails` block and before `stepDescriptions`:
 
 ```ts
     stepDetails: {
@@ -118,7 +134,7 @@ In `apps/web/src/i18n/dictionaries/en-US.ts`, inside `connection`, add:
 
 - [ ] **Step 4: Add the minimal model implementation**
 
-In `apps/web/src/domain/connection/connectionEntry.ts`, add:
+In `apps/web/src/domain/connection/connectionEntry.ts`, add this type and interface directly after `export type ConnectionStepStatus = "active" | "done" | "failed" | "pending";`:
 
 ```ts
 export type ConnectionStepDetailStatus = "active" | "done" | "failed" | "pending";
@@ -129,7 +145,7 @@ export interface ConnectionStepDetail {
 }
 ```
 
-Change `ConnectionEntryStep` to:
+Replace the existing `ConnectionEntryStep` interface with:
 
 ```ts
 export interface ConnectionEntryStep {
@@ -141,7 +157,7 @@ export interface ConnectionEntryStep {
 }
 ```
 
-Add the helper functions near `createConnectionSteps`:
+Add these helper functions directly above `function createConnectionSteps`:
 
 ```ts
 function createConnectionStepDetails(
@@ -174,30 +190,36 @@ function resolveConnectionStepDetailStatus(
 }
 ```
 
-Update the return mapping inside `createConnectionSteps` so every returned step includes details after its major status is known:
+Replace the entire existing `createConnectionSteps` function with this full function. Do not patch its branches one by one:
 
 ```ts
-  return connectionSteps.map((step, index) => {
-    const stepStatus = index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
-    return {
+function createConnectionSteps(
+  copy: WebDictionary["connection"],
+  status: ConnectionEntryStatus,
+  failedStepId: ConnectionStepId | null,
+  hasDevices: boolean,
+): ConnectionEntryStep[] {
+  const connectionSteps = getConnectionSteps(copy);
+  if (status === "connected") {
+    return connectionSteps.map((step) => ({
       ...step,
-      details: createConnectionStepDetails(copy, step.id, stepStatus),
-      status: stepStatus,
-    };
-  });
-```
+      details: createConnectionStepDetails(copy, step.id, "done"),
+      status: "done",
+    }));
+  }
+  if (status === "connecting") {
+    const activeIndex = hasDevices ? 1 : 0;
+    return connectionSteps.map((step, index) => {
+      const stepStatus = index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
+      return {
+        ...step,
+        details: createConnectionStepDetails(copy, step.id, stepStatus),
+        status: stepStatus,
+      };
+    });
+  }
 
-Apply the same pattern to the connected and failed branches:
-
-```ts
-  return connectionSteps.map((step) => ({
-    ...step,
-    details: createConnectionStepDetails(copy, step.id, "done"),
-    status: "done",
-  }));
-```
-
-```ts
+  const failedIndex = connectionSteps.findIndex((step) => step.id === failedStepId);
   return connectionSteps.map((step, index) => {
     const stepStatus = index < failedIndex ? "done" : index === failedIndex ? "failed" : "pending";
     return {
@@ -206,6 +228,7 @@ Apply the same pattern to the connected and failed branches:
       status: stepStatus,
     };
   });
+}
 ```
 
 - [ ] **Step 5: Run the focused model test and typecheck**
@@ -273,7 +296,16 @@ Expected: FAIL because the component and CSS do not render child step details.
 
 - [ ] **Step 3: Render details in the component**
 
-In `apps/web/src/components/shell/connection-entry.tsx`, replace the step copy block with:
+In `apps/web/src/components/shell/connection-entry.tsx`, find this existing block:
+
+```tsx
+                  <span className="connection-entry-step-copy">
+                    <span className="connection-entry-step-title">{step.label}</span>
+                    <span className="connection-entry-step-description">{step.description}</span>
+                  </span>
+```
+
+Replace it with:
 
 ```tsx
                   <span className="connection-entry-step-copy">
@@ -292,7 +324,7 @@ In `apps/web/src/components/shell/connection-entry.tsx`, replace the step copy b
 
 - [ ] **Step 4: Add minimal CSS**
 
-In `packages/ui/src/styles.css`, after `.connection-entry-step-title`, add:
+In `packages/ui/src/styles.css`, add this CSS immediately after the existing `.connection-entry-step-title` rule and before `.connection-entry-retry`:
 
 ```css
 .connection-entry-step-details {
@@ -311,6 +343,11 @@ In `packages/ui/src/styles.css`, after `.connection-entry-step-title`, add:
   color: var(--cr-muted);
   font-size: var(--cr-text-meta);
   line-height: 1.35;
+}
+
+.connection-entry-step-detail-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .connection-entry-step-detail-dot {
@@ -374,7 +411,7 @@ git commit -m "feat: render startup child progress"
   - `apps/web/src/data/workerApi/client.ts`
 
 **Interfaces:**
-- Consumes: the child-step model and rendered connection entry from Tasks 1-3.
+- Consumes: the child-step model and rendered connection entry from Tasks 1-2.
 - Produces: verified behavior only. Do not refactor startup loading unless a test or browser run proves it is needed.
 
 - [ ] **Step 1: Run focused tests**
@@ -424,6 +461,49 @@ Verify in the browser:
 - At least one child row has visible active loading.
 - The top summary still exists, but it is not the only visible progress text.
 - After startup completes, the workbench opens with Sidebar and main content.
+
+Run this in the browser console while the connection entry is visible:
+
+```js
+({
+  majorSteps: document.querySelectorAll(".connection-entry-step").length,
+  detailGroups: document.querySelectorAll(".connection-entry-step-details").length,
+  detailRows: document.querySelectorAll(".connection-entry-step-detail").length,
+  activeDetails: document.querySelectorAll(".connection-entry-step-detail.is-active").length,
+  hasOnlySummary: document.querySelectorAll(".connection-entry-summary-details span").length > 0
+    && document.querySelectorAll(".connection-entry-step-detail").length === 0,
+})
+```
+
+Expected object while loading:
+
+```js
+{
+  majorSteps: 4,
+  detailGroups: 4,
+  detailRows: 13,
+  activeDetails: 1,
+  hasOnlySummary: false,
+}
+```
+
+After the app enters the workbench, run:
+
+```js
+({
+  connectionEntryVisible: document.querySelector(".connection-entry-shell") !== null,
+  workbenchVisible: document.querySelector(".workspace-shell, .resizable-workspace-shell, aside, main") !== null,
+})
+```
+
+Expected:
+
+```js
+{
+  connectionEntryVisible: false,
+  workbenchVisible: true,
+}
+```
 
 - [ ] **Step 5: Commit only if Task 3 changed code**
 
