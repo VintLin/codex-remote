@@ -10,8 +10,10 @@ import {
 } from "react-resizable-panels";
 
 import { appPanelLayout } from "../../domain/layout/appLayout";
+import type { WebDictionary } from "../../i18n/dictionary.ts";
 
 interface ResizableWorkspaceShellProps {
+  copy: WebDictionary["sidebar"];
   detail: ReactNode;
   isDetailCollapsed: boolean;
   isSidebarCollapsed: boolean;
@@ -35,6 +37,7 @@ interface WorkspaceMeasurements {
 const collapseThresholdBufferPx = 4;
 
 export function ResizableWorkspaceShell({
+  copy,
   detail,
   isDetailCollapsed,
   isSidebarCollapsed,
@@ -344,7 +347,7 @@ export function ResizableWorkspaceShell({
         {sidebar}
       </Panel>
       <PanelResizeHandle
-        aria-label="调整左侧边栏宽度"
+        aria-label={copy.resizeLeftHandle}
         className={`workspace-resize-handle workspace-resize-handle-left${isSidebarCollapsed ? " is-disabled" : ""}`}
         disabled={isSidebarCollapsed}
         id="left-main-resize"
@@ -359,7 +362,7 @@ export function ResizableWorkspaceShell({
         {main}
       </Panel>
       <PanelResizeHandle
-        aria-label="调整右侧边栏宽度"
+        aria-label={copy.resizeRightHandle}
         className={`workspace-resize-handle workspace-resize-handle-right${isDetailCollapsed ? " is-disabled" : ""}`}
         disabled={isDetailCollapsed}
         id="main-right-resize"

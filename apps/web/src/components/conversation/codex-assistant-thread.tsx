@@ -691,7 +691,7 @@ function AssistantMessageActions(props: { copy: WebDictionary["conversation"]; t
         down
       </button>
       <button aria-label={props.copy.derived} className="codex-assistant-message-action" disabled type="button">
-        派生
+        {props.copy.derived}
       </button>
       <button aria-label={props.copy.hooks} className="codex-assistant-message-action" disabled type="button">
         hooks

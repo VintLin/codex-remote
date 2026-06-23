@@ -97,7 +97,7 @@ export function Sidebar(props: SidebarProps) {
   }, [props.sidebarScrollRef, props.model, props.sectionState]);
 
   return (
-    <aside aria-label="Workspace navigation" className="sidebar">
+    <aside aria-label={props.copy.sidebar.workspaceNavigation} className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-header-controls">
           {props.isMobile ? <span /> : (
@@ -142,7 +142,7 @@ export function Sidebar(props: SidebarProps) {
           </div>
         </div>
 
-        <nav aria-label="Primary" className="primary-nav">
+        <nav aria-label={props.copy.sidebar.primaryNavigation} className="primary-nav">
           <NavButton
             active={props.activeView === "devices"}
             icon="laptop"

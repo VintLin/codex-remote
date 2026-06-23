@@ -97,6 +97,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
   const [workbenchData, setWorkbenchData] = useState(() => createFallbackWorkbenchData("not_configured"));
   const [activeView, setActiveView] = useState<AppView>("conversation");
   const [isWorkbenchLoading, setIsWorkbenchLoading] = useState(true);
+  const [hasCompletedConnectionSteps, setHasCompletedConnectionSteps] = useState(false);
   const [cachedConnectionDevices, setCachedConnectionDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState(() => resolveInitialSelectedDeviceId(null, workbenchData.devices[0]?.id ?? null));
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(
@@ -571,6 +572,18 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
       shouldIgnore = true;
     };
   }, [selectedConversationKey, selectedDeviceId]);
+
+  useEffect(() => {
+    setHasCompletedConnectionSteps(false);
+  }, [selectedDeviceId]);
+
+  useEffect(() => {
+    if (source.reason !== "loaded" || hasCompletedConnectionSteps) {
+      return;
+    }
+    const timerId = window.setTimeout(() => setHasCompletedConnectionSteps(true), 700);
+    return () => window.clearTimeout(timerId);
+  }, [hasCompletedConnectionSteps, isWorkbenchLoading, source.reason]);
 
   useEffect(() => {
     const storedDeviceId = readStoredSelectedDeviceId();
@@ -1062,7 +1075,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
     sourceReason: source.reason,
   });
 
-  if (connectionEntryModel.status !== "connected") {
+  if (connectionEntryModel.status === "failed" || !hasCompletedConnectionSteps) {
     return (
       <ConnectionEntry
         copy={dictionary.connection}
@@ -1083,6 +1096,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
         </div>
       ) : (
         <ResizableWorkspaceShell
+          copy={dictionary.sidebar}
           detail={mainContent.detail}
           isDetailCollapsed={isDetailCollapsed}
           isSidebarCollapsed={isSidebarCollapsed}

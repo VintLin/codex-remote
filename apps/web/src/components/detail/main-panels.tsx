@@ -281,7 +281,7 @@ export function ConversationMain({
             ) : null}
           </div>
         </div>
-        <div aria-label="Conversation controls" className="toolbar conversation-toolbar">
+        <div aria-label={copy.conversationControls} className="toolbar conversation-toolbar">
           <span className="datasource-status" title={datasourceStatus.join(" · ")}>
             {datasourceStatus.join(" · ")}
           </span>
@@ -1007,26 +1007,26 @@ export function LocalWorkbenchPage({
       </header>
       <div className="content-scroll local-workbench-content">
         {localWorkbench.status === "degraded" ? (
-          <section aria-label="Local tools degraded" className="conversation-source-banner">
+          <section aria-label={copy.localToolsDegradedRegion} className="conversation-source-banner">
             <strong>{copy.localToolsDegraded}</strong>
             <span>{copy.localToolsDegradedHint}</span>
           </section>
         ) : null}
         {localWorkbench.status === "empty" || localWorkbench.status === "unavailable" ? (
-          <section aria-label="Local tools empty" className="empty-state">
+          <section aria-label={copy.localToolsEmptyRegion} className="empty-state">
             <h2>{copy.localToolsEmpty}</h2>
             <p>{copy.localToolsEmptyHint}</p>
           </section>
         ) : (
           <>
-            <section aria-label="Local tools summary" className="local-workbench-summary">
+            <section aria-label={copy.localToolsSummaryRegion} className="local-workbench-summary">
               <MetricPill label={copy.localFiles} value={localWorkbench.summary ? `${localWorkbench.summary.directoryCount}/${localWorkbench.summary.fileCount}` : "0/0"} />
               <MetricPill label={copy.localGitReview} value={localWorkbench.summary?.gitStatus ?? "unknown"} />
               <MetricPill label={copy.localSearch} value={String(localWorkbench.search.data?.matches.length ?? localWorkbench.summary?.searchResultCount ?? 0)} />
               <MetricPill label={copy.localMcp} value={String(localWorkbench.summary?.mcpServerCount ?? localWorkbench.mcp.data?.servers.length ?? 0)} />
               <MetricPill label={copy.localExtensions} value={String(localWorkbench.summary?.extensionCount ?? 0)} />
             </section>
-            <section aria-label="Local tools sections" className="local-workbench-grid">
+            <section aria-label={copy.localToolsSectionsRegion} className="local-workbench-grid">
               <LocalWorkbenchCard title={copy.localFiles} status={localWorkbench.files.status}>
                 <div className="local-workbench-list">
                   {localWorkbench.files.data?.entries.length ? localWorkbench.files.data.entries.map((entry) => (
