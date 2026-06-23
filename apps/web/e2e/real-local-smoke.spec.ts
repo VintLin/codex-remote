@@ -68,14 +68,22 @@ test("i18n: should default to Chinese and switch to English via Settings", async
 
   await page.goto("/zh-CN");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
+  await expect(page.locator(".datasource-status").first()).toContainText("loaded", { timeout: 15_000 });
 
   await page.getByRole("button", { name: "设置", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "设置", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "English" })).toBeVisible();
+
   await page.getByRole("button", { name: "English" }).click();
 
   await expect(page).toHaveURL(/\/en-US/);
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+  await page.goto("/en-US");
+  await expect(page.locator(".datasource-status").first()).toContainText("loaded", { timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 
   const storedLocale = await page.evaluate(() => window.localStorage.getItem("codex-remote-locale"));
   expect(storedLocale).toBe("en-US");
