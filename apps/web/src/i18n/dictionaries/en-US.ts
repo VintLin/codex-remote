@@ -127,6 +127,7 @@ export const enUSDictionary = {
     sideChat: "Side chat",
     deviceDetails: "Device details",
     taskDetails: "Task details",
+    backToConversation: "Back to conversation",
     collapseRight: "Collapse right sidebar",
     toolMeta: "Tools",
     context: "Context",

@@ -125,6 +125,7 @@ export const zhCNDictionary = {
     sideChat: "侧边聊天",
     deviceDetails: "设备详情",
     taskDetails: "任务详情",
+    backToConversation: "返回对话",
     collapseRight: "收起右侧边栏",
     toolMeta: "工具",
     context: "上下文",

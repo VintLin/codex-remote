@@ -22,7 +22,7 @@ export function DetailWorkspace({ conversationTitle, copy, isCollapsed, isMobile
   return (
     <RightDetailPane
       ariaLabel={`${conversationTitle} detail workspace`}
-      backLabel="返回对话"
+      backLabel={copy.backToConversation}
       className="detail-workspace"
       isCollapsed={isCollapsed}
       isMobile={isMobile}
