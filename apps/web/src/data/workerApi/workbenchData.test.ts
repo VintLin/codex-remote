@@ -1427,12 +1427,8 @@ test("workbench datasource when timeline fetch fails should keep loaded snapshot
   const errored = data.assistantThreads.find((item) => item.id === "timeline-error");
   const other = data.assistantThreads.find((item) => item.id === "timeline-ok");
 
-  assert.equal(data.source.reason, "request_failure");
-  assert.equal(data.source.error?.code, "timeline_read_failed");
-  assert.equal(data.source.error?.message, "Unable to read conversation timeline.");
-  assert.equal(data.source.error?.details?.operation, "read_timeline");
-  assert.equal(data.source.error?.details && "url" in data.source.error.details, false);
-  assert.equal(data.source.error?.details && "token" in data.source.error.details, false);
+  assert.equal(data.source.reason, "loaded");
+  assert.equal(data.source.error, undefined);
 
   assert.equal(data.devices[0]?.id, "w4");
   assert.equal(data.devices.length, 1);

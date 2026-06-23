@@ -584,7 +584,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
     }
     const timerId = window.setTimeout(() => setHasCompletedConnectionSteps(true), 700);
     return () => window.clearTimeout(timerId);
-  }, [hasCompletedConnectionSteps, isWorkbenchLoading, source.reason]);
+  }, [hasCompletedConnectionSteps, source.reason]);
 
   useEffect(() => {
     const storedDeviceId = readStoredSelectedDeviceId();

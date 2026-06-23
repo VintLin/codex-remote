@@ -580,7 +580,7 @@ export async function loadWorkbenchData(options: LoadWorkbenchDataOptions): Prom
 
     if (timelineError) {
       return {
-        source: createSourceFromError(timelineError),
+        source: createWorkbenchSource("loaded"),
         taskSource: taskError ? { status: "failed" } : { status: "loaded" },
         devices,
         projects,
