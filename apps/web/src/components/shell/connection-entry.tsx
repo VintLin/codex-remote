@@ -72,6 +72,14 @@ export function ConnectionEntry({ copy, model, onRetry, onSelectDevice }: Connec
                   <span className="connection-entry-step-copy">
                     <span className="connection-entry-step-title">{step.label}</span>
                     <span className="connection-entry-step-description">{step.description}</span>
+                    <span className="connection-entry-step-details">
+                      {step.details.map((detail) => (
+                        <span className={`connection-entry-step-detail is-${detail.status}`} key={detail.label}>
+                          <span aria-hidden="true" className="connection-entry-step-detail-dot" />
+                          <span className="connection-entry-step-detail-label">{detail.label}</span>
+                        </span>
+                      ))}
+                    </span>
                   </span>
                 </li>
               ))}

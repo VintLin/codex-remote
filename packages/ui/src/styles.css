@@ -1387,6 +1387,61 @@ button.sidebar-list-content {
   font-weight: var(--cr-weight-emphasis);
 }
 
+.connection-entry-step-details {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.connection-entry-step-detail {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  line-height: 1.35;
+}
+
+.connection-entry-step-detail-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-entry-step-detail-dot {
+  width: var(--cr-status-dot-compact-size);
+  height: var(--cr-status-dot-compact-size);
+  border: var(--cr-stroke);
+  border-radius: var(--cr-pill-radius);
+  background: var(--cr-bg);
+}
+
+.connection-entry-step-detail.is-done .connection-entry-step-detail-dot {
+  border-color: var(--cr-success);
+  background: var(--cr-success);
+}
+
+.connection-entry-step-detail.is-active {
+  color: var(--cr-ink);
+}
+
+.connection-entry-step-detail.is-active .connection-entry-step-detail-dot {
+  border-color: var(--cr-accent);
+  border-top-color: color-mix(in oklch, var(--cr-accent) 24%, var(--cr-line));
+  animation: connection-entry-spin 0.8s linear infinite;
+}
+
+.connection-entry-step-detail.is-failed {
+  color: var(--cr-danger-ink);
+}
+
+.connection-entry-step-detail.is-failed .connection-entry-step-detail-dot {
+  border-color: var(--cr-danger);
+  background: var(--cr-danger);
+}
+
 .connection-entry-retry {
   display: flex;
   align-items: center;
