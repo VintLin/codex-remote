@@ -43,6 +43,30 @@ Step 4 may complete with a degraded timeline only when the failure is explicit a
 
 After step 4 completes, the entry shows a short completed state, then opens the workbench.
 
+## Startup Step Details
+
+Each startup step must contain visible child steps. The summary line explains the current major step; the child steps show that work is still moving. The child steps are product-facing status text, not implementation logs.
+
+Only the active major step needs animated loading. Completed major steps show completed child steps. Pending major steps may show their child steps muted or collapsed, but the active step must show its child list.
+
+| Major step | Child steps shown to the user |
+|---|---|
+| 连接控制中心 | 读取连接配置；校验访问凭证；读取设备目录。 |
+| 连接上次使用的设备 | 查找上次选择的设备；确认设备在线状态；保留设备切换入口。 |
+| 启动 Codex 本机服务 | 建立设备连接；检查本机 Codex 服务响应；确认当前工作目录可访问。 |
+| 载入对话记录与工作区 | 读取项目列表；读取对话列表；载入当前对话时间线；准备侧边栏与主内容区。 |
+
+Recommended child-step states:
+
+| State | Meaning | UI |
+|---|---|---|
+| `done` | This child step has completed or is implied by later progress. | Check mark or completed dot. |
+| `active` | This child step is the current visible work. | Small spinner or active dot. |
+| `pending` | This child step has not started. | Muted dot. |
+| `failed` | This child step owns the failure. | Failure dot and concise reason. |
+
+The current implementation only has summary details under the top summary. That is not enough: it makes the page look like a static sentence while the four major steps stay coarse. The implementation plan must add a child-step model under each major step and render it inside the step list.
+
 ## Core Data
 
 The homepage may open when these are ready:
@@ -112,6 +136,8 @@ The workbench shell owns selected device, selected conversation, sidebar section
 Unit tests:
 
 - Connection entry marks each source failure to the correct step.
+- Connection entry exposes child steps for each of the four startup steps.
+- The active major step exposes at least one active child step.
 - Step 4 does not complete before core project/conversation/timeline state is ready.
 - Completed connection state appears before the workbench gate opens.
 - Local loading failures are not treated as startup failures.
@@ -119,6 +145,7 @@ Unit tests:
 Component tests:
 
 - Initial load shows connection entry and not the workbench shell.
+- The active startup step renders visible child progress, not only the top summary sentence.
 - Completed startup opens Sidebar and main conversation area.
 - Local Workbench loading renders inside Local Workbench only.
 - Runtime Settings failure does not hide Sidebar or Main conversation.
