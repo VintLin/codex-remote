@@ -32,6 +32,7 @@ interface CodexAssistantThreadProps {
   controlStatus?: "accepted" | "failed" | "idle" | "submitting";
   dictionary: WebDictionary["conversation"];
   followUpStatus?: "accepted" | "failed" | "idle" | "submitting";
+  timelineLoading?: boolean;
   onOpenDetail?: (target: DetailTarget | LinkReference) => void;
   onCancelQueuedMessage?: (message: ConversationQueuedMessage) => Promise<void>;
   onQueueMessage?: (message: string) => Promise<SubmitFollowUpDraftResult | void>;
@@ -92,6 +93,7 @@ export function CodexAssistantThread({
   controlStatus = "idle",
   dictionary,
   followUpStatus = "idle",
+  timelineLoading = false,
   onOpenDetail = noopOpenDetail,
   onCancelQueuedMessage = noopQueueMessage,
   onQueueMessage = noopSubmitFollowUp,
@@ -126,6 +128,7 @@ export function CodexAssistantThread({
       onSubmitStart={onSubmitStart}
       onSubmitSteer={onSubmitSteer}
       startStatus={startStatus}
+      timelineLoading={timelineLoading}
       approvalCards={approvalCards}
       pendingApprovals={pendingApprovals}
       queuedMessages={queuedMessages}
@@ -141,6 +144,7 @@ function CodexAssistantRuntimeThread({
   controlStatus,
   dictionary,
   followUpStatus,
+  timelineLoading,
   onOpenDetail,
   onCancelQueuedMessage,
   onQueueMessage,
@@ -196,6 +200,8 @@ function CodexAssistantRuntimeThread({
   const selectedAccessModeOption = accessModeOptions.find((option) => option.key === selectedAccessMode) ?? accessModeOptions[2]!;
   const pendingQueuedMessages = queuedMessages.filter((message) => message.status === "queued");
   const nextQueuedMessage = pendingQueuedMessages[0] ?? null;
+  const isTimelineLoading = timelineLoading || thread?.loadState === "missingRead";
+  const hasTimelineError = thread?.loadState === "readError";
   const syncDraftFromComposer = useCallback(() => {
     setDraft(composerInputRef.current?.textContent ?? "");
   }, []);
@@ -341,11 +347,22 @@ function CodexAssistantRuntimeThread({
         <ThreadPrimitive.Root className="codex-assistant-root">
           <ThreadPrimitive.ViewportProvider>
             <div className="codex-assistant-scroll" onScroll={updateScrollToLatestVisibility} ref={scrollRef}>
-              <ThreadPrimitive.Empty>
-                <div className="codex-assistant-empty">{dictionary.empty}</div>
-              </ThreadPrimitive.Empty>
+              {isTimelineLoading ? (
+                <div aria-live="polite" className="codex-assistant-loading">
+                  <div className="codex-assistant-loading-row" />
+                  <div className="codex-assistant-loading-row is-short" />
+                  <div className="codex-assistant-loading-row" />
+                  <span>{dictionary.loading}</span>
+                </div>
+              ) : hasTimelineError ? (
+                <div className="codex-assistant-empty" role="status">{dictionary.loadFailed}</div>
+              ) : (
+                <ThreadPrimitive.Empty>
+                  <div className="codex-assistant-empty">{dictionary.empty}</div>
+                </ThreadPrimitive.Empty>
+              )}
               <div className="codex-assistant-message-list">
-                {rows.map((row) => (
+                {!isTimelineLoading && !hasTimelineError ? rows.map((row) => (
                   <Fragment key={row.id}>
                     {row.type === "processedRun" ? (
                       <CodexAssistantProcessedRun
@@ -362,7 +379,7 @@ function CodexAssistantRuntimeThread({
                         ))
                       : null}
                   </Fragment>
-	                ))}
+                )) : null}
                   <ConversationRequestCards
                     canControl={canSubmitFollowUp}
                     controlStatus={controlStatus}

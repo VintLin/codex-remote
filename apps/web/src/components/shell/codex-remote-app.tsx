@@ -139,6 +139,8 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [selectedDetailTarget, setSelectedDetailTarget] = useState<DetailTarget | LinkReference | null>(null);
   const [renamingConversationKey, setRenamingConversationKey] = useState<string | null>(null);
+  const [loadingConversationKey, setLoadingConversationKey] = useState<string | null>(null);
+  const [restoringConversationKey, setRestoringConversationKey] = useState<string | null>(null);
   const pressedTimerRef = useRef<number | null>(null);
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const { devices, projects, conversations, approvalCards, queuedMessages, tasks, localWorkbench, runtimeSettings, advancedPlatform, assistantThreads, searchRecents, source, taskSource } = workbenchData;
@@ -175,6 +177,9 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
 
   const refreshWorkbenchData = useCallback(async (conversationKey: string | null) => {
     setIsWorkbenchLoading(true);
+    if (conversationKey) {
+      setLoadingConversationKey(conversationKey);
+    }
     try {
       const nextWorkbenchData = await loadWorkbenchData({
         baseUrl: controlPlaneBaseUrl,
@@ -185,6 +190,9 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
       setWorkbenchData(nextWorkbenchData);
     } finally {
       setIsWorkbenchLoading(false);
+      if (conversationKey) {
+        setLoadingConversationKey((current) => current === conversationKey ? null : current);
+      }
     }
   }, [selectedDeviceId]);
 
@@ -460,6 +468,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
       return;
     }
 
+    setLoadingConversationKey(conversationKey);
     try {
       await workerClient.openConversation(targetConversation.deviceId, targetConversation.id, {
         clientRequestId: crypto.randomUUID(),
@@ -467,6 +476,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
       await refreshWorkbenchData(conversationKey);
     } catch {
       setControlStatus("failed");
+      setLoadingConversationKey((current) => current === conversationKey ? null : current);
     }
   }, [conversations, refreshWorkbenchData, source.reason, workerClient]);
 
@@ -518,15 +528,19 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
       return;
     }
 
+    const conversationKey = createConversationKey(targetConversation);
+    setRestoringConversationKey(conversationKey);
     setControlStatus("submitting");
     try {
       await workerClient.unarchiveConversation(targetConversation.deviceId, targetConversation.id, {
         clientRequestId: crypto.randomUUID(),
       });
-      await refreshWorkbenchData(createConversationKey(targetConversation));
+      await refreshWorkbenchData(conversationKey);
       setControlStatus("accepted");
     } catch {
       setControlStatus("failed");
+    } finally {
+      setRestoringConversationKey((current) => current === conversationKey ? null : current);
     }
   }, [refreshWorkbenchData, source.reason, workerClient]);
 
@@ -900,6 +914,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
             onExpandSidebar={() => setIsSidebarCollapsed(false)}
             onLocaleChange={handleLocaleChange}
             onRestoreConversation={unarchiveConversation}
+            restoreStatusByKey={restoringConversationKey ? { [restoringConversationKey]: true } : {}}
             runtimeSettings={runtimeSettings}
           />
         ),
@@ -970,6 +985,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
             renaming={conversation ? renamingConversationKey === createConversationKey(conversation) : false}
             source={source}
             startStatus={startStatus}
+            timelineLoading={false}
           />
         ),
       };
@@ -1034,6 +1050,7 @@ export function CodexRemoteApp({ locale }: CodexRemoteAppProps) {
           renaming={renamingConversationKey === createConversationKey(conversation)}
           source={source}
           startStatus={startStatus}
+          timelineLoading={loadingConversationKey === createConversationKey(conversation)}
         />
       ),
     };

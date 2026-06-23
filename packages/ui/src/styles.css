@@ -2509,6 +2509,35 @@ button.codex-assistant-run-status:hover {
   background: transparent;
 }
 
+.codex-assistant-loading {
+  display: grid;
+  gap: 10px;
+  min-height: var(--cr-empty-thread-min-height);
+  align-content: center;
+  color: var(--cr-muted);
+}
+
+.codex-assistant-loading-row {
+  width: min(680px, 100%);
+  height: 14px;
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+}
+
+.codex-assistant-loading-row.is-short {
+  width: min(420px, 68%);
+}
+
+.codex-assistant-loading span,
+.local-workbench-status {
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+}
+
+.local-workbench-status[data-state="failed"] {
+  color: var(--cr-danger);
+}
+
 .codex-assistant-tool-row,
 .codex-assistant-item-card {
   display: inline-flex;

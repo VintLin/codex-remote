@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readWebSource } from "../../test-support/sourcePaths.ts";
+import { readWebSource, readWorkspaceSource } from "../../test-support/sourcePaths.ts";
 
 test("codex remote app when follow-up submit is wired, should call Worker API and refresh selected conversation", () => {
   const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
@@ -123,6 +123,38 @@ test("codex remote app when conversation is selected, should open conversation b
   assert.match(shellSource, /await workerClient\.openConversation/);
   assert.match(shellSource, /await refreshWorkbenchData\(conversationKey\)/);
   assert.match(shellSource, /await workerClient\.openConversation[\s\S]+await refreshWorkbenchData\(conversationKey\)/);
+});
+
+test("conversation workbench UI when timeline is loading or degraded, should not render it as empty", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const assistantThreadSource = readWebSource("components/conversation/codex-assistant-thread.tsx");
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
+  const stylesSource = readWorkspaceSource("packages/ui/src/styles.css");
+
+  assert.match(shellSource, /loadingConversationKey/);
+  assert.match(shellSource, /setLoadingConversationKey\(conversationKey\)/);
+  assert.match(mainPanelsSource, /timelineLoading=\{timelineLoading\}/);
+  assert.match(assistantThreadSource, /thread\?\.loadState === "missingRead"/);
+  assert.match(assistantThreadSource, /dictionary\.loading/);
+  assert.match(assistantThreadSource, /dictionary\.loadFailed/);
+  assert.match(stylesSource, /\.codex-assistant-loading-row/);
+  assert.match(dictionarySource, /正在载入对话/);
+  assert.match(dictionarySource, /Loading conversation/);
+});
+
+test("workbench local actions when submitting, should expose visible busy states instead of silent disabled controls", () => {
+  const shellSource = readWebSource("components/shell/codex-remote-app.tsx");
+  const mainPanelsSource = readWebSource("components/detail/main-panels.tsx");
+  const dictionarySource = `${readWebSource("i18n/dictionaries/zh-CN.ts")}\n${readWebSource("i18n/dictionaries/en-US.ts")}`;
+
+  assert.match(shellSource, /restoringConversationKey/);
+  assert.match(mainPanelsSource, /restoreStatusByKey/);
+  assert.match(mainPanelsSource, /copy\.mainPanels\.restoring/);
+  assert.match(mainPanelsSource, /searchStatus === "submitting"/);
+  assert.match(mainPanelsSource, /copy\.searchingLocalFiles/);
+  assert.match(dictionarySource, /正在恢复/);
+  assert.match(dictionarySource, /正在搜索/);
 });
 
 test("conversation workbench UI when lifecycle state exists, should expose badges and lifecycle actions", () => {

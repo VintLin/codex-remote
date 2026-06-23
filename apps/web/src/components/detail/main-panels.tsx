@@ -19,6 +19,7 @@ import type {
 } from "@codex-remote/api-contract";
 import type { AdvancedPlatformData, LocalWorkbenchData, RuntimeSettingsData, SearchRecent, WorkbenchData } from "../../data/workerApi/workbenchData";
 import type { Locale, WebDictionary } from "../../i18n/dictionary.ts";
+import { createConversationKey } from "../../domain/sidebar/conversationIdentity";
 import { getStatusClassName, getStatusText } from "../../domain/status/statusPresentation";
 import { ActionMenu } from "../sidebar/action-menu";
 import { CodexAssistantThread } from "../conversation/codex-assistant-thread";
@@ -67,6 +68,7 @@ interface ConversationMainProps {
   source: WorkbenchData["source"];
   startStatus: "accepted" | "failed" | "idle" | "submitting";
   activeTurnId: string | null;
+  timelineLoading: boolean;
 }
 
 interface DevicesPageProps {
@@ -131,6 +133,7 @@ interface SettingsPageProps {
   onExpandSidebar: () => void;
   onLocaleChange: (locale: Locale) => void;
   onRestoreConversation: (conversation: CodexConversation) => Promise<void>;
+  restoreStatusByKey: Record<string, boolean>;
   advancedPlatform: AdvancedPlatformData;
   runtimeSettings: RuntimeSettingsData;
 }
@@ -185,6 +188,7 @@ export function ConversationMain({
   source,
   startStatus,
   activeTurnId,
+  timelineLoading,
 }: ConversationMainProps) {
   const conversationTitle = conversation === null ? conversationCopy.empty : conversation.title;
   const [renameDraft, setRenameDraft] = useState(conversationTitle);
@@ -321,6 +325,7 @@ export function ConversationMain({
           onSubmitStart={onSubmitStart}
           onSubmitSteer={onSubmitSteer}
           startStatus={startStatus}
+          timelineLoading={timelineLoading}
           pendingApprovals={pendingApprovals}
           queuedMessages={queuedMessages}
           thread={assistantThread}
@@ -342,6 +347,7 @@ export function SettingsPage({
   onExpandSidebar,
   onLocaleChange,
   onRestoreConversation,
+  restoreStatusByKey,
   advancedPlatform,
   runtimeSettings,
 }: SettingsPageProps) {
@@ -395,17 +401,21 @@ export function SettingsPage({
             <p className="empty-state">{copy.mainPanels.noArchivedConversations}</p>
           ) : (
             <div className="settings-list">
-              {archivedConversations.map((conversation) => (
-                <article className="settings-row" key={`${conversation.deviceId}:${conversation.id}`}>
-                  <span>
-                    <strong>{conversation.title}</strong>
-                    <span>{conversation.projectName} · {conversation.updatedAt}</span>
-                  </span>
-                  <button className="button secondary" onClick={() => void onRestoreConversation(conversation)} type="button">
-                    {copy.mainPanels.restore}
-                  </button>
-                </article>
-              ))}
+              {archivedConversations.map((conversation) => {
+                const restoreKey = createConversationKey(conversation);
+                const restoring = restoreStatusByKey[restoreKey] === true;
+                return (
+                  <article className="settings-row" key={`${conversation.deviceId}:${conversation.id}`}>
+                    <span>
+                      <strong>{conversation.title}</strong>
+                      <span>{conversation.projectName} · {conversation.updatedAt}</span>
+                    </span>
+                    <button className="button secondary" disabled={restoring} onClick={() => void onRestoreConversation(conversation)} type="button">
+                      {restoring ? copy.mainPanels.restoring : copy.mainPanels.restore}
+                    </button>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1115,9 +1125,15 @@ export function LocalWorkbenchPage({
                     value={searchQuery}
                   />
                   <button disabled={!searchQuery.trim() || searchStatus === "submitting"} type="submit">
-                    {copy.searchButton}
+                    {searchStatus === "submitting" ? copy.searchingLocalFiles : copy.searchButton}
                   </button>
                 </form>
+                {searchStatus === "submitting" ? (
+                  <p className="local-workbench-status" aria-live="polite">{copy.searchingLocalFiles}</p>
+                ) : null}
+                {searchStatus === "failed" ? (
+                  <p className="local-workbench-status" data-state="failed">{copy.searchLocalFilesFailed}</p>
+                ) : null}
                 <div className="local-workbench-list">
                   {localWorkbench.search.data?.matches.map((match) => (
                     <div className="local-workbench-row" key={`${match.path}:${match.lineNumber}:${match.columnNumber ?? 0}`}>
