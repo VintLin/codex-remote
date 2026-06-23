@@ -111,12 +111,11 @@ export function createControlPlaneHttpApp(params: {
     const checkedAt = params.now();
     const devices = await Promise.all(params.config.devices.map(async (device) => {
       const health = await readDeviceHealth(params.workerClient, device);
-      const conversations = health ? await readDeviceConversations(params.workerClient, device) : [];
       return projectDevice({
         configuredDevice: device,
         checkedAt,
         health,
-        currentProject: conversations[0]?.projectName ?? "",
+        currentProject: "",
       });
     }));
     return c.json(devices);

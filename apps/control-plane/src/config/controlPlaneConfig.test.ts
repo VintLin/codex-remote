@@ -22,6 +22,7 @@ test("control plane config when env json is valid, should parse configured devic
 
   assert.equal(config.publicToken, "example-public-token");
   assert.equal(config.taskDatabasePath, ":memory:");
+  assert.equal(config.requestTimeoutMs, 10_000);
   assert.equal(config.devices[0]?.id, "device-a");
   assert.equal(config.devices[0]?.baseUrl, "http://127.0.0.1:8788");
   assert.deepEqual(config.allowedOrigins, ["http://127.0.0.1:5173"]);

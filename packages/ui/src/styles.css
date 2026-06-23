@@ -1283,15 +1283,61 @@ button.sidebar-list-content {
   width: var(--cr-control-size);
   height: var(--cr-control-size);
   flex: 0 0 auto;
-  border-radius: var(--cr-radius-md);
-  background: linear-gradient(135deg, var(--cr-ink-strong) 0 48%, var(--cr-muted) 49% 100%);
-  transform: rotate(45deg);
+  background: var(--cr-ink-strong);
+  -webkit-mask: url("/codex.svg") center / contain no-repeat;
+  mask: url("/codex.svg") center / contain no-repeat;
 }
 
 .connection-entry-summary,
 .connection-entry-retry p {
   margin: 0;
   color: var(--cr-muted);
+}
+
+.connection-entry-summary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.connection-entry-summary-copy,
+.connection-entry-summary-details {
+  display: grid;
+  min-width: 0;
+}
+
+.connection-entry-summary-copy {
+  gap: 6px;
+}
+
+.connection-entry-summary-title {
+  color: var(--cr-ink);
+  line-height: 1.45;
+}
+
+.connection-entry-summary-details {
+  gap: 3px;
+  color: var(--cr-muted);
+  font-size: var(--cr-text-meta);
+  line-height: 1.45;
+}
+
+.connection-entry-summary-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  border: 2px solid color-mix(in oklch, var(--cr-accent) 24%, var(--cr-line));
+  border-top-color: var(--cr-accent);
+  border-radius: var(--cr-pill-radius);
+  animation: connection-entry-spin 0.8s linear infinite;
+}
+
+@keyframes connection-entry-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .connection-entry-steps {

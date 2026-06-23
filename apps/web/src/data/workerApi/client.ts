@@ -98,7 +98,7 @@ type SanitizedErrorEnvelope = {
 
 const errorDetailKeys = new Set(["operation", "retryable", "diagnosticId", "reason", "field", "limit", "expected", "actualKind", "deviceId"]);
 const fallbackErrorMessage = "Worker request failed.";
-const defaultRequestTimeoutMs = 3_000;
+const defaultRequestTimeoutMs = 10_000;
 
 export interface WorkerApiErrorEnvelope extends Error {
   status: number;

@@ -37,7 +37,7 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv): ControlPlaneConf
     devices,
     port: readPort(input.port),
     publicToken,
-    requestTimeoutMs: readPositiveInteger(input.requestTimeoutMs, 5_000),
+    requestTimeoutMs: readPositiveInteger(input.requestTimeoutMs, 10_000),
     taskDatabasePath: readTaskDatabasePath(input.taskDatabasePath),
   };
 }

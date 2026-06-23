@@ -37,6 +37,8 @@ export interface ConnectionEntryModel {
   status: ConnectionEntryStatus;
   steps: ConnectionEntryStep[];
   summary: string;
+  summaryDetails: readonly string[];
+  summaryLoading: boolean;
   title: string;
 }
 
@@ -55,22 +57,22 @@ function getConnectionSteps(copy: WebDictionary["connection"]): Array<Omit<Conne
     {
       id: "control_center",
       label: copy.steps.controlCenter,
-      description: "确认当前 Web 可以访问控制中心。",
+      description: copy.stepDescriptions.control_center,
     },
     {
       id: "device",
       label: copy.steps.device,
-      description: "优先连接上次选择的设备；失败时保留设备列表和重试入口。",
+      description: copy.stepDescriptions.device,
     },
     {
       id: "codex_service",
       label: copy.steps.codexService,
-      description: "设备连接后检查 Codex 本机服务是否可用。",
+      description: copy.stepDescriptions.codex_service,
     },
     {
       id: "workspace",
       label: copy.steps.workspace,
-      description: "成功后展开侧边栏，并显示正确的主内容区域。",
+      description: copy.stepDescriptions.workspace,
     },
   ];
 }
@@ -80,14 +82,16 @@ export function createConnectionEntryModel(options: CreateConnectionEntryModelOp
   const status = resolveConnectionStatus(options);
   const failedStepId = status === "failed" ? resolveFailedStepId(options) : null;
 
+  const steps = createConnectionSteps(copy, status, failedStepId, options.devices.length > 0);
+
   return {
     devices: createConnectionEntryDevices(copy, options.devices, options.selectedDeviceId, status),
     failureTitle: failedStepId ? resolveFailureTitle(copy, options, failedStepId) : null,
     status,
-    steps: createConnectionSteps(copy, status, failedStepId, options.devices.length > 0),
-    summary: status === "failed"
-      ? copy.failedSummary
-      : copy.defaultSummary,
+    steps,
+    summary: resolveConnectionSummary(copy, status, steps),
+    summaryDetails: resolveConnectionSummaryDetails(copy, status, steps),
+    summaryLoading: status === "connecting",
     title: "Codex Remote",
   };
 }
@@ -223,6 +227,36 @@ function createConnectionSteps(
     ...step,
     status: index < failedIndex ? "done" : index === failedIndex ? "failed" : "pending",
   }));
+}
+
+function resolveConnectionSummary(
+  copy: WebDictionary["connection"],
+  status: ConnectionEntryStatus,
+  steps: ConnectionEntryStep[],
+): string {
+  if (status === "failed") {
+    return copy.failedSummary;
+  }
+  if (status === "connected") {
+    return copy.completedSummary;
+  }
+  const activeStep = steps.find((step) => step.status === "active") ?? steps[0];
+  return activeStep ? `${activeStep.label}：${activeStep.description}` : copy.defaultSummary;
+}
+
+function resolveConnectionSummaryDetails(
+  copy: WebDictionary["connection"],
+  status: ConnectionEntryStatus,
+  steps: ConnectionEntryStep[],
+): readonly string[] {
+  if (status === "failed") {
+    return [];
+  }
+  if (status === "connected") {
+    return copy.loadingDetails.completed;
+  }
+  const activeStep = steps.find((step) => step.status === "active") ?? steps[0];
+  return activeStep ? copy.loadingDetails[activeStep.id] : [];
 }
 
 function resolveFailedStepId(options: CreateConnectionEntryModelOptions): ConnectionStepId {

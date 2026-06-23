@@ -49,7 +49,19 @@ export function ConnectionEntry({ copy, model, onRetry, onSelectDevice }: Connec
               <span className="connection-entry-mark" />
               <h2>{model.title}</h2>
             </div>
-            <p className="connection-entry-summary">{model.summary}</p>
+            <div className="connection-entry-summary" role={model.summaryLoading ? "status" : undefined}>
+              {model.summaryLoading ? <span className="connection-entry-summary-spinner" aria-hidden="true" /> : null}
+              <span className="connection-entry-summary-copy">
+                <span className="connection-entry-summary-title">{model.summary}</span>
+                {model.summaryDetails.length ? (
+                  <span className="connection-entry-summary-details">
+                    {model.summaryDetails.map((detail) => (
+                      <span key={detail}>{detail}</span>
+                    ))}
+                  </span>
+                ) : null}
+              </span>
+            </div>
 
             <ol className="connection-entry-steps">
               {model.steps.map((step, index) => (

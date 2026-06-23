@@ -334,6 +334,10 @@ test("control plane http app when devices are listed, should isolate one unavail
     ["device-a", "Connected"],
     ["device-b", "Not connected"],
   ]);
+  assert.deepEqual(client.calls.map((call) => `${call.method}:${call.deviceId}`), [
+    "getHealth:device-a",
+    "getHealth:device-b",
+  ]);
 });
 
 test("control plane http app when health is read, should aggregate connected device counts", async () => {
