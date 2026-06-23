@@ -44,7 +44,7 @@ export interface ConnectionEntryModel {
   status: ConnectionEntryStatus;
   steps: ConnectionEntryStep[];
   summary: string;
-  summaryDetails: readonly string[];
+  summaryDetails: ConnectionStepDetail[];
   summaryLoading: boolean;
   title: string;
 }
@@ -289,22 +289,22 @@ function resolveConnectionSummary(
     return copy.completedSummary;
   }
   const activeStep = steps.find((step) => step.status === "active") ?? steps[0];
-  return activeStep ? `${activeStep.label}：${activeStep.description}` : copy.defaultSummary;
+  return activeStep ? activeStep.label : copy.defaultSummary;
 }
 
 function resolveConnectionSummaryDetails(
   copy: WebDictionary["connection"],
   status: ConnectionEntryStatus,
   steps: ConnectionEntryStep[],
-): readonly string[] {
+): ConnectionStepDetail[] {
   if (status === "failed") {
     return [];
   }
   if (status === "connected") {
-    return copy.loadingDetails.completed;
+    return copy.loadingDetails.completed.map((label) => ({ label, status: "done" }));
   }
   const activeStep = steps.find((step) => step.status === "active") ?? steps[0];
-  return activeStep ? copy.loadingDetails[activeStep.id] : [];
+  return activeStep?.details ?? [];
 }
 
 function resolveFailedStepId(options: CreateConnectionEntryModelOptions): ConnectionStepId {

@@ -84,8 +84,15 @@ test("when connecting, should show the selected device first and only expose thr
   assert.deepEqual(model.steps[0]?.details.map((detail) => detail.status), ["done", "done", "done"]);
   assert.deepEqual(model.steps[1]?.details.map((detail) => detail.status), ["done", "active", "pending"]);
   assert.deepEqual(model.steps[2]?.details.map((detail) => detail.status), ["pending", "pending", "pending"]);
-  assert.equal(model.summary, "连接上次使用的设备：优先连接上次选择的设备；失败时保留设备列表和重试入口。");
-  assert.deepEqual(model.summaryDetails, ["恢复上次选择的设备。", "同步设备在线状态，失败时保留切换入口。"]);
+  assert.equal(model.summary, "连接上次使用的设备");
+  assert.deepEqual(
+    model.summaryDetails.map((detail) => [detail.label, detail.status]),
+    [
+      ["查找上次选择的设备", "done"],
+      ["确认设备在线状态", "active"],
+      ["保留设备切换入口", "pending"],
+    ],
+  );
   assert.equal(model.summaryLoading, true);
 });
 
@@ -250,7 +257,13 @@ test("when loaded, should mark every connection step done", () => {
   assert.equal(model.status, "connected");
   assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "done", "done"]);
   assert.equal(model.summary, "连接步骤已完成，正在打开工作区。");
-  assert.deepEqual(model.summaryDetails, ["设备、本机服务和工作区数据均已就绪。", "即将打开上次使用的主工作区。"]);
+  assert.deepEqual(
+    model.summaryDetails.map((detail) => [detail.label, detail.status]),
+    [
+      ["设备、本机服务和工作区数据均已就绪。", "done"],
+      ["即将打开上次使用的主工作区。", "done"],
+    ],
+  );
   assert.equal(model.summaryLoading, false);
 });
 

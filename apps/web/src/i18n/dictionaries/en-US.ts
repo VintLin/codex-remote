@@ -285,7 +285,7 @@ export const enUSDictionary = {
     },
     loadingDetails: {
       control_center: ["Reading connection settings and access credentials.", "Confirming this browser can reach the device directory."],
-      device: ["Restoring the last selected device.", "Syncing device availability while keeping device switching available."],
+      device: ["Find the last selected device", "Confirm device availability", "Keep device switching available"],
       codex_service: ["Confirming the device connection is established.", "Checking whether the local Codex service can respond."],
       workspace: ["Reading projects, conversations, and the current timeline.", "Preparing the sidebar, main content, and local tools."],
       completed: ["Device, local service, and workspace data are ready.", "Opening the last used workspace."],
