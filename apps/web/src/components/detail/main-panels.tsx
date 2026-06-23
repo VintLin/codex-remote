@@ -759,7 +759,7 @@ export function DeviceDetailPane({
   if (!selectedDevice) {
     return (
       <RightDetailPane
-        ariaLabel="Device detail"
+        ariaLabel={detailCopy.deviceDetails}
         backLabel={copy.backToDeviceList}
         className="device-detail-pane"
         isCollapsed={isCollapsed}
@@ -778,7 +778,7 @@ export function DeviceDetailPane({
 
   return (
     <RightDetailPane
-      ariaLabel="Device detail"
+      ariaLabel={detailCopy.deviceDetails}
       backLabel={copy.backToDeviceList}
       className="device-detail-pane"
       isCollapsed={isCollapsed}
@@ -1208,8 +1208,8 @@ export function TaskDetailPane({
   onCollapse: () => void;
 }) {
   return (
-    <RightDetailPane
-      ariaLabel="Task detail"
+      <RightDetailPane
+      ariaLabel={detailCopy.taskDetails}
       backLabel={copy.backToTaskList}
       className="device-detail-pane"
       isCollapsed={isCollapsed}

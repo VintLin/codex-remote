@@ -290,6 +290,12 @@ export const enUSDictionary = {
       workspace: ["Reading projects, conversations, and the current timeline.", "Preparing the sidebar, main content, and local tools."],
       completed: ["Device, local service, and workspace data are ready.", "Opening the last used workspace."],
     },
+    stepDescriptions: {
+      control_center: "Confirm this Web can reach the control center.",
+      device: "Connect to the last used device first; if it fails, keep the device list and a retry entry visible.",
+      codex_service: "After the device is connected, verify the local Codex service is available.",
+      workspace: "Once ready, expand the sidebar and reveal the correct main content area.",
+    },
     failureTitles: {
       control_center: "Control center unreachable",
       not_configured: "Connection not configured",
