@@ -14,6 +14,12 @@ export type ConnectionLoadReason =
 export type ConnectionEntryStatus = "connected" | "connecting" | "failed";
 export type ConnectionStepId = "control_center" | "device" | "codex_service" | "workspace";
 export type ConnectionStepStatus = "active" | "done" | "failed" | "pending";
+export type ConnectionStepDetailStatus = "active" | "done" | "failed" | "pending";
+
+export interface ConnectionStepDetail {
+  label: string;
+  status: ConnectionStepDetailStatus;
+}
 
 export interface ConnectionEntryDevice {
   ariaLabel: string;
@@ -26,6 +32,7 @@ export interface ConnectionEntryDevice {
 
 export interface ConnectionEntryStep {
   description: string;
+  details: ConnectionStepDetail[];
   id: ConnectionStepId;
   label: string;
   status: ConnectionStepStatus;
@@ -52,7 +59,7 @@ interface CreateConnectionEntryModelOptions {
   sourceReason: ConnectionLoadReason;
 }
 
-function getConnectionSteps(copy: WebDictionary["connection"]): Array<Omit<ConnectionEntryStep, "status">> {
+function getConnectionSteps(copy: WebDictionary["connection"]): Array<Omit<ConnectionEntryStep, "status" | "details">> {
   return [
     {
       id: "control_center",
@@ -212,21 +219,62 @@ function createConnectionSteps(
 ): ConnectionEntryStep[] {
   const connectionSteps = getConnectionSteps(copy);
   if (status === "connected") {
-    return connectionSteps.map((step) => ({ ...step, status: "done" }));
+    return connectionSteps.map((step) => ({
+      ...step,
+      details: createConnectionStepDetails(copy, step.id, "done"),
+      status: "done",
+    }));
   }
   if (status === "connecting") {
     const activeIndex = hasDevices ? 1 : 0;
-    return connectionSteps.map((step, index) => ({
-      ...step,
-      status: index < activeIndex ? "done" : index === activeIndex ? "active" : "pending",
-    }));
+    return connectionSteps.map((step, index) => {
+      const stepStatus = index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
+      return {
+        ...step,
+        details: createConnectionStepDetails(copy, step.id, stepStatus),
+        status: stepStatus,
+      };
+    });
   }
 
   const failedIndex = connectionSteps.findIndex((step) => step.id === failedStepId);
-  return connectionSteps.map((step, index) => ({
-    ...step,
-    status: index < failedIndex ? "done" : index === failedIndex ? "failed" : "pending",
+  return connectionSteps.map((step, index) => {
+    const stepStatus = index < failedIndex ? "done" : index === failedIndex ? "failed" : "pending";
+    return {
+      ...step,
+      details: createConnectionStepDetails(copy, step.id, stepStatus),
+      status: stepStatus,
+    };
+  });
+}
+
+function createConnectionStepDetails(
+  copy: WebDictionary["connection"],
+  stepId: ConnectionStepId,
+  stepStatus: ConnectionStepStatus,
+): ConnectionStepDetail[] {
+  const labels = copy.stepDetails[stepId];
+  return labels.map((label, index) => ({
+    label,
+    status: resolveConnectionStepDetailStatus(stepStatus, index, labels.length),
   }));
+}
+
+function resolveConnectionStepDetailStatus(
+  stepStatus: ConnectionStepStatus,
+  index: number,
+  count: number,
+): ConnectionStepDetailStatus {
+  if (stepStatus === "done") {
+    return "done";
+  }
+  if (stepStatus === "pending") {
+    return "pending";
+  }
+  if (stepStatus === "failed") {
+    return index === Math.max(0, count - 2) ? "failed" : index < Math.max(0, count - 2) ? "done" : "pending";
+  }
+  return index === 0 ? "done" : index === 1 ? "active" : "pending";
 }
 
 function resolveConnectionSummary(

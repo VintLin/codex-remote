@@ -290,6 +290,12 @@ export const enUSDictionary = {
       workspace: ["Reading projects, conversations, and the current timeline.", "Preparing the sidebar, main content, and local tools."],
       completed: ["Device, local service, and workspace data are ready.", "Opening the last used workspace."],
     },
+    stepDetails: {
+      control_center: ["Read connection settings", "Verify access credential", "Read device directory"],
+      device: ["Find the last selected device", "Confirm device availability", "Keep device switching available"],
+      codex_service: ["Establish device connection", "Check local Codex service response", "Confirm current workspace access"],
+      workspace: ["Read projects", "Read conversations", "Load current conversation timeline", "Prepare sidebar and main content"],
+    },
     stepDescriptions: {
       control_center: "Confirm this Web can reach the control center.",
       device: "Connect to the last used device first; if it fails, keep the device list and a retry entry visible.",

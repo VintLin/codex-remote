@@ -288,6 +288,12 @@ export const zhCNDictionary = {
       workspace: ["读取项目、对话列表与当前时间线。", "准备侧边栏、主内容区和本地工具入口。"],
       completed: ["设备、本机服务和工作区数据均已就绪。", "即将打开上次使用的主工作区。"],
     },
+    stepDetails: {
+      control_center: ["读取连接配置", "校验访问凭证", "读取设备目录"],
+      device: ["查找上次选择的设备", "确认设备在线状态", "保留设备切换入口"],
+      codex_service: ["建立设备连接", "检查本机 Codex 服务响应", "确认当前工作目录可访问"],
+      workspace: ["读取项目列表", "读取对话列表", "载入当前对话时间线", "准备侧边栏与主内容区"],
+    },
     stepDescriptions: {
       control_center: "确认当前 Web 可以访问控制中心。",
       device: "优先连接上次选择的设备；失败时保留设备列表和重试入口。",

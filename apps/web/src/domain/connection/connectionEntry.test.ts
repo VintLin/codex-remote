@@ -72,6 +72,18 @@ test("when connecting, should show the selected device first and only expose thr
   assert.equal(model.devices[0]?.meta, "上次使用 · 正在连接");
   assert.equal(model.devices[0]?.ariaLabel, "MacBook-Pro-4，上次使用，正在连接");
   assert.deepEqual(model.steps.map((step) => step.status), ["done", "active", "pending", "pending"]);
+  assert.deepEqual(
+    model.steps.map((step) => step.details.map((detail) => detail.label)),
+    [
+      ["读取连接配置", "校验访问凭证", "读取设备目录"],
+      ["查找上次选择的设备", "确认设备在线状态", "保留设备切换入口"],
+      ["建立设备连接", "检查本机 Codex 服务响应", "确认当前工作目录可访问"],
+      ["读取项目列表", "读取对话列表", "载入当前对话时间线", "准备侧边栏与主内容区"],
+    ],
+  );
+  assert.deepEqual(model.steps[0]?.details.map((detail) => detail.status), ["done", "done", "done"]);
+  assert.deepEqual(model.steps[1]?.details.map((detail) => detail.status), ["done", "active", "pending"]);
+  assert.deepEqual(model.steps[2]?.details.map((detail) => detail.status), ["pending", "pending", "pending"]);
   assert.equal(model.summary, "连接上次使用的设备：优先连接上次选择的设备；失败时保留设备列表和重试入口。");
   assert.deepEqual(model.summaryDetails, ["恢复上次选择的设备。", "同步设备在线状态，失败时保留切换入口。"]);
   assert.equal(model.summaryLoading, true);
@@ -221,6 +233,7 @@ test("when the timeline cannot be read, should fail at the workspace step", () =
 
   assert.equal(model.failureTitle, "对话记录暂不可读");
   assert.deepEqual(model.steps.map((step) => step.status), ["done", "done", "done", "failed"]);
+  assert.deepEqual(model.steps[3]?.details.map((detail) => detail.status), ["done", "done", "failed", "pending"]);
 });
 
 test("when loaded, should mark every connection step done", () => {
