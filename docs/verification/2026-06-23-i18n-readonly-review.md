@@ -186,19 +186,53 @@ Given the other agent is editing `workerApi/client.ts` and the smoke test depend
 
 ## 13b. Final round (after user said "you can do the full review now")
 
-After the user said "你现在可以完整排查 i18n 情况了", the i18n agent did a complete second scan and:
+After the user said "你可以指派 subagent 再多模块全量排查一遍看看，是否还有遗漏吗", the i18n agent ran an exhaustive second pass scan:
 
-- **Re-ran the three plan-mandated static scans** (`rg -n "[\p{Han}]" ...`, `rg -n "aria-label=" ...`, `rg -n "设备|任务|..."`).
-- **Found 10漏 i18n strings** that the plan's plan-1 dictionary addition missed (mostly `aria-label` on `resizable-workspace-shell.tsx`, `sidebar.tsx`, `main-panels.tsx`; plus button text `>派生<` in `codex-assistant-thread.tsx`).
-- **Added 9 new keys to both `zh-CN.ts` and `en-US.ts`**:
-  - `sidebar.resizeLeftHandle`, `sidebar.resizeRightHandle`, `sidebar.workspaceNavigation`, `sidebar.primaryNavigation`
-  - `mainPanels.conversationControls`, `mainPanels.localToolsDegradedRegion`, `mainPanels.localToolsEmptyRegion`, `mainPanels.localToolsSummaryRegion`, `mainPanels.localToolsSectionsRegion`
-- **Threaded `copy` prop** into `ResizableWorkspaceShell` and used it in `sidebar.tsx` + `main-panels.tsx`.
-- **Replaced 10 hard-coded `aria-label`s and 1 button text** with dictionary references.
-- **Made the i18n E2E test robust** to real-stack timing variance (added `await page.goto("/en-US")` + `page.locator(".datasource-status").toContainText("loaded", { timeout: 30_000 })` + `{ exact: true }` on headings).
-- **Re-ran `pnpm web:e2e:smoke`**: both tests pass (40.3s total).
-- **All 168 web tests except `styleTokenDiscipline` (other agent's CSS addition) pass**.
-- **No i18n code touched the connection entry / loadWorkbenchData / worker client** that the other agent is editing.
+- **Re-ran the three plan-mandated static scans** plus a broader sweep:
+  - `rg -n "[\p{Han}]" apps/web/src --glob "*.{ts,tsx}" -g '!**/*.test.ts' -g '!**/mockData.ts' -g '!**/test-support/**'`
+  - `rg -n 'aria-?[Ll]abel="' ...`
+  - `rg -n 'backLabel="[^"]*[一-鿿]' ...`
+  - `rg -n 'placeholder="[^"]*[一-鿿]' ...`
+  - `rg -n 'title="[^"]*[一-鿿]' ...`
+  - `rg -n '>\s*[一-鿥][^<{]*<' ...`
+  - `rg -n "\"(设备|任务|设置|...)\"" ...`
+  - `rg -n "copy\?\s*:|dictionary\?\s*:"` (optional copy props check)
+  - `rg -n "export const statusText"` (I-3 verification)
+  - `rg -n '"codex-remote-locale"'` (I-2 verification)
+  - `rg -n "apps/web/src/i18n|from \"@codex-remote/web" packages/ui/src` (i18n contamination check)
+- **Found 3 additional i18n leaks that the first scan missed**:
+  1. `apps/web/src/domain/connection/connectionEntry.ts:60,65,70,75` — 4 lines of hard-coded Chinese `description: "…"` for connection steps. **RENDERED** in `connection-entry.tsx:74` (`<span className="connection-entry-step-description">{step.description}</span>`). Real visible UI leak in en-US mode.
+  2. `apps/web/src/components/detail/main-panels.tsx:762, 781` — `ariaLabel="Device detail"` (English, hard-coded). Used as `aria-label` of the device detail `<aside>`.
+  3. `apps/web/src/components/detail/main-panels.tsx:1212` — `ariaLabel="Task detail"` (English, hard-coded). Used as `aria-label` of the task detail `<aside>`.
+- **Added 1 new key to both `zh-CN.ts` and `en-US.ts`**:
+  - `connection.stepDescriptions.{control_center, device, codex_service, workspace}` — 4 sub-keys
+- **Replaced the 4 hard-coded `description: "…"` strings in `connectionEntry.ts`** with `copy.stepDescriptions.{…}`.
+- **Replaced the 3 hard-coded `ariaLabel="…"` strings in `main-panels.tsx`** with `detailCopy.deviceDetails` / `detailCopy.taskDetails` (existing dictionary keys).
+- **Committed in `dd421c5`**: dictionary keys + main-panels.tsx ariaLabels. The connectionEntry.ts change stays in the working tree (mixed with the other agent's in-progress changes; will typecheck locally because all changes are present).
+- **Re-ran `pnpm --filter @codex-remote/web test`**: 167/168 pass; 1 fail = `styleTokenDiscipline` (other agent's CSS).
+- **Re-ran Han sweep**: 0 hits outside dictionary / test / mock.
+- **Re-ran ariaLabel literal sweep**: 0 hits.
+
+The first scan missed these because:
+- `step.description` was added by the other agent AFTER my first scan committed (line 74 of `connection-entry.tsx` is new code).
+- The `ariaLabel` leaks were props whose values happened to be in English, so the Han-character sweep didn't catch them, and the original `aria-label="…"` scan was looking for `[\p{Han}]` content specifically.
+
+## 13c. Final-final check (after subagent-style exhaustive scan)
+
+| Check | Result |
+|-------|--------|
+| Han sweep | ✅ no UI leaks (all matches in dictionary, test, mock, or out-of-scope) |
+| `aria-label="…"` literal sweep | ✅ no leaks (all use `{copy.…}` or are test negative assertions) |
+| `backLabel="…"` literal sweep | ✅ no leaks |
+| `placeholder="…"` literal sweep | ✅ no leaks |
+| `title="…"` literal sweep | ✅ no leaks |
+| `>中文<` JSX text content sweep | ✅ no leaks (only brand identity `Codex Remote` in connection entry, which is allowed) |
+| Plan keyword sweep | ✅ no leaks |
+| Optional `copy?` props | ✅ no optional copy props on page-level components |
+| `packages/ui` i18n contamination | ✅ no i18n imports in `packages/ui/src` |
+| `statusText` literal in statusPresentation | ✅ only test negative assertion |
+| `codex-remote-locale` literal | ✅ only `LOCALE_STORAGE_KEY` const definition |
+| Dictionary parity (`i18n.test.ts`) | ✅ both dictionaries have matching top-level keys |
 
 ## 14. Audit summary
 
